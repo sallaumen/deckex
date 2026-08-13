@@ -103,6 +103,20 @@ defmodule DeckexWeb.SettingsAndTableTest do
       assert "Counterspell" in Enum.map(Decks.list_deck_cards(deck), & &1.card.name)
     end
 
+    # The message itself is asserted in Deckex.DeckEditingTest; what matters
+    # here is that a double click cannot quietly produce an illegal decklist.
+    test "clicking add twice does not add a second copy", %{conn: conn, deck: deck} do
+      {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}")
+
+      add = element(live, "button[phx-click='apply-add'][phx-value-name='Counterspell']")
+
+      render_click(add)
+      render_click(add)
+
+      counterspell = Enum.find(Decks.list_deck_cards(deck), &(&1.card.name == "Counterspell"))
+      assert counterspell.quantity == 1
+    end
+
     test "cutting a suggested card removes it", %{conn: conn, deck: deck} do
       {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}")
 
