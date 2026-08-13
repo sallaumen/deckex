@@ -52,6 +52,20 @@ defmodule DeckexWeb.ImportLive do
   defp blank_to_default(""), do: "Deck sem nome"
   defp blank_to_default(name), do: name
 
+  # A function, not an inline string: the HEEx formatter rewrites
+  # `placeholder={"a\nb"}` into a literal HTML attribute, which turns the
+  # escapes into visible backslashes.
+  defp decklist_example do
+    """
+    Commander
+    1 Iroh, Grand Lotus (TLA) 227
+
+    ----
+    1 Sol Ring (M3C) 305
+    4 Forest (DMU) 276\
+    """
+  end
+
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
@@ -99,7 +113,7 @@ defmodule DeckexWeb.ImportLive do
                 name="paste[decklist]"
                 rows="16"
                 required
-                placeholder="Commander\n1 Iroh, Grand Lotus (TLA) 227\n\n----\n1 Sol Ring (M3C) 305\n4 Forest (DMU) 276"
+                placeholder={decklist_example()}
                 class="w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 font-mono text-body-sm text-ink placeholder:text-ink-disabled focus:border-ink-faint"
               >{@paste_form[:decklist].value}</textarea>
             </div>
