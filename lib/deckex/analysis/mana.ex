@@ -22,6 +22,18 @@ defmodule Deckex.Analysis.Mana do
 
   @enters_tapped ~r/enters tapped/i
 
+  # A fetchland produces no mana itself but grabs one that does, and Scryfall
+  # reports `produced_mana: []` for every one of them. Counting only direct
+  # production reads eight fetchlands as eight dead cards — which is how a real
+  # Temur deck first measured 20 green sources while casting green fine.
+  @basic_types %{
+    "plains" => "W",
+    "island" => "U",
+    "swamp" => "B",
+    "mountain" => "R",
+    "forest" => "G"
+  }
+
   @spec measure(DeckSnapshot.t(), Baselines.t()) :: map()
   def measure(snapshot, baselines) do
     lands = DeckSnapshot.lands(snapshot)
@@ -38,6 +50,7 @@ defmodule Deckex.Analysis.Mana do
       ramp_by_band: ramp_by_band(ramp),
       taplands: DeckSnapshot.count(taplands),
       tapland_share: share(DeckSnapshot.count(taplands), DeckSnapshot.count(lands)),
+      fetchlands: lands |> Enum.filter(&fetchland?/1) |> DeckSnapshot.count(),
       colors: colors(snapshot, baselines)
     }
   end
@@ -225,11 +238,42 @@ defmodule Deckex.Analysis.Mana do
     end)
   end
 
-  defp sources(%{main: main}, colour) do
-    main |> Enum.filter(&produces?(&1, colour)) |> DeckSnapshot.count()
+  defp sources(snapshot, colour) do
+    snapshot.main
+    |> Enum.filter(&source_of?(&1, colour, snapshot.color_identity))
+    |> DeckSnapshot.count()
+  end
+
+  defp source_of?(entry, colour, identity) do
+    produces?(entry, colour) or colour in fetchable_colors(entry, identity)
   end
 
   defp produces?(%{card: card}, colour), do: colour in (card.produced_mana || [])
+
+  # Which colours this fetchland can actually reach: the basic types it names,
+  # narrowed to the deck's identity. A fetch that names no type at all (an
+  # Evolving Wilds) can find anything the deck plays.
+  defp fetchable_colors(entry, identity) do
+    if fetchland?(entry), do: reachable_colors(entry, identity), else: []
+  end
+
+  defp reachable_colors(entry, identity) do
+    case named_types(entry) do
+      [] -> identity
+      named -> Enum.filter(named, &(&1 in identity))
+    end
+  end
+
+  defp named_types(entry) do
+    text = String.downcase(entry.card.oracle_text || "")
+
+    for {type, colour} <- @basic_types, String.contains?(text, type), do: colour
+  end
+
+  defp fetchland?(entry) do
+    CardEntry.land?(entry) and entry.card.produced_mana == [] and
+      String.contains?(String.downcase(entry.card.oracle_text || ""), "search your library")
+  end
 
   defp max_pips(snapshot, colour) do
     snapshot

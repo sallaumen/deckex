@@ -88,6 +88,66 @@ defmodule Deckex.Analysis.ManaTest do
                Mana.measure(snapshot, Baselines.default())
     end
 
+    test "a fetchland counts as a source for the colours it can actually find" do
+      # Arid Mesa fetches Mountain or Plains. In a Temur deck only the Mountain
+      # half is reachable, so it is a red source and nothing else. Scryfall
+      # reports produced_mana: [] for every fetchland, so a naive count reads
+      # eight of them as eight dead cards.
+      arid_mesa =
+        land("Arid Mesa",
+          oracle_text:
+            "{T}, Pay 1 life, Sacrifice this land: Search your library for a Mountain or Plains card, put it onto the battlefield, then shuffle."
+        )
+
+      snapshot = AnalysisFixture.snapshot([arid_mesa], color_identity: ["G", "R", "U"])
+
+      assert %{colors: colors} = Mana.measure(snapshot, Baselines.default())
+      assert colors["R"].sources == 1
+      assert colors["G"].sources == 0
+      assert colors["U"].sources == 0
+    end
+
+    test "a fetchland that finds two relevant types counts for both" do
+      misty =
+        land("Misty Rainforest",
+          oracle_text:
+            "{T}, Pay 1 life, Sacrifice this land: Search your library for a Forest or Island card, put it onto the battlefield, then shuffle."
+        )
+
+      snapshot = AnalysisFixture.snapshot([misty], color_identity: ["G", "R", "U"])
+
+      assert %{colors: colors} = Mana.measure(snapshot, Baselines.default())
+      assert colors["G"].sources == 1
+      assert colors["U"].sources == 1
+      assert colors["R"].sources == 0
+    end
+
+    test "a generic basic-land fetcher counts for every colour the deck plays" do
+      wilds =
+        land("Evolving Wilds",
+          oracle_text:
+            "{T}, Sacrifice this land: Search your library for a basic land card, put it onto the battlefield tapped, then shuffle."
+        )
+
+      snapshot = AnalysisFixture.snapshot([wilds], color_identity: ["G", "U"])
+
+      assert %{colors: colors} = Mana.measure(snapshot, Baselines.default())
+      assert colors["G"].sources == 1
+      assert colors["U"].sources == 1
+    end
+
+    test "counts the fetchlands separately so the number is auditable" do
+      arid_mesa =
+        land("Arid Mesa",
+          oracle_text:
+            "Search your library for a Mountain or Plains card, put it onto the battlefield"
+        )
+
+      snapshot = AnalysisFixture.snapshot([arid_mesa], color_identity: ["R"])
+
+      assert %{fetchlands: 1} = Mana.measure(snapshot, Baselines.default())
+    end
+
     test "only reports colours in the deck's identity" do
       snapshot =
         AnalysisFixture.snapshot([land("Forest", produced_mana: ["G"])], color_identity: ["G"])

@@ -5,6 +5,7 @@ defmodule Deckex.Decks.ImportFromUrlTest do
 
   alias Deckex.Cards.Card
   alias Deckex.Cards.ScryfallMapper
+  alias Deckex.CatalogueFixture
   alias Deckex.Decks
   alias Deckex.Error
   alias Deckex.ScryfallFixture
@@ -12,17 +13,9 @@ defmodule Deckex.Decks.ImportFromUrlTest do
 
   setup :verify_on_exit!
 
-  defp seed_catalogue(names) do
-    for name <- names do
-      attrs = name |> ScryfallFixture.load!() |> ScryfallMapper.to_attrs()
-
-      %Card{} |> Card.changeset(attrs) |> Repo.insert!()
-    end
-  end
-
   describe "import_from_url/1" do
     test "fetches the deck and imports it" do
-      seed_catalogue(["sol_ring"])
+      CatalogueFixture.seed!(["sol_ring"])
 
       expect(Deckex.Moxfield.Mock, :fetch_deck, fn "kq9g4t81" ->
         {:ok, %{name: "Iroh das Lontra", decklist: "1 Sol Ring"}}
@@ -55,7 +48,7 @@ defmodule Deckex.Decks.ImportFromUrlTest do
 
   describe "Deckex.Events" do
     test "a subscriber hears when a deck's status changes" do
-      seed_catalogue(["sol_ring"])
+      CatalogueFixture.seed!(["sol_ring"])
 
       expect(Deckex.Moxfield.Mock, :fetch_deck, fn _id ->
         {:ok, %{name: "Com evento", decklist: "1 Sol Ring"}}
@@ -73,7 +66,7 @@ defmodule Deckex.Decks.ImportFromUrlTest do
 
   describe "ImportDeckWorker" do
     test "imports the deck at the given URL" do
-      seed_catalogue(["sol_ring"])
+      CatalogueFixture.seed!(["sol_ring"])
 
       expect(Deckex.Moxfield.Mock, :fetch_deck, fn _id ->
         {:ok, %{name: "Do worker", decklist: "1 Sol Ring"}}

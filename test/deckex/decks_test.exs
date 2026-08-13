@@ -3,26 +3,16 @@ defmodule Deckex.DecksTest do
 
   import Mox
 
-  alias Deckex.Cards.Card
-  alias Deckex.Cards.ScryfallMapper
+  alias Deckex.CatalogueFixture
   alias Deckex.Decks
   alias Deckex.Error
   alias Deckex.ScryfallFixture
 
   setup :verify_on_exit!
 
-  # Seed the catalogue so imports need no Scryfall call at all.
-  defp seed_catalogue(names) do
-    for name <- names do
-      attrs = name |> ScryfallFixture.load!() |> ScryfallMapper.to_attrs()
-
-      %Card{} |> Card.changeset(attrs) |> Repo.insert!()
-    end
-  end
-
   describe "import_from_text/2" do
     test "creates a deck with its cards" do
-      seed_catalogue(["sol_ring", "cultivate"])
+      CatalogueFixture.seed!(["sol_ring", "cultivate"])
 
       text = "1 Sol Ring\n1 Cultivate"
 
@@ -35,14 +25,14 @@ defmodule Deckex.DecksTest do
     end
 
     test "keeps the quantity of each line" do
-      seed_catalogue(["forest"])
+      CatalogueFixture.seed!(["forest"])
 
       assert {:ok, deck} = Decks.import_from_text("4 Forest", %{name: "T", source: :paste})
       assert [%{quantity: 4}] = Decks.list_deck_cards(deck)
     end
 
     test "stores the raw decklist so the deck can be rebuilt later" do
-      seed_catalogue(["sol_ring"])
+      CatalogueFixture.seed!(["sol_ring"])
       text = "1 Sol Ring"
 
       assert {:ok, deck} = Decks.import_from_text(text, %{name: "T", source: :paste})
@@ -50,7 +40,7 @@ defmodule Deckex.DecksTest do
     end
 
     test "puts the commander on the commander board" do
-      seed_catalogue(["sol_ring", "cultivate"])
+      CatalogueFixture.seed!(["sol_ring", "cultivate"])
 
       text = """
       Commander
@@ -66,7 +56,7 @@ defmodule Deckex.DecksTest do
     end
 
     test "derives colour identity from the commander" do
-      seed_catalogue(["cultivate"])
+      CatalogueFixture.seed!(["cultivate"])
 
       assert {:ok, deck} =
                Decks.import_from_text("Commander\n1 Cultivate", %{name: "T", source: :paste})
@@ -75,7 +65,7 @@ defmodule Deckex.DecksTest do
     end
 
     test "leaves colour identity empty when no commander was declared" do
-      seed_catalogue(["sol_ring"])
+      CatalogueFixture.seed!(["sol_ring"])
 
       assert {:ok, deck} = Decks.import_from_text("1 Sol Ring", %{name: "T", source: :paste})
       assert deck.color_identity == []
@@ -91,7 +81,7 @@ defmodule Deckex.DecksTest do
     end
 
     test "records unresolved names on the deck instead of failing the import" do
-      seed_catalogue(["sol_ring"])
+      CatalogueFixture.seed!(["sol_ring"])
 
       expect(Deckex.Scryfall.Mock, :fetch_by_names, fn _names ->
         {:ok, %{found: [], not_found: ["Carta Inventada"]}}
@@ -119,14 +109,14 @@ defmodule Deckex.DecksTest do
     end
 
     test "leaves the deck ready when every card is already classified" do
-      seed_catalogue(["sol_ring"])
+      CatalogueFixture.seed!(["sol_ring"])
 
       assert {:ok, deck} = Decks.import_from_text("1 Sol Ring", %{name: "T", source: :paste})
       assert deck.status == :ready
     end
 
     test "marks the deck classifying and enqueues the residue" do
-      seed_catalogue(["young_pyromancer"])
+      CatalogueFixture.seed!(["young_pyromancer"])
 
       assert {:ok, deck} =
                Decks.import_from_text("1 Young Pyromancer", %{name: "T", source: :paste})
@@ -138,7 +128,7 @@ defmodule Deckex.DecksTest do
 
   describe "archive_deck/1" do
     test "hides a deck from the list without deleting it" do
-      seed_catalogue(["sol_ring"])
+      CatalogueFixture.seed!(["sol_ring"])
       {:ok, deck} = Decks.import_from_text("1 Sol Ring", %{name: "T", source: :paste})
 
       assert {:ok, archived} = Decks.archive_deck(deck)

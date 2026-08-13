@@ -8,29 +8,22 @@ defmodule Deckex.Decks.ImportRegressionTest do
   import Mox
 
   alias Deckex.Cards
-  alias Deckex.Cards.Card
-  alias Deckex.Cards.ScryfallMapper
+  alias Deckex.CatalogueFixture
   alias Deckex.Decks
-  alias Deckex.ScryfallFixture
 
   setup :verify_on_exit!
 
   @decklist "test/support/fixtures/decklists/iroh_das_lontra.txt"
 
-  # The catalogue holds only the cards we have fixtures for; the rest come back
-  # from the (mocked) port as not_found, which the import records instead of
-  # failing on.
-  defp seed_catalogue do
-    # Every one of these is genuinely in the decklist — seeding a card the deck
-    # does not contain would silently weaken the count assertions below.
-    for name <- ~w(sol_ring natures_lore command_tower counterspell forest) do
-      attrs = name |> ScryfallFixture.load!() |> ScryfallMapper.to_attrs()
-
-      %Card{} |> Card.changeset(attrs) |> Repo.insert!()
-    end
-  end
+  # Every one of these is genuinely in the decklist — seeding a card the deck
+  # does not contain would silently weaken the count assertions below. The rest
+  # of the deck comes back from the (mocked) port as not_found, which the import
+  # records instead of failing on.
+  @seeded ~w(sol_ring natures_lore command_tower counterspell forest)
 
   defp import_real_deck do
+    CatalogueFixture.seed!(@seeded)
+
     expect(Deckex.Scryfall.Mock, :fetch_by_names, fn names ->
       # Everything not seeded is reported unresolved rather than invented.
       {:ok, %{found: [], not_found: names}}
@@ -40,8 +33,6 @@ defmodule Deckex.Decks.ImportRegressionTest do
   end
 
   test "imports the deck, keeping quantities, boards and unresolved names" do
-    seed_catalogue()
-
     assert {:ok, deck} = import_real_deck()
 
     cards = Decks.list_deck_cards(deck)
@@ -68,8 +59,6 @@ defmodule Deckex.Decks.ImportRegressionTest do
   end
 
   test "the seeded cards come out classified by the rules" do
-    seed_catalogue()
-
     assert {:ok, _deck} = import_real_deck()
 
     assert [%{kind: :ramp, source: :rule}] = Cards.roles_for(Cards.get_by_name("Sol Ring"))
@@ -83,8 +72,6 @@ defmodule Deckex.Decks.ImportRegressionTest do
   end
 
   test "a deck whose cards the rules all cover comes out ready" do
-    seed_catalogue()
-
     assert {:ok, deck} = import_real_deck()
     assert deck.status == :ready
   end

@@ -7,22 +7,15 @@ defmodule Deckex.AnalysisTest do
   alias Deckex.Analysis.Report
   alias Deckex.Cards.Card
   alias Deckex.Cards.ScryfallMapper
+  alias Deckex.CatalogueFixture
   alias Deckex.Decks
   alias Deckex.ScryfallFixture
 
   setup :verify_on_exit!
 
-  defp seed_catalogue(names) do
-    for name <- names do
-      attrs = name |> ScryfallFixture.load!() |> ScryfallMapper.to_attrs()
-
-      %Card{} |> Card.changeset(attrs) |> Repo.insert!()
-    end
-  end
-
   describe "Decks.snapshot/1" do
     test "loads cards, quantities and roles" do
-      seed_catalogue(["sol_ring", "forest"])
+      CatalogueFixture.seed!(["sol_ring", "forest"])
 
       {:ok, deck} = Decks.import_from_text("1 Sol Ring\n4 Forest", %{name: "T", source: :paste})
 
@@ -40,7 +33,7 @@ defmodule Deckex.AnalysisTest do
     end
 
     test "separates the commander" do
-      seed_catalogue(["sol_ring", "natures_lore"])
+      CatalogueFixture.seed!(["sol_ring", "natures_lore"])
 
       {:ok, deck} =
         Decks.import_from_text("Commander\n1 Nature's Lore\n----\n1 Sol Ring", %{
@@ -57,7 +50,7 @@ defmodule Deckex.AnalysisTest do
 
   describe "report/2" do
     test "produces every lens and a sorted finding list" do
-      seed_catalogue(["sol_ring", "forest"])
+      CatalogueFixture.seed!(["sol_ring", "forest"])
 
       {:ok, deck} = Decks.import_from_text("1 Sol Ring\n4 Forest", %{name: "T", source: :paste})
 
@@ -71,7 +64,7 @@ defmodule Deckex.AnalysisTest do
     end
 
     test "counts critical findings" do
-      seed_catalogue(["sol_ring"])
+      CatalogueFixture.seed!(["sol_ring"])
 
       {:ok, deck} = Decks.import_from_text("1 Sol Ring", %{name: "T", source: :paste})
 
@@ -79,7 +72,7 @@ defmodule Deckex.AnalysisTest do
     end
 
     test "filters findings by lens" do
-      seed_catalogue(["sol_ring"])
+      CatalogueFixture.seed!(["sol_ring"])
 
       {:ok, deck} = Decks.import_from_text("1 Sol Ring", %{name: "T", source: :paste})
       report = deck |> Decks.snapshot() |> Analysis.report()
@@ -88,7 +81,7 @@ defmodule Deckex.AnalysisTest do
     end
 
     test "is deterministic — the same snapshot yields the same report" do
-      seed_catalogue(["sol_ring", "forest"])
+      CatalogueFixture.seed!(["sol_ring", "forest"])
 
       {:ok, deck} = Decks.import_from_text("1 Sol Ring\n4 Forest", %{name: "T", source: :paste})
       snapshot = Decks.snapshot(deck)
