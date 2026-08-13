@@ -30,7 +30,7 @@ mix setup
 mix phx.server
 ```
 
-O Postgres sobe na porta **5435**. Abre http://localhost:4000.
+O Postgres sobe na porta **5435**. Abre http://localhost:4005.
 
 ## Importando um deck
 

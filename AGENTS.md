@@ -56,6 +56,29 @@ for *what* we are building and *why*. This file is *how*.
   configurable User-Agent for the day Moxfield approves one. **Pasting a
   decklist is the primary import path.** No browser impersonation, no
   User-Agent rotation, no CAPTCHA handling — ever.
+- **Every card write takes its locks in `oracle_id` order.** The Ecto sandbox
+  isolates what a test can *see*, not the locks it *takes*: two async
+  transactions inserting the same card rows in different orders deadlock in
+  Postgres, surfacing as a random `40P01` in whichever one lost. One global
+  order means concurrent writers queue instead of colliding. This holds in
+  production code (`Deckex.Cards.insert_all/1`, the classification pass) and in
+  tests (`Deckex.CatalogueFixture`). **Never hand-roll a card insert in a
+  test** — seed through `CatalogueFixture`, once per test, in a single call.
+  This bug came back three times before the rule was written down here.
+- **A Tailwind class that names a nothing is silent.** `class="text-hero"`
+  compiles, renders, and does nothing; it cost four page titles their size for
+  weeks. Every utility using a design-token prefix must name a token declared in
+  the `@theme` block of `assets/css/app.css`. `DeckexWeb.DesignTokensTest`
+  enforces it — if a class is a structural Tailwind utility with no token behind
+  it, add it to that test's `@builtins` deliberately.
+- **The model never states a price.** Card prices come from the catalogue, which
+  gets them from Scryfall. A model's price memory is stale on a good day and
+  invented on a bad one — verified 2026-08-13, when `fable` quoted a Cyclonic
+  Rift 28% under its actual price. The briefing forbids it and
+  `Deckex.Consults.Suggestions` discards any price field the model volunteers.
+- **Building a page never reaches for the network.** Rendering a deck reads;
+  fetching happens in the background job that already exists. A suggested card
+  missing from the catalogue renders unresolved rather than making the page wait.
 - **Analysis is pure.** `Deckex.Analysis` has no Repo, no HTTP, no process
   state. Reports are computed on demand, never cached.
 - **Classification records its provenance.** Every `card_role` carries `source`
@@ -80,6 +103,8 @@ Credo runs `--strict`. Findings in generator output are fixed, not suppressed.
 
 PostgreSQL runs in Docker on **host port 5435** (5432/5433/5434 belong to other
 projects on this machine).
+
+The app serves on **port 4005**.
 
 ```bash
 docker compose up -d
