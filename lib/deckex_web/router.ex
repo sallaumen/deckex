@@ -18,6 +18,7 @@ defmodule DeckexWeb.Router do
     pipe_through :browser
 
     live "/", MesaLive, :index
+    live "/importar", ImportLive, :new
     live "/decks/:id", DeckLive, :show
   end
 

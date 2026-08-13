@@ -48,6 +48,8 @@ defmodule DeckexWeb.MesaLive do
             {length(@decks)} {if length(@decks) == 1, do: "deck", else: "decks"} na mesa.
           </p>
         </div>
+
+        <.button navigate={~p"/importar"} variant="primary">Trazer um deck</.button>
       </header>
 
       <div
@@ -55,9 +57,10 @@ defmodule DeckexWeb.MesaLive do
         class="rounded-xl border border-hairline-soft bg-surface p-10 text-center"
       >
         <p class="text-body text-ink-secondary">Nenhum deck ainda.</p>
-        <p class="mt-1 text-caption text-ink-faint">
-          Importe uma lista com <code class="font-mono">Deckex.Decks.import_from_text/2</code>.
+        <p class="mt-1 mb-5 text-caption text-ink-faint">
+          Cole a lista exportada do Moxfield e a mesa começa.
         </p>
+        <.button navigate={~p"/importar"} variant="primary">Trazer um deck</.button>
       </div>
 
       <ul class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">

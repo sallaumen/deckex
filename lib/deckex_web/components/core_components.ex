@@ -122,7 +122,9 @@ defmodule DeckexWeb.CoreComponents do
       <.button phx-click="go" variant="primary">Importar</.button>
       <.button navigate={~p"/"}>Mesa</.button>
   """
-  attr :rest, :global, include: ~w(href navigate patch method download name value disabled)
+  # `type` is here so the same component can submit a form; without it a form's
+  # button falls back to the browser default and the markup lies about intent.
+  attr :rest, :global, include: ~w(href navigate patch method download name value disabled type)
   attr :class, :any
   attr :variant, :string, values: ~w(primary)
   slot :inner_block, required: true
