@@ -21,6 +21,12 @@ defmodule Deckex.Consults do
   alias Deckex.Repo
   alias Deckex.Workers.ConsultWorker
 
+  # A consult is a long generation by design: the model reads a 100-card list,
+  # searches the web, and reasons about swaps. The AI port's 2-minute default is
+  # sized for bulk classification, not for this, and it timed out on the first
+  # real deck. Ten minutes with an explicit override, not a bumped global.
+  @default_timeout_ms 600_000
+
   defdelegate list_for_deck(deck), to: ConsultQuery
   defdelegate fetch(id), to: ConsultQuery
 
@@ -53,10 +59,18 @@ defmodule Deckex.Consults do
 
     # WebSearch is the point of the whole feature: the app supplies measured
     # facts about this deck, the model supplies knowledge about every card.
-    case AI.complete(running.briefing, schema, allowed_tools: ["WebSearch"]) do
+    opts = [allowed_tools: ["WebSearch"], timeout_ms: timeout_ms()]
+
+    case AI.complete(running.briefing, schema, opts) do
       {:ok, response} -> {:ok, succeed(running, response, started)}
       {:error, %Error{} = error} -> fail(running, error)
     end
+  end
+
+  @doc "How long a consult may take before it is called a timeout."
+  @spec timeout_ms() :: pos_integer()
+  def timeout_ms do
+    :deckex |> Application.get_env(__MODULE__, []) |> Keyword.get(:timeout_ms, @default_timeout_ms)
   end
 
   defp insert!(deck, lens, briefing, report, opts) do
