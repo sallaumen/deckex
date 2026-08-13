@@ -481,6 +481,7 @@ points, not laws.
 | `top_heavy_share` | 0.20 | Share of nonlands at 6+ CMC that reads as top-heavy |
 | `interaction_target` | 8 | Healthy interaction count |
 | `interaction_floor` | 5 | Below this is a critical finding |
+| `board_wipe_target` | 2 | Below this the deck cannot reset a board |
 | `draw_target` | 8 | Card advantage pieces |
 | `sources_single_pip` | 19 | Colour sources for a single coloured pip on curve |
 | `sources_double_pip` | 25 | For `{B}{B}`-style costs |
@@ -542,7 +543,13 @@ by cost band. Six removal spells at sorcery speed do not hold a table the way
 six at instant speed do, and a single total would hide that.
 
 Findings: `interaction.total_low`, `interaction.no_board_wipes`,
-`interaction.sorcery_speed_heavy`, `interaction.no_protection`.
+`interaction.board_wipes_low`, `interaction.sorcery_speed_heavy`,
+`interaction.no_protection`.
+
+**`board_wipes_low` is separate from `no_board_wipes`** — added 2026-08-13 after
+measuring a real deck. That deck held exactly one sweeper, so a finding that
+only fires at zero stayed silent about the thing most likely to be losing it
+games. Zero sweepers is critical; one is a warning; neither is fine.
 
 ### 7.6 Lens: Consistência & Fecho (`Analysis.Consistency`)
 
