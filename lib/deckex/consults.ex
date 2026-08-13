@@ -70,7 +70,9 @@ defmodule Deckex.Consults do
   @doc "How long a consult may take before it is called a timeout."
   @spec timeout_ms() :: pos_integer()
   def timeout_ms do
-    :deckex |> Application.get_env(__MODULE__, []) |> Keyword.get(:timeout_ms, @default_timeout_ms)
+    :deckex
+    |> Application.get_env(__MODULE__, [])
+    |> Keyword.get(:timeout_ms, @default_timeout_ms)
   end
 
   defp insert!(deck, lens, briefing, report, opts) do
