@@ -215,6 +215,19 @@ and programmatic access is gated behind a `User-Agent` approved by e-mailing
 support@moxfield.com. The deck endpoint used by community tools is undocumented,
 sits behind Cloudflare, and returns public decks only.
 
+**Verified empirically on 2026-08-13.** A single `GET` to
+`api2.moxfield.com/v3/decks/all/<publicId>` carrying an honest, identifying
+`User-Agent` returned **HTTP 403** with a Cloudflare challenge page, not deck
+JSON. This is the expected behaviour for an unapproved client, and it sets the
+v1 reality:
+
+- **Pasting the decklist is the primary, working import path in v1.**
+- **URL sync ships implemented but blocked.** It is wired end to end behind the
+  configurable `User-Agent`, so the day Moxfield approves one, the owner pastes
+  it into Ajustes and sync begins working with no code change.
+- The UI must therefore never present URL sync as the default happy path while
+  it is blocked; it surfaces `:moxfield_blocked` with the paste form inline.
+
 The owner chose automatic URL sync with this understood. The implementation is
 therefore **honest, not evasive**:
 
@@ -229,9 +242,9 @@ therefore **honest, not evasive**:
 - On any block or failure the app degrades gracefully: it reports what happened
   and offers the paste path.
 
-**The paste path is a first-class, always-available feature**, not a hidden
-fallback. It is the only way to import a private deck, and it is the path that
-cannot break.
+**The paste path is the primary import feature**, not a hidden fallback. It is
+the only way to import a private deck, the only path that works today, and the
+only one that cannot break.
 
 ### 4.3 AI
 
