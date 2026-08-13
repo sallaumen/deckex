@@ -8,6 +8,8 @@ defmodule Deckex.Decks do
   itself only writes rows.
   """
 
+  alias Deckex.Analysis.CardEntry
+  alias Deckex.Analysis.DeckSnapshot
   alias Deckex.Cards
   alias Deckex.Cards.Name
   alias Deckex.Decks.Deck
@@ -61,6 +63,36 @@ defmodule Deckex.Decks do
         last_synced_at: DateTime.utc_now(:second)
       })
     end
+  end
+
+  @doc """
+  Builds the snapshot the analysis engine reads.
+
+  This is the **only** database work in the whole analysis path: two queries —
+  the deck's cards, then every role for those cards — and every lens then
+  operates on structs in memory.
+  """
+  @spec snapshot(Deck.t()) :: DeckSnapshot.t()
+  def snapshot(%Deck{} = deck) do
+    deck_cards = DeckQuery.list_deck_cards(deck)
+    roles = deck_cards |> Enum.map(& &1.card_id) |> Cards.roles_by_card_ids()
+    grouped = Enum.group_by(deck_cards, & &1.board)
+
+    %DeckSnapshot{
+      deck_id: deck.id,
+      deck_name: deck.name,
+      color_identity: deck.color_identity,
+      commanders: entries_for(grouped, :commander, roles),
+      main: entries_for(grouped, :main, roles)
+    }
+  end
+
+  defp entries_for(grouped, board, roles) do
+    grouped
+    |> Map.get(board, [])
+    |> Enum.map(fn deck_card ->
+      CardEntry.new(deck_card.card, deck_card.quantity, Map.get(roles, deck_card.card_id, []))
+    end)
   end
 
   @doc "Hides a deck from the list without deleting anything."

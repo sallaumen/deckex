@@ -24,6 +24,7 @@ defmodule Deckex.Cards do
   defdelegate list_by_normalized_names(names), to: CardQuery
   defdelegate list_by_ids(ids), to: CardQuery
   defdelegate roles_for(card), to: CardQuery, as: :list_roles
+  defdelegate roles_by_card_ids(ids), to: CardQuery
 
   @doc """
   Resolves card names to `Card` structs, fetching and caching whatever is

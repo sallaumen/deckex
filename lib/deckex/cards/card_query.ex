@@ -39,4 +39,19 @@ defmodule Deckex.Cards.CardQuery do
   def list_roles(%Card{id: card_id}) do
     Repo.all(from r in CardRole, where: r.card_id == ^card_id, order_by: r.kind)
   end
+
+  @doc """
+  Maps card id to the role kinds that card holds, for many cards at once.
+
+  One query for a whole deck. Doing this per card would be a hundred round
+  trips to build a report that is meant to cost microseconds.
+  """
+  @spec roles_by_card_ids([String.t()]) :: %{String.t() => [atom()]}
+  def roles_by_card_ids([]), do: %{}
+
+  def roles_by_card_ids(card_ids) when is_list(card_ids) do
+    from(r in CardRole, where: r.card_id in ^card_ids, select: {r.card_id, r.kind})
+    |> Repo.all()
+    |> Enum.group_by(fn {card_id, _kind} -> card_id end, fn {_card_id, kind} -> kind end)
+  end
 end
