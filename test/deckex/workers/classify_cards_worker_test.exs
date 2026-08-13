@@ -4,22 +4,20 @@ defmodule Deckex.Workers.ClassifyCardsWorkerTest do
   import Mox
 
   alias Deckex.Cards
-  alias Deckex.Cards.Card
-  alias Deckex.Cards.ScryfallMapper
+  alias Deckex.CatalogueFixture
   alias Deckex.Error
-  alias Deckex.ScryfallFixture
   alias Deckex.Workers.ClassifyCardsWorker
 
   setup :verify_on_exit!
 
-  defp insert_fixture(name) do
-    attrs = name |> ScryfallFixture.load!() |> ScryfallMapper.to_attrs()
-
-    %Card{} |> Card.changeset(attrs) |> Repo.insert!()
+  # One ordered, conflict-safe batch per test — see `Deckex.CatalogueFixture`
+  # for why the order is load-bearing and why it must be a single call.
+  defp seed(names) do
+    CatalogueFixture.seed_map!(names)
   end
 
   test "classifies the cards it is given" do
-    card = insert_fixture("sol_ring")
+    %{"sol_ring" => card} = seed(~w(sol_ring))
 
     assert :ok = perform_job(ClassifyCardsWorker, %{card_ids: [card.id]})
     assert [%{kind: :ramp}] = Cards.roles_for(card)
@@ -31,7 +29,7 @@ defmodule Deckex.Workers.ClassifyCardsWorkerTest do
   end
 
   test "retries an AI timeout rather than cancelling" do
-    card = insert_fixture("young_pyromancer")
+    %{"young_pyromancer" => card} = seed(~w(young_pyromancer))
 
     expect(Deckex.AI.Mock, :complete, fn _prompt, _schema, _opts ->
       {:error, Error.new(:ai_timeout, "estourou")}

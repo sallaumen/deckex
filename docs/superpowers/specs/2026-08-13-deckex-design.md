@@ -722,3 +722,27 @@ uncertain work happens early.
 | Reports computed, never cached | Same reason. Consults freeze a snapshot for reproducibility, which is a different thing. |
 | AI runs in-app with WebSearch | Owner's choice. The briefing is stored anyway, so the copy-to-terminal path costs nothing extra and remains available. |
 | Baselines editable | They are heuristics. Making them configurable is honest about that and lets the owner tune to their playgroup. |
+| Suggestions as a table, not prose | The answer is a list of decisions; a table lets each one carry its reason, the finding it addresses, its price, and a button. Prose cannot be clicked. |
+| Prices from Scryfall, never from the model | Verified on 2026-08-13: `fable` quoted "~US$16", "~US$5", "~US$31" unprompted. The briefing now forbids stating prices, and the table sources them from the catalogue regardless. |
+| `opus` as the default model | See the comparison below. Selectable per consult, so a cheaper model is one dropdown away. |
+
+### Model comparison — 2026-08-13
+
+One identical briefing (lens `:full`, Iroh das Lontra, 101 cards) sent to three
+models. Criteria: colour-identity legality, grounding in the actual decklist,
+specificity of the reasoning, and honesty about what it did not know.
+
+| Model | Time | Cuts/adds | What it did |
+|---|---|---|---|
+| `fable` | 156s | 3/3 | Correct diagnosis, all suggestions legal. **Invented prices** in every reason. Cut Anger, which is defensible but thin. |
+| `sonnet` | 228s | 4/4 | Correct diagnosis, sharpest single observation (Arid Mesa only fetches Mountain in this list). Suggested **Forest twice as two rows**, which reads as a duplicate. |
+| `opus` | 250s | 5/5 | Paired every cut with the add that replaces it via `replaces`. The only one that read the commander's text and reasoned from it — Lessons are the engine because Iroh flashbacks them, so they stay. Gave budget alternatives, flagged that Chain Reaction kills your own board, and said plainly that it could not verify prices. Also noted `graveyard_hate` at 0 as out of scope but relevant. |
+
+All three agreed on the diagnosis the engine had already measured — G starved at
+23 sources against a target of 25, and a single board wipe. That agreement is
+the useful result: the lenses are pointing at something real.
+
+Two defects in deckex surfaced from reading the three answers side by side, and
+both are fixed: the briefing now forbids price claims, and `add_card/3` refuses
+a second copy of a singleton card so a repeated suggestion cannot build an
+illegal decklist one click at a time.

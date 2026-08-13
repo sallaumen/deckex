@@ -43,7 +43,7 @@ defmodule DeckexWeb.MesaLive do
     <div class="mx-auto max-w-[1800px] px-6 py-10 lg:px-10 lg:py-14">
       <header class="mb-8 flex items-end justify-between gap-4">
         <div>
-          <h1 class="text-hero font-semibold text-ink">A Mesa</h1>
+          <h1 class="text-display font-semibold text-ink">A Mesa</h1>
           <p class="mt-1 text-body text-ink-muted">
             {length(@decks)} {if length(@decks) == 1, do: "deck", else: "decks"} na mesa.
           </p>

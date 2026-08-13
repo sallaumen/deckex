@@ -11,6 +11,7 @@ defmodule Deckex.Decks do
   alias Deckex.Analysis.CardEntry
   alias Deckex.Analysis.DeckSnapshot
   alias Deckex.Cards
+  alias Deckex.Cards.Card
   alias Deckex.Cards.Name
   alias Deckex.Decks.Deck
   alias Deckex.Decks.DeckCard
@@ -100,13 +101,18 @@ defmodule Deckex.Decks do
 
   Writes the same `deck_cards` row the import writes, so the next report picks
   the change up with no special case.
+
+  Refuses a second copy of a singleton card. A model asked for two Forests will
+  get two — that is legal — but a model asking twice for the same spell would
+  otherwise build an illegal decklist one click at a time.
   """
   @spec add_card(Deck.t(), String.t(), keyword()) :: {:ok, DeckCard.t()} | {:error, Error.t()}
   def add_card(%Deck{} = deck, name, opts \\ []) do
     board = Keyword.get(opts, :board, :main)
     quantity = Keyword.get(opts, :quantity, 1)
 
-    with {:ok, card} <- resolve_one(name) do
+    with {:ok, card} <- resolve_one(name),
+         :ok <- check_singleton(deck, card, board) do
       # Classify on the way in. A card added without roles is invisible to every
       # lens — the interaction count would not move when you add a counterspell,
       # which is precisely the feedback the button exists to give.
@@ -114,6 +120,26 @@ defmodule Deckex.Decks do
 
       {:ok, upsert_deck_card!(deck, card, board, quantity)}
     end
+  end
+
+  # Commander is singleton apart from basic lands and the handful of cards whose
+  # own text lifts the rule. Both exceptions are *in the card data*, so this asks
+  # the card rather than carrying a list of card names — the same reason the rest
+  # of the engine reads oracle text instead of hardcoding what is good.
+  defp check_singleton(deck, card, board) do
+    cond do
+      Card.basic_land?(card) or Card.any_number_allowed?(card) -> :ok
+      is_nil(DeckQuery.get_deck_card(deck, card.id, board)) -> :ok
+      true -> {:error, already_singleton(card)}
+    end
+  end
+
+  defp already_singleton(card) do
+    Error.new(
+      :not_commander_legal,
+      "#{card.name} já está no deck, e Commander só aceita uma cópia.",
+      %{card: card.name}
+    )
   end
 
   @doc "Removes one copy of a card, deleting the row when the last copy goes."

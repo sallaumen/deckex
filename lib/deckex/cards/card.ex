@@ -52,6 +52,32 @@ defmodule Deckex.Cards.Card do
     timestamps()
   end
 
+  @doc """
+  Whether this is a basic land, which a deck may hold any number of.
+
+  Reads the type line rather than a list of five names: snow-covered basics and
+  Wastes are basic too, and the type line already says so.
+  """
+  @spec basic_land?(t()) :: boolean()
+  def basic_land?(%__MODULE__{type_line: nil}), do: false
+
+  def basic_land?(%__MODULE__{type_line: type_line}) do
+    String.contains?(type_line, "Basic") and String.contains?(type_line, "Land")
+  end
+
+  @doc """
+  Whether the card's own text lifts the singleton rule.
+
+  Relentless Rats and its cousins all say so in their rules text, so this asks
+  the card instead of carrying a list that would go stale with the next set.
+  """
+  @spec any_number_allowed?(t()) :: boolean()
+  def any_number_allowed?(%__MODULE__{oracle_text: nil}), do: false
+
+  def any_number_allowed?(%__MODULE__{oracle_text: text}) do
+    String.contains?(text, "any number of cards named")
+  end
+
   @doc "Builds a changeset from Scryfall-derived attributes."
   @spec changeset(t(), map()) :: Ecto.Changeset.t()
   def changeset(card, attrs) do

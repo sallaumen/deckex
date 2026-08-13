@@ -1,11 +1,4 @@
 [
-  # Content-Security-Policy is deferred to the UI plan (spec §13 milestone 7).
-  # deckex is a local, single-user app bound to 127.0.0.1 and has no real web
-  # surface yet; a proper CSP — with LiveView script nonces — lands with the UI
-  # rather than as a stub that would have to be rewritten. This entry is a
-  # deliberate deferral with a scheduled end, NOT a permanent exemption: the UI
-  # plan must add the CSP and delete this line.
-  ignore: ["Config.CSP"],
   # Honor per-function `@sobelow_skip` attributes, so a reviewed false positive
   # is silenced at the one function it affects instead of project-wide.
   skip: true,

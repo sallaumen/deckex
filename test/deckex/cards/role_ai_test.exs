@@ -4,18 +4,16 @@ defmodule Deckex.Cards.RoleAITest do
   import Mox
 
   alias Deckex.Cards
-  alias Deckex.Cards.Card
   alias Deckex.Cards.RoleAI
-  alias Deckex.Cards.ScryfallMapper
+  alias Deckex.CatalogueFixture
   alias Deckex.Error
-  alias Deckex.ScryfallFixture
 
   setup :verify_on_exit!
 
-  defp insert_fixture(name) do
-    attrs = name |> ScryfallFixture.load!() |> ScryfallMapper.to_attrs()
-
-    %Card{} |> Card.changeset(attrs) |> Repo.insert!()
+  # One ordered, conflict-safe batch per test — see `Deckex.CatalogueFixture`
+  # for why the order is load-bearing and why it must be a single call.
+  defp seed(names) do
+    CatalogueFixture.seed_map!(names)
   end
 
   describe "schema/0" do
@@ -39,7 +37,7 @@ defmodule Deckex.Cards.RoleAITest do
 
   describe "classify/1" do
     test "asks the model only about the cards it is given" do
-      card = insert_fixture("young_pyromancer")
+      %{"young_pyromancer" => card} = seed(~w(young_pyromancer))
 
       expect(Deckex.AI.Mock, :complete, fn prompt, _schema, _opts ->
         assert prompt =~ "Young Pyromancer"
@@ -57,7 +55,7 @@ defmodule Deckex.Cards.RoleAITest do
     end
 
     test "ignores a role the model invented" do
-      card = insert_fixture("young_pyromancer")
+      %{"young_pyromancer" => card} = seed(~w(young_pyromancer))
 
       expect(Deckex.AI.Mock, :complete, fn _prompt, _schema, _opts ->
         {:ok,
@@ -73,7 +71,7 @@ defmodule Deckex.Cards.RoleAITest do
     end
 
     test "ignores a card name the model hallucinated" do
-      card = insert_fixture("young_pyromancer")
+      %{"young_pyromancer" => card} = seed(~w(young_pyromancer))
 
       expect(Deckex.AI.Mock, :complete, fn _prompt, _schema, _opts ->
         {:ok,
@@ -95,7 +93,7 @@ defmodule Deckex.Cards.RoleAITest do
     end
 
     test "propagates an AI failure as a domain error" do
-      card = insert_fixture("young_pyromancer")
+      %{"young_pyromancer" => card} = seed(~w(young_pyromancer))
 
       expect(Deckex.AI.Mock, :complete, fn _prompt, _schema, _opts ->
         {:error, Error.new(:ai_timeout, "estourou")}
@@ -107,8 +105,8 @@ defmodule Deckex.Cards.RoleAITest do
 
   describe "Cards.classify_all/1" do
     test "uses rules for what it can and the AI only for the residue" do
-      sol_ring = insert_fixture("sol_ring")
-      pyromancer = insert_fixture("young_pyromancer")
+      %{"sol_ring" => sol_ring, "young_pyromancer" => pyromancer} =
+        seed(~w(sol_ring young_pyromancer))
 
       # Sol Ring never reaches the model: the rules place it for free.
       expect(Deckex.AI.Mock, :complete, fn prompt, _schema, _opts ->
@@ -131,15 +129,15 @@ defmodule Deckex.Cards.RoleAITest do
 
     test "does not call the model at all when the rules cover everything" do
       # verify_on_exit! fails the test if the mock is called.
-      sol_ring = insert_fixture("sol_ring")
-      cultivate = insert_fixture("cultivate")
+      %{"sol_ring" => sol_ring, "cultivate" => cultivate} =
+        seed(~w(sol_ring cultivate))
 
       assert {:ok, %{rules: 2, ai: 0}} = Cards.classify_all([sol_ring, cultivate])
     end
 
     test "an AI failure does not lose the roles the rules already found" do
-      sol_ring = insert_fixture("sol_ring")
-      pyromancer = insert_fixture("young_pyromancer")
+      %{"sol_ring" => sol_ring, "young_pyromancer" => pyromancer} =
+        seed(~w(sol_ring young_pyromancer))
 
       expect(Deckex.AI.Mock, :complete, fn _prompt, _schema, _opts ->
         {:error, Error.new(:ai_timeout, "estourou")}

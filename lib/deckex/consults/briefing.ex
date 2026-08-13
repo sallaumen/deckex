@@ -40,11 +40,16 @@ defmodule Deckex.Consults.Briefing do
     - Every card you add must be inside the deck's colour identity
       (#{identity(report)}). A card outside it is illegal, not merely bad.
     - Only suggest cutting cards that are actually in the list above.
+    - A card may appear once. Basic lands and cards whose own text allows any
+      number are the only exceptions — Commander is singleton.
     - Prefer changes that address a finding over changes that are merely
       upgrades.#{budget_line(opts[:budget_usd])}
-    - Search the web for current Commander staples and prices where it helps.
-      The measurements above are facts about this deck; the card pool is what
-      you know and can look up.
+    - **Never state a price.** The app shows the current Scryfall price next to
+      every suggestion, so a number from you can only disagree with it. Say
+      "cheap" or "expensive" if it matters to the argument; leave the figure out.
+    - Search the web for current Commander staples where it helps. The
+      measurements above are facts about this deck; the card pool is what you
+      know and can look up.
 
     Answer in **Portuguese (pt-BR)**, but never translate a card name.
     """

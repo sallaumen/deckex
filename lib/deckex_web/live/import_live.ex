@@ -75,7 +75,7 @@ defmodule DeckexWeb.ImportLive do
       </.link>
 
       <header class="mt-3 mb-10">
-        <h1 class="text-hero font-semibold text-ink">Trazer um deck</h1>
+        <h1 class="text-display font-semibold text-ink">Trazer um deck</h1>
         <p class="mt-1 text-body text-ink-muted">
           Cole a lista exportada ou tente o link do Moxfield.
         </p>
@@ -114,7 +114,7 @@ defmodule DeckexWeb.ImportLive do
                 rows="16"
                 required
                 placeholder={decklist_example()}
-                class="w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 font-mono text-body-sm text-ink placeholder:text-ink-disabled focus:border-ink-faint"
+                class="w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 font-mono text-caption text-ink placeholder:text-ink-disabled focus:border-ink-faint"
               >{@paste_form[:decklist].value}</textarea>
             </div>
 

@@ -66,7 +66,7 @@ defmodule DeckexWeb.SettingsLive do
       </.link>
 
       <header class="mt-3 mb-10">
-        <h1 class="text-hero font-semibold text-ink">Ajustes</h1>
+        <h1 class="text-display font-semibold text-ink">Ajustes</h1>
         <p class="mt-1 text-body text-ink-muted">
           Os números da análise são heurísticas, não leis. Mexa à vontade.
         </p>
@@ -128,7 +128,7 @@ defmodule DeckexWeb.SettingsLive do
                   type="text"
                   name="setting[value]"
                   value={@values[entry.key]}
-                  class="w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 font-mono text-body-sm text-ink"
+                  class="w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 font-mono text-caption text-ink"
                 />
 
                 <p :if={entry.hint} class="mt-1.5 text-caption text-ink-muted">{entry.hint}</p>

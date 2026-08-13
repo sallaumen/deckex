@@ -81,4 +81,40 @@ defmodule Deckex.Cards.CardTest do
       assert [%{"name" => "Agadeem's Awakening"}, %{"name" => _back}] = card.card_faces
     end
   end
+
+  describe "basic_land?/1" do
+    test "a basic land is one" do
+      assert Card.basic_land?(%Card{type_line: "Basic Land — Forest"})
+    end
+
+    test "a snow-covered basic is still one" do
+      assert Card.basic_land?(%Card{type_line: "Basic Snow Land — Island"})
+    end
+
+    test "a nonbasic land is not" do
+      refute Card.basic_land?(%Card{type_line: "Land — Forest Island"})
+    end
+
+    test "a card with no type line is not" do
+      refute Card.basic_land?(%Card{type_line: nil})
+    end
+  end
+
+  describe "any_number_allowed?/1" do
+    # Read from the card's own text, so the next set that prints one of these
+    # needs no code change.
+    test "a card whose text lifts the singleton rule says so" do
+      assert Card.any_number_allowed?(%Card{
+               oracle_text: "A deck can have any number of cards named Relentless Rats."
+             })
+    end
+
+    test "an ordinary card does not" do
+      refute Card.any_number_allowed?(%Card{oracle_text: "Counter target spell."})
+    end
+
+    test "a card with no text does not" do
+      refute Card.any_number_allowed?(%Card{oracle_text: nil})
+    end
+  end
 end

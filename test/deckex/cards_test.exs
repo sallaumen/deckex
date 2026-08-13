@@ -1,5 +1,19 @@
 defmodule Deckex.CardsTest do
-  use Deckex.DataCase, async: true
+  # async: false, and it is the one module that has to be.
+  #
+  # Everywhere else, cards are written through `Deckex.CatalogueFixture` or
+  # `Cards.resolve_names/1`, which both insert in `oracle_id` order — a single
+  # global order is what stops two concurrent transactions from taking the same
+  # unique-index locks in opposite directions and deadlocking (40P01).
+  #
+  # These tests cannot honour that order: their whole subject is the catalogue
+  # write path, so they hand-pick real card identities ("Sol Ring", "Cultivate")
+  # in whatever sequence each scenario needs. A test that inserts Sol Ring and
+  # then resolves Cultivate takes its locks in the opposite order from a
+  # concurrent seed of both, and one of the two dies. ExUnit runs `async: false`
+  # modules after every async one, so serialising here removes the overlap
+  # entirely — at a cost of about a tenth of a second.
+  use Deckex.DataCase, async: false
 
   import Mox
 

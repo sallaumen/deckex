@@ -30,6 +30,23 @@ defmodule Deckex.CatalogueFixture do
     |> insert_all()
   end
 
+  @doc """
+  Seeds the named fixtures and returns them keyed by fixture name.
+
+  For tests that need to name the cards they seeded — `seed!/1` returns them in
+  `oracle_id` order, which is the point of it and useless for picking one out.
+
+      %{"sol_ring" => sol_ring} = CatalogueFixture.seed_map!(~w(sol_ring cultivate))
+  """
+  @spec seed_map!([String.t()]) :: %{String.t() => Card.t()}
+  def seed_map!(names) do
+    by_oracle = Map.new(seed!(names), &{&1.oracle_id, &1})
+
+    Map.new(names, fn name ->
+      {name, Map.fetch!(by_oracle, ScryfallFixture.load!(name)["oracle_id"])}
+    end)
+  end
+
   @doc "Seeds every committed fixture — the whole catalogue a test can know about."
   @spec seed_all!() :: [Card.t()]
   def seed_all! do

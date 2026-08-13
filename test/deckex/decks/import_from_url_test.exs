@@ -3,12 +3,9 @@ defmodule Deckex.Decks.ImportFromUrlTest do
 
   import Mox
 
-  alias Deckex.Cards.Card
-  alias Deckex.Cards.ScryfallMapper
   alias Deckex.CatalogueFixture
   alias Deckex.Decks
   alias Deckex.Error
-  alias Deckex.ScryfallFixture
   alias Deckex.Workers.ImportDeckWorker
 
   setup :verify_on_exit!

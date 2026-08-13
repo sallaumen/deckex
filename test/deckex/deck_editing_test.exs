@@ -35,13 +35,28 @@ defmodule Deckex.DeckEditingTest do
       assert "Cultivate" in Enum.map(Decks.list_deck_cards(deck), & &1.card.name)
     end
 
-    test "bumps the quantity when the card is already there" do
+    test "bumps the quantity of a basic land, which may repeat" do
       deck = deck()
 
       assert {:ok, _deck_card} = Decks.add_card(deck, "Forest")
 
       forest = Enum.find(Decks.list_deck_cards(deck), &(&1.card.name == "Forest"))
       assert forest.quantity == 5
+    end
+
+    # A model that names the same card in two rows would otherwise build an
+    # illegal decklist one click at a time.
+    test "refuses a second copy of a singleton card, and says why" do
+      deck = deck()
+      {:ok, _deck_card} = Decks.add_card(deck, "Counterspell")
+
+      assert {:error, %Error{code: :not_commander_legal, message: message}} =
+               Decks.add_card(deck, "Counterspell")
+
+      assert message =~ "uma cópia"
+
+      counterspell = Enum.find(Decks.list_deck_cards(deck), &(&1.card.name == "Counterspell"))
+      assert counterspell.quantity == 1
     end
 
     test "refuses a card that does not exist" do

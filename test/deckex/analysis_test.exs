@@ -5,11 +5,8 @@ defmodule Deckex.AnalysisTest do
 
   alias Deckex.Analysis
   alias Deckex.Analysis.Report
-  alias Deckex.Cards.Card
-  alias Deckex.Cards.ScryfallMapper
   alias Deckex.CatalogueFixture
   alias Deckex.Decks
-  alias Deckex.ScryfallFixture
 
   setup :verify_on_exit!
 

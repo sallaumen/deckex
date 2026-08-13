@@ -125,7 +125,7 @@ defmodule DeckexWeb.DeckLive do
 
       <header class="mt-3 mb-10 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 class="text-hero font-semibold text-ink">{@deck.name}</h1>
+          <h1 class="text-display font-semibold text-ink">{@deck.name}</h1>
           <p :for={commander <- @snapshot.commanders} class="mt-1 flex items-center gap-2">
             <span class="text-body text-ink-secondary">{commander.card.name}</span>
             <.mana_cost cost={commander.card.mana_cost} size={14} />
@@ -216,8 +216,127 @@ defmodule DeckexWeb.DeckLive do
               </:actions>
             </.finding>
           </div>
+        </aside>
 
-          <section :if={@consults != []} class="mt-8">
+        <div class="space-y-8">
+          <section>
+            <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+              Curva de mana
+            </h2>
+
+            <div class="rounded-xl border border-hairline-soft bg-surface p-6">
+              <!-- A grid, not a flex row: eight equal columns so the histogram
+                   fills whatever width it is given and the buckets stay
+                   comparable to each other. -->
+              <div class="grid grid-cols-8 items-end gap-3">
+                <.curve_bar
+                  :for={bucket <- 0..7}
+                  label={if bucket == 7, do: "7+", else: to_string(bucket)}
+                  count={Map.get(@report.curve.histogram, bucket, 0)}
+                  max={curve_max(@report.curve.histogram)}
+                  height={200}
+                />
+              </div>
+
+              <div class="mt-6 grid grid-cols-2 gap-5 border-t border-hairline-soft pt-5 sm:grid-cols-4">
+                <.stat label="Custo médio" value={Format.decimal(@report.curve.avg_cmc, 2)} />
+                <.stat
+                  label="Até 3 de mana"
+                  value={to_string(@report.curve.early_plays)}
+                  unit="cartas"
+                />
+                <.stat
+                  label="De 5 pra cima"
+                  value={to_string(@report.curve.late_game)}
+                  unit="cartas"
+                />
+                <.stat label="Não-terrenos" value={to_string(@report.curve.nonland_count)} />
+              </div>
+            </div>
+          </section>
+
+          <div class="grid gap-8 2xl:grid-cols-2">
+            <section>
+              <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+                Mana e aceleração
+              </h2>
+
+              <div class="rounded-xl border border-hairline-soft bg-surface p-6">
+                <div class="grid grid-cols-2 gap-5 lg:grid-cols-4 2xl:grid-cols-2">
+                  <.stat
+                    label="Terrenos"
+                    value={Format.decimal(@report.mana.land_count, 1)}
+                    target={"alvo #{@report.mana.land_target}"}
+                    tone={land_tone(@report.mana)}
+                  />
+                  <.stat label="Ramp" value={to_string(@report.mana.ramp_total)} unit="peças" />
+                  <.stat label="Ramp barato" value={to_string(@report.mana.ramp_cheap)} unit="até 2" />
+                  <.stat label="Entram virados" value={to_string(@report.mana.taplands)} />
+                </div>
+
+                <div class="mt-6 grid grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-3 border-t border-hairline-soft pt-5">
+                  <%= for {colour, measured} <- Enum.sort(@report.mana.colors) do %>
+                    <.mana_pip symbol={pip(colour)} size={20} />
+
+                    <span class="font-mono text-caption">
+                      <span class="text-ink">{measured.sources}</span><span class="text-ink-faint">/{measured.target}</span>
+                      <span class="text-ink-faint">fontes</span>
+                      <span class="hidden text-ink-disabled sm:inline">
+                        · pip máx {measured.max_pips}
+                      </span>
+                    </span>
+
+                    <span class={[
+                      "justify-self-end whitespace-nowrap font-mono text-caption",
+                      measured.sources < measured.target && "text-sev-critical",
+                      measured.sources >= measured.target && "text-sev-healthy"
+                    ]}>
+                      {if measured.sources < measured.target,
+                        do: "faltam #{measured.target - measured.sources}",
+                        else: "ok"}
+                    </span>
+                  <% end %>
+                </div>
+              </div>
+            </section>
+
+            <div class="space-y-8">
+              <section>
+                <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+                  Interação
+                </h2>
+                <div class="grid grid-cols-2 gap-5 rounded-xl border border-hairline-soft bg-surface p-6 lg:grid-cols-4 2xl:grid-cols-2">
+                  <.stat label="Respostas reais" value={to_string(@report.interaction.answers)}>
+                    remoção + varredura, sem contar counter
+                  </.stat>
+                  <.stat label="Counters" value={to_string(@report.interaction.counters)} />
+                  <.stat
+                    label="Varreduras"
+                    value={to_string(@report.interaction.board_wipes)}
+                    tone={if @report.interaction.board_wipes < 2, do: :warning, else: :neutral}
+                  />
+                  <.stat label="Proteção" value={to_string(@report.interaction.protection)} />
+                </div>
+              </section>
+
+              <section>
+                <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+                  Consistência
+                </h2>
+                <div class="grid grid-cols-2 gap-5 rounded-xl border border-hairline-soft bg-surface p-6 lg:grid-cols-4 2xl:grid-cols-2">
+                  <.stat label="Compra" value={to_string(@report.consistency.draw)} unit="peças" />
+                  <.stat label="Tutores" value={to_string(@report.consistency.tutors)} />
+                  <.stat label="Recursão" value={to_string(@report.consistency.recursion)} />
+                  <.stat
+                    label="Win conditions"
+                    value={to_string(@report.consistency.wincons)}
+                    tone={if @report.consistency.wincons == 0, do: :critical, else: :neutral}
+                  />
+                </div>
+              </section>
+            </div>
+          </div>
+          <section :if={@consults != []}>
             <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
               Consultas
             </h2>
@@ -242,15 +361,15 @@ defmodule DeckexWeb.DeckLive do
                   </span>
                 </header>
 
-                <p :if={consult.error} class="text-body-sm text-ink-secondary">{consult.error}</p>
+                <p :if={consult.error} class="text-caption text-ink-secondary">{consult.error}</p>
 
                 <div :if={consult.response} class="space-y-3">
-                  <p class="text-body-sm text-ink">{consult.response["diagnosis"]}</p>
+                  <p class="text-caption text-ink">{consult.response["diagnosis"]}</p>
 
                   <div :if={@suggestions[consult.id] not in [nil, []]} class="overflow-x-auto">
                     <table class="w-full text-caption">
                       <thead>
-                        <tr class="border-b border-hairline-subtle text-left text-label uppercase tracking-[0.1em] text-ink-faint">
+                        <tr class="border-b border-hairline-soft text-left text-label uppercase tracking-[0.1em] text-ink-faint">
                           <th class="py-1.5 pr-2 font-semibold">Carta</th>
                           <th class="py-1.5 pr-2 text-right font-semibold">Preço</th>
                           <th class="py-1.5 font-semibold"></th>
@@ -259,7 +378,7 @@ defmodule DeckexWeb.DeckLive do
                       <tbody>
                         <tr
                           :for={row <- @suggestions[consult.id]}
-                          class="border-b border-hairline-subtle align-top last:border-0"
+                          class="border-b border-hairline-soft align-top last:border-0"
                         >
                           <td class="py-2 pr-2">
                             <div class="flex items-center gap-1.5">
@@ -337,126 +456,6 @@ defmodule DeckexWeb.DeckLive do
               </article>
             </div>
           </section>
-        </aside>
-
-        <div class="space-y-8">
-          <section>
-            <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
-              Curva de mana
-            </h2>
-
-            <div class="rounded-xl border border-hairline-soft bg-surface p-6">
-              <!-- A grid, not a flex row: eight equal columns so the histogram
-                   fills whatever width it is given and the buckets stay
-                   comparable to each other. -->
-              <div class="grid grid-cols-8 items-end gap-3">
-                <.curve_bar
-                  :for={bucket <- 0..7}
-                  label={if bucket == 7, do: "7+", else: to_string(bucket)}
-                  count={Map.get(@report.curve.histogram, bucket, 0)}
-                  max={curve_max(@report.curve.histogram)}
-                  height={200}
-                />
-              </div>
-
-              <div class="mt-6 grid grid-cols-2 gap-5 border-t border-hairline-subtle pt-5 sm:grid-cols-4">
-                <.stat label="Custo médio" value={Format.decimal(@report.curve.avg_cmc, 2)} />
-                <.stat
-                  label="Até 3 de mana"
-                  value={to_string(@report.curve.early_plays)}
-                  unit="cartas"
-                />
-                <.stat
-                  label="De 5 pra cima"
-                  value={to_string(@report.curve.late_game)}
-                  unit="cartas"
-                />
-                <.stat label="Não-terrenos" value={to_string(@report.curve.nonland_count)} />
-              </div>
-            </div>
-          </section>
-
-          <div class="grid gap-8 2xl:grid-cols-2">
-            <section>
-              <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
-                Mana e aceleração
-              </h2>
-
-              <div class="rounded-xl border border-hairline-soft bg-surface p-6">
-                <div class="grid grid-cols-2 gap-5 lg:grid-cols-4 2xl:grid-cols-2">
-                  <.stat
-                    label="Terrenos"
-                    value={Format.decimal(@report.mana.land_count, 1)}
-                    target={"alvo #{@report.mana.land_target}"}
-                    tone={land_tone(@report.mana)}
-                  />
-                  <.stat label="Ramp" value={to_string(@report.mana.ramp_total)} unit="peças" />
-                  <.stat label="Ramp barato" value={to_string(@report.mana.ramp_cheap)} unit="até 2" />
-                  <.stat label="Entram virados" value={to_string(@report.mana.taplands)} />
-                </div>
-
-                <div class="mt-6 grid grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-3 border-t border-hairline-subtle pt-5">
-                  <%= for {colour, measured} <- Enum.sort(@report.mana.colors) do %>
-                    <.mana_pip symbol={pip(colour)} size={20} />
-
-                    <span class="font-mono text-body-sm">
-                      <span class="text-ink">{measured.sources}</span><span class="text-ink-faint">/{measured.target}</span>
-                      <span class="text-ink-faint">fontes</span>
-                      <span class="hidden text-ink-disabled sm:inline">
-                        · pip máx {measured.max_pips}
-                      </span>
-                    </span>
-
-                    <span class={[
-                      "justify-self-end whitespace-nowrap font-mono text-caption",
-                      measured.sources < measured.target && "text-sev-critical",
-                      measured.sources >= measured.target && "text-sev-healthy"
-                    ]}>
-                      {if measured.sources < measured.target,
-                        do: "faltam #{measured.target - measured.sources}",
-                        else: "ok"}
-                    </span>
-                  <% end %>
-                </div>
-              </div>
-            </section>
-
-            <div class="space-y-8">
-              <section>
-                <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
-                  Interação
-                </h2>
-                <div class="grid grid-cols-2 gap-5 rounded-xl border border-hairline-soft bg-surface p-6 lg:grid-cols-4 2xl:grid-cols-2">
-                  <.stat label="Respostas reais" value={to_string(@report.interaction.answers)}>
-                    remoção + varredura, sem contar counter
-                  </.stat>
-                  <.stat label="Counters" value={to_string(@report.interaction.counters)} />
-                  <.stat
-                    label="Varreduras"
-                    value={to_string(@report.interaction.board_wipes)}
-                    tone={if @report.interaction.board_wipes < 2, do: :warning, else: :neutral}
-                  />
-                  <.stat label="Proteção" value={to_string(@report.interaction.protection)} />
-                </div>
-              </section>
-
-              <section>
-                <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
-                  Consistência
-                </h2>
-                <div class="grid grid-cols-2 gap-5 rounded-xl border border-hairline-soft bg-surface p-6 lg:grid-cols-4 2xl:grid-cols-2">
-                  <.stat label="Compra" value={to_string(@report.consistency.draw)} unit="peças" />
-                  <.stat label="Tutores" value={to_string(@report.consistency.tutors)} />
-                  <.stat label="Recursão" value={to_string(@report.consistency.recursion)} />
-                  <.stat
-                    label="Win conditions"
-                    value={to_string(@report.consistency.wincons)}
-                    tone={if @report.consistency.wincons == 0, do: :critical, else: :neutral}
-                  />
-                </div>
-              </section>
-            </div>
-          </div>
         </div>
       </div>
 
