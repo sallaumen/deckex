@@ -141,6 +141,23 @@ defmodule Deckex.Cards do
   end
 
   @doc """
+  Runs only the rule pass over `cards`. Free and instant, so it happens inline
+  during import; the AI pass is what goes to a worker.
+  """
+  @spec classify_all_by_rules([Card.t()]) :: {:ok, %{rules: non_neg_integer()}}
+  def classify_all_by_rules(cards) do
+    handled = Enum.reject(cards, &Roles.residue?/1)
+
+    Enum.each(handled, &classify_card/1)
+
+    {:ok, %{rules: length(handled)}}
+  end
+
+  @doc "Whether the rules failed to place this card, meaning the AI must see it."
+  @spec residue?(Card.t()) :: boolean()
+  defdelegate residue?(card), to: Roles
+
+  @doc """
   Records a role chosen by the user. Manual roles are never overwritten by a
   later rule or AI pass, and they are the signal for improving the rules.
   """
