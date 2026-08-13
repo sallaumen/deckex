@@ -10,15 +10,18 @@ defmodule Deckex.Consults do
 
   alias Deckex.AI
   alias Deckex.Analysis
+  alias Deckex.Cards
   alias Deckex.Consults.Briefing
   alias Deckex.Consults.Consult
   alias Deckex.Consults.ConsultQuery
   alias Deckex.Consults.Schemas
+  alias Deckex.Consults.Suggestions
   alias Deckex.Decks
   alias Deckex.Decks.Deck
   alias Deckex.Error
   alias Deckex.Events
   alias Deckex.Repo
+  alias Deckex.Settings
   alias Deckex.Workers.ConsultWorker
 
   # A consult is a long generation by design: the model reads a 100-card list,
@@ -31,24 +34,69 @@ defmodule Deckex.Consults do
   defdelegate fetch(id), to: ConsultQuery
 
   @doc """
-  Measures `deck`, freezes the report and the prompt, and queues the AI call.
+  Measures `deck`, freezes the report, the prompt **and the model**, then queues
+  the call.
+
+  The model is recorded now rather than read at run time: changing the setting
+  between asking and answering must not silently change what a queued consult
+  runs.
 
   This cannot fail for an expected reason — every field is built here, not
-  supplied by a user — so it raises rather than returning a tagged error. The
-  `{:ok, _}` wrapper is kept because the caller composes with `run/1`, which
-  genuinely can fail.
+  supplied by a user — so it raises rather than returning a tagged error.
   """
   @spec request(Deck.t(), atom(), keyword()) :: {:ok, Consult.t()}
   def request(%Deck{} = deck, lens, opts \\ []) do
-    snapshot = Decks.snapshot(deck)
-    report = Analysis.report(snapshot)
-    consult = insert!(deck, lens, Briefing.build(report, snapshot, lens, opts), report, opts)
-
-    {:ok, _job} = ConsultWorker.enqueue(consult.id)
-    Events.broadcast_consult(consult)
-
-    {:ok, consult}
+    {:ok, hd(start(deck, lens, [opts[:model] || Settings.model()], opts))}
   end
+
+  @doc """
+  Runs one identical briefing across several models, so they can be compared on
+  the same question.
+
+  One briefing is built and shared by every consult: an experiment whose input
+  differs per arm measures nothing.
+  """
+  @spec compare(Deck.t(), atom(), [String.t()], keyword()) :: {:ok, [Consult.t()]}
+  def compare(%Deck{} = deck, lens, models, opts \\ []) do
+    {:ok, start(deck, lens, models, opts)}
+  end
+
+  @doc "The model aliases the `claude` CLI accepts."
+  @spec models() :: [String.t()]
+  def models, do: ["fable", "sonnet", "opus", "haiku"]
+
+  @doc "The lenses a user can pick, with their pt-BR labels."
+  @spec lens_labels() :: [{atom(), String.t()}]
+  def lens_labels do
+    [
+      {:full, "O deck inteiro"},
+      {:matchup, "Contra um deck específico"},
+      {:budget, "Melhorar gastando pouco"},
+      {:upgrade, "Melhorar sem olhar preço"},
+      {:speed_curve, "Só velocidade e curva"},
+      {:mana_ramp, "Só mana e aceleração"},
+      {:interaction, "Só interação"},
+      {:consistency, "Só consistência"}
+    ]
+  end
+
+  defp start(deck, lens, models, opts) do
+    snapshot = Decks.snapshot(deck)
+    report = Analysis.report(snapshot, Settings.baselines())
+    briefing = Briefing.build(report, snapshot, lens, briefing_opts(opts))
+    frozen = freeze(report)
+
+    Enum.map(models, fn model ->
+      consult = insert!(deck, lens, briefing, frozen, model, opts)
+
+      {:ok, _job} = ConsultWorker.enqueue(consult.id)
+      Events.broadcast_consult(consult)
+
+      consult
+    end)
+  end
+
+  defp briefing_opts(opts), do: Keyword.put_new(opts, :budget_usd, Settings.budget_usd())
 
   @doc "Sends a consult's stored briefing to the model and records the answer."
   @spec run(Consult.t()) :: {:ok, Consult.t()} | {:error, Error.t()}
@@ -59,7 +107,7 @@ defmodule Deckex.Consults do
 
     # WebSearch is the point of the whole feature: the app supplies measured
     # facts about this deck, the model supplies knowledge about every card.
-    opts = [allowed_tools: ["WebSearch"], timeout_ms: timeout_ms()]
+    opts = [allowed_tools: ["WebSearch"], timeout_ms: timeout_ms(), model: running.model]
 
     case AI.complete(running.briefing, schema, opts) do
       {:ok, response} -> {:ok, succeed(running, response, started)}
@@ -75,7 +123,7 @@ defmodule Deckex.Consults do
     |> Keyword.get(:timeout_ms, @default_timeout_ms)
   end
 
-  defp insert!(deck, lens, briefing, report, opts) do
+  defp insert!(deck, lens, briefing, frozen, model, opts) do
     %Consult{}
     |> Consult.changeset(%{
       deck_id: deck.id,
@@ -83,7 +131,8 @@ defmodule Deckex.Consults do
       finding_code: opts[:finding_code],
       status: :pending,
       briefing: briefing,
-      report_snapshot: freeze(report)
+      report_snapshot: frozen,
+      model: model
     })
     |> Repo.insert!()
   end
@@ -93,13 +142,28 @@ defmodule Deckex.Consults do
   defp freeze(report), do: report |> Jason.encode!() |> Jason.decode!()
 
   defp succeed(consult, response, started) do
-    update!(consult, %{
-      status: :done,
-      response: response,
-      model: AI.model(),
-      duration_ms: System.monotonic_time(:millisecond) - started,
-      error: nil
-    })
+    done =
+      update!(consult, %{
+        status: :done,
+        response: response,
+        duration_ms: System.monotonic_time(:millisecond) - started,
+        error: nil
+      })
+
+    catalogue(done)
+  end
+
+  # The answer names cards we may never have seen. Fetch them here, once, while
+  # we are already in a background job — the suggestion table only reads, so a
+  # card missing from the catalogue would render without a price forever.
+  # A Scryfall outage is not a reason to lose an answer that already cost money.
+  defp catalogue(%Consult{} = consult) do
+    case consult |> Suggestions.names() |> Cards.resolve_names() do
+      {:ok, %{cards: cards}} -> Enum.each(cards, &Cards.classify_card/1)
+      {:error, %Error{}} -> :ok
+    end
+
+    consult
   end
 
   defp fail(consult, %Error{} = error) do

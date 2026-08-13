@@ -44,7 +44,9 @@ defmodule DeckexWeb.DeckConsultTest do
   test "the whole deck can be consulted at once", %{conn: conn, deck: deck} do
     {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}")
 
-    live |> element("button[phx-click='consult-full']") |> render_click()
+    live
+    |> form("form[phx-submit='consult-full']", consult: %{lens: "full", model: "sonnet"})
+    |> render_submit()
 
     assert [%{lens: :full}] = Consults.list_for_deck(deck)
   end
@@ -52,12 +54,17 @@ defmodule DeckexWeb.DeckConsultTest do
   test "a finished consult renders its cuts and adds", %{conn: conn, deck: deck} do
     {:ok, consult} = Consults.request(deck, :full)
 
+    # run/1 pulls the suggested cards into the catalogue; the page then only reads.
+    stub(Deckex.Scryfall.Mock, :fetch_by_names, fn _names ->
+      {:ok, %{found: [Deckex.ScryfallFixture.load!("cultivate")], not_found: []}}
+    end)
+
     expect(Deckex.AI.Mock, :complete, fn _prompt, _schema, _opts ->
       {:ok,
        %{
          "diagnosis" => "Falta interação nesse deck.",
          "cuts" => [%{"card" => "Sol Ring", "reason" => "exemplo de corte"}],
-         "adds" => [%{"card" => "Swords to Plowshares", "reason" => "remoção barata"}]
+         "adds" => [%{"card" => "Cultivate", "reason" => "remoção barata"}]
        }}
     end)
 
@@ -66,7 +73,7 @@ defmodule DeckexWeb.DeckConsultTest do
     {:ok, _live, html} = live(conn, ~p"/decks/#{deck.id}")
 
     assert html =~ "Falta interação nesse deck."
-    assert html =~ "Swords to Plowshares"
+    assert html =~ "Cultivate"
     assert html =~ "remoção barata"
   end
 

@@ -19,7 +19,10 @@ defmodule DeckexWeb.Router do
 
     live "/", MesaLive, :index
     live "/importar", ImportLive, :new
+    live "/ajustes", SettingsLive, :edit
     live "/decks/:id", DeckLive, :show
+
+    get "/consultas/:id/csv", ExportController, :consult_csv
   end
 
   # Other scopes may use custom stacks.

@@ -23,7 +23,11 @@ defmodule Deckex.Consults.Schemas do
             "type" => "object",
             "properties" => %{
               "card" => %{"type" => "string", "description" => "Exact card name, untranslated."},
-              "reason" => %{"type" => "string", "description" => "One sentence, pt-BR."}
+              "reason" => %{"type" => "string", "description" => "One sentence, pt-BR."},
+              "addresses" => %{
+                "type" => "string",
+                "description" => "The finding code this cut serves, e.g. mana.color_starved."
+              }
             },
             "required" => ["card", "reason"]
           }
@@ -35,6 +39,11 @@ defmodule Deckex.Consults.Schemas do
             "properties" => %{
               "card" => %{"type" => "string", "description" => "Exact card name, untranslated."},
               "reason" => %{"type" => "string", "description" => "One sentence, pt-BR."},
+              "addresses" => %{
+                "type" => "string",
+                "description" =>
+                  "The finding code this add serves, e.g. interaction.board_wipes_low."
+              },
               "replaces" => %{
                 "type" => "string",
                 "description" => "The cut this add pairs with, if any."

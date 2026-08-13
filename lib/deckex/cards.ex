@@ -59,8 +59,13 @@ defmodule Deckex.Cards do
   # to nothing.
   defp fetch_missing(names), do: names |> Enum.map(&Name.display/1) |> Scryfall.fetch_by_names()
 
+  # Ordered by oracle_id, and that is load-bearing: two connections inserting
+  # the same cards in different orders deadlock in Postgres (40P01). Scryfall
+  # returns them in whatever order it likes, so we impose one here. The same law
+  # is written down in `Deckex.CatalogueFixture` for the same reason.
   defp insert_all(scryfall_cards) do
     scryfall_cards
+    |> Enum.sort_by(& &1["oracle_id"])
     |> Enum.reduce_while({:ok, []}, fn scryfall_card, {:ok, acc} ->
       case insert_card(scryfall_card) do
         {:ok, card} -> {:cont, {:ok, [card | acc]}}
@@ -126,7 +131,7 @@ defmodule Deckex.Cards do
   @spec classify_all([Card.t()]) ::
           {:ok, %{rules: non_neg_integer(), ai: non_neg_integer()}} | {:error, Error.t()}
   def classify_all(cards) do
-    {residue, handled} = Enum.split_with(cards, &Roles.residue?/1)
+    {residue, handled} = cards |> in_lock_order() |> Enum.split_with(&Roles.residue?/1)
 
     Enum.each(handled, &classify_card/1)
 
@@ -147,12 +152,19 @@ defmodule Deckex.Cards do
   """
   @spec classify_all_by_rules([Card.t()]) :: {:ok, %{rules: non_neg_integer()}}
   def classify_all_by_rules(cards) do
-    handled = Enum.reject(cards, &Roles.residue?/1)
+    handled = cards |> in_lock_order() |> Enum.reject(&Roles.residue?/1)
 
     Enum.each(handled, &classify_card/1)
 
     {:ok, %{rules: length(handled)}}
   end
+
+  # Writing `card_roles` takes a lock per card, so the order cards are visited
+  # in is the order locks are taken in. `resolve_names/1` returns known cards in
+  # whatever order Postgres felt like, which means two callers classifying
+  # overlapping cards can deadlock (40P01). One global order, as everywhere else
+  # a card is written.
+  defp in_lock_order(cards), do: Enum.sort_by(cards, & &1.oracle_id)
 
   @doc "Whether the rules failed to place this card, meaning the AI must see it."
   @spec residue?(Card.t()) :: boolean()

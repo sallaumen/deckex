@@ -1,6 +1,7 @@
 defmodule Deckex.Moxfield.HttpTest do
-  # async: false — Req.Test stubs are process-owned.
-  use ExUnit.Case, async: false
+  # async: false — Req.Test stubs are process-owned. DataCase, not ExUnit.Case:
+  # the User-Agent is a setting now, so building a request reads the database.
+  use Deckex.DataCase, async: false
 
   alias Deckex.Error
   alias Deckex.Moxfield
@@ -64,9 +65,24 @@ defmodule Deckex.Moxfield.HttpTest do
       assert {:error, %Error{code: :moxfield_blocked}} = Http.fetch_deck("abc123")
     end
 
-    test "sends the configured User-Agent" do
+    # The setting is the whole point: the day Moxfield approves a User-Agent,
+    # pasting it into Ajustes is what turns the 403 into a working sync.
+    test "sends the User-Agent from Ajustes, not a hardcoded one" do
+      {:ok, _value} = Deckex.Settings.put(:moxfield_user_agent, "deckex/1.0 (approved)")
+
       Req.Test.stub(Http, fn conn ->
-        assert ["deckex-test-agent"] = Plug.Conn.get_req_header(conn, "user-agent")
+        assert ["deckex/1.0 (approved)"] = Plug.Conn.get_req_header(conn, "user-agent")
+
+        Plug.Conn.send_resp(conn, 404, "")
+      end)
+
+      assert {:error, _error} = Http.fetch_deck("abc123")
+    end
+
+    test "falls back to the declared default when nothing is stored" do
+      Req.Test.stub(Http, fn conn ->
+        assert ["deckex/0.1 (personal deck analysis tool)"] =
+                 Plug.Conn.get_req_header(conn, "user-agent")
 
         Plug.Conn.send_resp(conn, 404, "")
       end)

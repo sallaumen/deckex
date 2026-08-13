@@ -12,9 +12,12 @@ defmodule DeckexWeb.DeckLive do
 
   alias Deckex.Analysis
   alias Deckex.Consults
+  alias Deckex.Consults.Suggestions
   alias Deckex.Decks
   alias Deckex.Error
   alias Deckex.Events
+  alias Deckex.Money
+  alias Deckex.Settings
 
   @impl Phoenix.LiveView
   def mount(%{"id" => id}, _session, socket) do
@@ -32,13 +35,15 @@ defmodule DeckexWeb.DeckLive do
 
     snapshot = Decks.snapshot(deck)
 
-    assign(socket,
+    socket
+    |> assign(
       deck: deck,
       snapshot: snapshot,
-      report: Analysis.report(snapshot),
-      consults: Consults.list_for_deck(deck),
+      report: Analysis.report(snapshot, Settings.baselines()),
+      model: Settings.model(),
       page_title: deck.name
     )
+    |> refresh_consults()
   end
 
   @impl Phoenix.LiveView
@@ -46,24 +51,69 @@ defmodule DeckexWeb.DeckLive do
     {:noreply, start_consult(socket, :finding, finding_code: code)}
   end
 
-  def handle_event("consult-full", _params, socket) do
-    {:noreply, start_consult(socket, :full)}
+  def handle_event("consult-full", %{"consult" => params}, socket) do
+    lens = String.to_existing_atom(params["lens"] || "full")
+
+    opts = [model: params["model"], against: blank_to_nil(params["against"])]
+
+    {:noreply, start_consult(socket, lens, opts)}
+  end
+
+  def handle_event("compare-models", _params, socket) do
+    {:ok, _consults} = Consults.compare(socket.assigns.deck, :full, Consults.models())
+
+    {:noreply,
+     socket
+     |> put_flash(:info, "Rodando a mesma pergunta em #{length(Consults.models())} modelos.")
+     |> refresh_consults()}
+  end
+
+  def handle_event("apply-add", %{"name" => name}, socket) do
+    {:noreply, apply_edit(socket, Decks.add_card(socket.assigns.deck, name), "#{name} entrou.")}
+  end
+
+  def handle_event("apply-cut", %{"name" => name}, socket) do
+    {:noreply, apply_edit(socket, Decks.remove_card(socket.assigns.deck, name), "#{name} saiu.")}
   end
 
   @impl Phoenix.LiveView
   def handle_info({:consult_updated, _id}, socket) do
-    {:noreply, assign(socket, consults: Consults.list_for_deck(socket.assigns.deck))}
+    {:noreply, refresh_consults(socket)}
   end
 
   # Consults.request/3 raises rather than returning a tagged error — every
   # field it writes is built here, so a failure is a bug, not a user problem.
-  defp start_consult(socket, lens, opts \\ []) do
-    {:ok, _consult} = Consults.request(socket.assigns.deck, lens, opts)
+  defp start_consult(socket, lens, opts) do
+    {:ok, _consult} =
+      Consults.request(socket.assigns.deck, lens, Enum.reject(opts, &(elem(&1, 1) == nil)))
 
     socket
     |> put_flash(:info, "Consulta enviada. A resposta aparece aqui quando chegar.")
-    |> assign(consults: Consults.list_for_deck(socket.assigns.deck))
+    |> refresh_consults()
   end
+
+  # An edit changes the deck, so the whole report is rebuilt — that is the point
+  # of reports being computed rather than cached.
+  defp apply_edit(socket, {:ok, _result}, message) do
+    socket |> assign_deck(socket.assigns.deck) |> put_flash(:info, message)
+  end
+
+  defp apply_edit(socket, {:error, error}, _message) do
+    put_flash(socket, :error, error.message)
+  end
+
+  defp refresh_consults(socket) do
+    consults = Consults.list_for_deck(socket.assigns.deck)
+
+    assign(socket,
+      consults: consults,
+      suggestions: Map.new(consults, &{&1.id, Suggestions.for_consult(&1)})
+    )
+  end
+
+  defp blank_to_nil(nil), do: nil
+  defp blank_to_nil(""), do: nil
+  defp blank_to_nil(value), do: value
 
   @impl Phoenix.LiveView
   def render(assigns) do
@@ -86,18 +136,56 @@ defmodule DeckexWeb.DeckLive do
 
       <div class="grid gap-10 xl:grid-cols-[minmax(340px,26rem)_1fr] xl:items-start">
         <aside class="xl:sticky xl:top-8 xl:max-h-[calc(100vh-4rem)] xl:overflow-y-auto">
-          <div class="mb-3 flex items-center justify-between gap-3">
-            <h2 class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
-              Achados
-            </h2>
+          <div class="mb-4 space-y-2">
+            <div class="flex items-center justify-between gap-3">
+              <h2 class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+                Achados
+              </h2>
 
-            <button
-              type="button"
-              phx-click="consult-full"
-              class="text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
-            >
-              Consultar o deck inteiro
-            </button>
+              <button
+                type="button"
+                phx-click="compare-models"
+                class="text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+              >
+                Comparar modelos
+              </button>
+            </div>
+
+            <.form for={%{}} as={:consult} phx-submit="consult-full" class="space-y-2">
+              <div class="flex items-center gap-2">
+                <select
+                  name="consult[lens]"
+                  class="min-w-0 flex-1 rounded-md border border-hairline-soft bg-inlay px-2 py-1 text-caption text-ink"
+                >
+                  <option :for={{lens, label} <- Consults.lens_labels()} value={lens}>
+                    {label}
+                  </option>
+                </select>
+
+                <select
+                  name="consult[model]"
+                  class="rounded-md border border-hairline-soft bg-inlay px-2 py-1 font-mono text-caption text-ink"
+                >
+                  <option :for={model <- Consults.models()} value={model} selected={model == @model}>
+                    {model}
+                  </option>
+                </select>
+              </div>
+
+              <input
+                type="text"
+                name="consult[against]"
+                placeholder="Contra o quê? (só para a análise de matchup)"
+                class="w-full rounded-md border border-hairline-soft bg-inlay px-2 py-1 text-caption text-ink placeholder:text-ink-disabled"
+              />
+
+              <button
+                type="submit"
+                class="text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+              >
+                Perguntar
+              </button>
+            </.form>
           </div>
 
           <p
@@ -142,6 +230,7 @@ defmodule DeckexWeb.DeckLive do
                 <header class="mb-2 flex items-center justify-between gap-3">
                   <span class="font-mono text-caption text-ink-faint">
                     {consult.finding_code || consult.lens}
+                    <span :if={consult.model} class="text-ink-disabled">· {consult.model}</span>
                   </span>
                   <span class={[
                     "font-mono text-caption",
@@ -158,25 +247,85 @@ defmodule DeckexWeb.DeckLive do
                 <div :if={consult.response} class="space-y-3">
                   <p class="text-body-sm text-ink">{consult.response["diagnosis"]}</p>
 
-                  <div :if={consult.response["cuts"] not in [nil, []]}>
-                    <p class="mb-1 text-label uppercase tracking-[0.1em] text-ink-faint">Cortar</p>
-                    <ul class="space-y-1">
-                      <li :for={cut <- consult.response["cuts"]} class="text-caption">
-                        <span class="text-ink">{cut["card"]}</span>
-                        <span class="text-ink-muted">— {cut["reason"]}</span>
-                      </li>
-                    </ul>
+                  <div :if={@suggestions[consult.id] not in [nil, []]} class="overflow-x-auto">
+                    <table class="w-full text-caption">
+                      <thead>
+                        <tr class="border-b border-hairline-subtle text-left text-label uppercase tracking-[0.1em] text-ink-faint">
+                          <th class="py-1.5 pr-2 font-semibold">Carta</th>
+                          <th class="py-1.5 pr-2 text-right font-semibold">Preço</th>
+                          <th class="py-1.5 font-semibold"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr
+                          :for={row <- @suggestions[consult.id]}
+                          class="border-b border-hairline-subtle align-top last:border-0"
+                        >
+                          <td class="py-2 pr-2">
+                            <div class="flex items-center gap-1.5">
+                              <span class={[
+                                "font-mono text-micro",
+                                row.action == :cut && "text-sev-critical",
+                                row.action == :add && "text-sev-healthy"
+                              ]}>
+                                {if row.action == :cut, do: "−", else: "+"}
+                              </span>
+                              <span class="text-ink">{row.name}</span>
+                              <.mana_cost :if={row.card} cost={row.card.mana_cost} size={12} />
+                            </div>
+
+                            <p class="mt-0.5 text-ink-muted">{row.reason}</p>
+
+                            <p
+                              :if={row.addresses}
+                              class="mt-0.5 font-mono text-micro text-ink-disabled"
+                            >
+                              {row.addresses}
+                            </p>
+
+                            <p :if={not row.resolved?} class="mt-0.5 text-micro text-sev-warning">
+                              não achei essa carta na Scryfall
+                            </p>
+                          </td>
+
+                          <td class="py-2 pr-2 text-right font-mono text-micro whitespace-nowrap">
+                            <div class="text-ink-secondary">{Money.brl(row.price_usd)}</div>
+                            <div class="text-ink-disabled">{Money.usd(row.price_usd)}</div>
+                          </td>
+
+                          <td class="py-2 text-right">
+                            <button
+                              :if={row.resolved?}
+                              type="button"
+                              phx-click={if row.action == :cut, do: "apply-cut", else: "apply-add"}
+                              phx-value-name={row.name}
+                              class="whitespace-nowrap text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+                            >
+                              {if row.action == :cut, do: "cortar", else: "colocar"}
+                            </button>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+
+                    <div class="mt-2 flex items-center justify-between gap-3">
+                      <span class="font-mono text-micro text-ink-faint">
+                        entradas: {Money.brl(Suggestions.total_usd(@suggestions[consult.id]))}
+                      </span>
+
+                      <a
+                        href={~p"/consultas/#{consult.id}/csv"}
+                        download
+                        class="text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+                      >
+                        Baixar CSV
+                      </a>
+                    </div>
                   </div>
 
-                  <div :if={consult.response["adds"] not in [nil, []]}>
-                    <p class="mb-1 text-label uppercase tracking-[0.1em] text-ink-faint">Colocar</p>
-                    <ul class="space-y-1">
-                      <li :for={add <- consult.response["adds"]} class="text-caption">
-                        <span class="text-ink">{add["card"]}</span>
-                        <span class="text-ink-muted">— {add["reason"]}</span>
-                      </li>
-                    </ul>
-                  </div>
+                  <p :if={consult.response["notes"]} class="text-caption text-ink-muted">
+                    {consult.response["notes"]}
+                  </p>
                 </div>
 
                 <details class="mt-3">

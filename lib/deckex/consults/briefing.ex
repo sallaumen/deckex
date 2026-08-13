@@ -33,8 +33,7 @@ defmodule Deckex.Consults.Briefing do
 
     ## What to do
 
-    Work the findings above. For each one, name specific cards to **cut** from
-    the list and specific cards to **add**, and say why in one sentence each.
+    #{task_block(lens, opts)}
 
     Rules you must respect:
 
@@ -82,7 +81,52 @@ defmodule Deckex.Consults.Briefing do
   defp lens_keys(:mana_ramp), do: [:curve, :mana]
   defp lens_keys(:interaction), do: [:curve, :interaction]
   defp lens_keys(:consistency), do: [:curve, :consistency]
-  defp lens_keys(_full_or_finding), do: [:curve, :mana, :interaction, :consistency]
+  defp lens_keys(_everything_else), do: [:curve, :mana, :interaction, :consistency]
+
+  # Each lens asks a different question of the same measurements. The rules
+  # below the task are identical for all of them, which is deliberate: a
+  # suggestion outside the colour identity is illegal no matter what was asked.
+  defp task_block(:matchup, opts) do
+    against = opts[:against] || "an unspecified aggressive deck"
+
+    """
+    This deck keeps losing to: **#{against}**.
+
+    Work out why, from the measurements above, and name specific cards to
+    **cut** and to **add** that would change that matchup. Say in one sentence
+    each why the card helps against *that* deck specifically.
+    """
+  end
+
+  defp task_block(:budget, opts) do
+    ceiling = opts[:budget_usd] || 20
+
+    """
+    Improve this deck **as cheaply as possible**. Every card you add must cost
+    roughly US$ #{ceiling} or less.
+
+    Name specific cards to **cut** and to **add**, and say in one sentence each
+    what it fixes. A cheap card that addresses a finding beats an expensive one
+    that does not.
+    """
+  end
+
+  defp task_block(:upgrade, _opts) do
+    """
+    Make this deck **as strong as it can be, regardless of price**.
+
+    Name specific cards to **cut** and to **add**, and say in one sentence each
+    what it fixes. Do not hold back on cost here — a separate question exists
+    for the budget version.
+    """
+  end
+
+  defp task_block(_lens, _opts) do
+    """
+    Work the findings above. For each one, name specific cards to **cut** from
+    the list and specific cards to **add**, and say why in one sentence each.
+    """
+  end
 
   defp section(key, measured) do
     lines =

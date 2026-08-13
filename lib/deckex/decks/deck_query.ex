@@ -34,6 +34,12 @@ defmodule Deckex.Decks.DeckQuery do
   @spec get_by_public_id(String.t()) :: Deck.t() | nil
   def get_by_public_id(public_id), do: Repo.get_by(Deck, moxfield_public_id: public_id)
 
+  @doc "One card in a deck, on a board, or nil."
+  @spec get_deck_card(Deck.t(), String.t(), atom()) :: DeckCard.t() | nil
+  def get_deck_card(%Deck{id: deck_id}, card_id, board) do
+    Repo.get_by(DeckCard, deck_id: deck_id, card_id: card_id, board: board)
+  end
+
   @doc "Lists a deck's cards with the card preloaded."
   @spec list_deck_cards(Deck.t()) :: [DeckCard.t()]
   def list_deck_cards(%Deck{id: deck_id}) do

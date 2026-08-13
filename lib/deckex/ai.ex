@@ -13,10 +13,11 @@ defmodule Deckex.AI do
   end
 
   @doc ~S"""
-  Configured model (default `"sonnet"`).
+  The model to ask: the stored setting, falling back to config (default
+  `"sonnet"`).
   """
   @spec model() :: String.t()
-  def model, do: config(:model, "sonnet")
+  def model, do: Deckex.Settings.get(:claude_model) || config(:model, "sonnet")
 
   @doc "How many cards go to the model in one classification call (default 15)."
   @spec batch_size() :: pos_integer()

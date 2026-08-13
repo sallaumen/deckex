@@ -7,6 +7,7 @@ defmodule Deckex.ConsultsTest do
   alias Deckex.Consults
   alias Deckex.Decks
   alias Deckex.Error
+  alias Deckex.ScryfallFixture
   alias Deckex.Workers.ConsultWorker
 
   setup :verify_on_exit!
@@ -28,8 +29,16 @@ defmodule Deckex.ConsultsTest do
      %{
        "diagnosis" => "Falta interação.",
        "cuts" => [%{"card" => "Sol Ring", "reason" => "exemplo"}],
-       "adds" => [%{"card" => "Swords to Plowshares", "reason" => "remoção barata"}]
+       "adds" => [%{"card" => "Cultivate", "reason" => "ramp"}]
      }}
+  end
+
+  # A finished consult pulls the cards it suggested into the catalogue, so the
+  # suggestion table can show a real price without the page hitting Scryfall.
+  defp stub_catalogue do
+    stub(Deckex.Scryfall.Mock, :fetch_by_names, fn _names ->
+      {:ok, %{found: [ScryfallFixture.load!("cultivate")], not_found: []}}
+    end)
   end
 
   describe "request/3" do
@@ -65,6 +74,8 @@ defmodule Deckex.ConsultsTest do
       deck = deck()
       {:ok, consult} = Consults.request(deck, :full)
 
+      stub_catalogue()
+
       expect(Deckex.AI.Mock, :complete, fn prompt, schema, opts ->
         assert prompt =~ "Commander"
         assert schema["required"] == ["diagnosis", "cuts", "adds"]
@@ -99,6 +110,8 @@ defmodule Deckex.ConsultsTest do
     test "sends the stored briefing verbatim — never a rebuilt one" do
       {:ok, consult} = Consults.request(deck(), :full)
 
+      stub_catalogue()
+
       expect(Deckex.AI.Mock, :complete, fn prompt, _schema, _opts ->
         assert prompt == consult.briefing
 
@@ -114,6 +127,7 @@ defmodule Deckex.ConsultsTest do
       deck = deck()
       {:ok, consult} = Consults.request(deck, :full)
 
+      stub_catalogue()
       expect(Deckex.AI.Mock, :complete, fn _prompt, _schema, _opts -> answer() end)
 
       assert :ok = perform_job(ConsultWorker, %{consult_id: consult.id})

@@ -49,7 +49,16 @@ defmodule DeckexWeb.MesaLive do
           </p>
         </div>
 
-        <.button navigate={~p"/importar"} variant="primary">Trazer um deck</.button>
+        <div class="flex items-center gap-4">
+          <.link
+            navigate={~p"/ajustes"}
+            class="text-caption text-ink-faint transition-colors hover:text-ink"
+          >
+            Ajustes
+          </.link>
+
+          <.button navigate={~p"/importar"} variant="primary">Trazer um deck</.button>
+        </div>
       </header>
 
       <div

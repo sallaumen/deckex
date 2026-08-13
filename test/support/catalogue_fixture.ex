@@ -7,6 +7,12 @@ defmodule Deckex.CatalogueFixture do
   tests inserting the same card rows in different orders deadlock in Postgres,
   which surfaces as a random `40P01` in whichever test lost. A single global
   order means concurrent seeds queue instead of colliding.
+
+  The corollary: **seed once per test.** Two `seed!/1` calls in the same
+  transaction take their locks in two separately-ordered batches, and the
+  ordering guarantee only holds within a batch — which is exactly how the
+  deadlock came back after this module was written. Pass every card the test
+  needs to one call.
   """
 
   alias Deckex.Cards.Card

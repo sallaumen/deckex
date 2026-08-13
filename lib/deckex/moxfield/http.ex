@@ -13,7 +13,6 @@ defmodule Deckex.Moxfield.Http do
   alias Deckex.Moxfield.DeckMapper
 
   @endpoint "https://api2.moxfield.com/v3/decks/all"
-  @default_user_agent "deckex/0.1 (personal deck analysis tool)"
   @paste_hint "Você pode colar a lista exportada aqui do lado."
 
   @impl Deckex.Moxfield.Client
@@ -44,11 +43,14 @@ defmodule Deckex.Moxfield.Http do
   end
 
   @doc """
-  The User-Agent sent to Moxfield. Configurable so an approved one can be
-  dropped in without a code change.
+  The User-Agent sent to Moxfield.
+
+  A setting, not config: the whole reason it is one is that the owner can paste
+  an approved User-Agent in without a deploy. The registry holds the default, so
+  there is exactly one place to change it.
   """
   @spec user_agent() :: String.t()
-  def user_agent, do: config(:user_agent, @default_user_agent)
+  def user_agent, do: Deckex.Settings.get(:moxfield_user_agent)
 
   defp blocked(message, details), do: Error.new(:moxfield_blocked, message, details)
 

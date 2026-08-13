@@ -11,15 +11,12 @@ defmodule Deckex.Analysis.RealDeckTest do
 
   alias Deckex.Analysis
   alias Deckex.Analysis.Report
-  alias Deckex.Cards.Card
-  alias Deckex.Cards.ScryfallMapper
   alias Deckex.CatalogueFixture
   alias Deckex.Decks
 
   setup :verify_on_exit!
 
   @decklist "test/support/fixtures/decklists/iroh_das_lontra.txt"
-  @fixtures "test/support/fixtures/scryfall"
 
   defp import_and_measure do
     CatalogueFixture.seed_all!()

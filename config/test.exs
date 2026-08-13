@@ -33,9 +33,7 @@ config :deckex, Deckex.Scryfall.Client, adapter: Deckex.Scryfall.Mock
 config :deckex, Deckex.AI.Client, adapter: Deckex.AI.Mock
 config :deckex, Deckex.Moxfield.Client, adapter: Deckex.Moxfield.Mock
 
-config :deckex, Deckex.Moxfield.Http,
-  req_options: [plug: {Req.Test, Deckex.Moxfield.Http}],
-  user_agent: "deckex-test-agent"
+config :deckex, Deckex.Moxfield.Http, req_options: [plug: {Req.Test, Deckex.Moxfield.Http}]
 
 # When the real adapter is exercised directly (test/deckex/scryfall/http_test.exs)
 # it routes through Req.Test instead of the network, and does not really sleep.

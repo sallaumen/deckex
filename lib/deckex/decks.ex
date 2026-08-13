@@ -95,6 +95,88 @@ defmodule Deckex.Decks do
     end)
   end
 
+  @doc """
+  Adds a card to the deck by name, resolving it through the catalogue first.
+
+  Writes the same `deck_cards` row the import writes, so the next report picks
+  the change up with no special case.
+  """
+  @spec add_card(Deck.t(), String.t(), keyword()) :: {:ok, DeckCard.t()} | {:error, Error.t()}
+  def add_card(%Deck{} = deck, name, opts \\ []) do
+    board = Keyword.get(opts, :board, :main)
+    quantity = Keyword.get(opts, :quantity, 1)
+
+    with {:ok, card} <- resolve_one(name) do
+      # Classify on the way in. A card added without roles is invisible to every
+      # lens — the interaction count would not move when you add a counterspell,
+      # which is precisely the feedback the button exists to give.
+      {:ok, _roles} = Cards.classify_card(card)
+
+      {:ok, upsert_deck_card!(deck, card, board, quantity)}
+    end
+  end
+
+  @doc "Removes one copy of a card, deleting the row when the last copy goes."
+  @spec remove_card(Deck.t(), String.t()) :: {:ok, :removed} | {:error, Error.t()}
+  def remove_card(%Deck{} = deck, name) do
+    with {:ok, card} <- resolve_one(name),
+         %DeckCard{} = deck_card <- find_any_board(deck, card) do
+      drop_one!(deck_card)
+
+      {:ok, :removed}
+    else
+      nil -> {:error, not_in_deck(name)}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp resolve_one(name) do
+    case Cards.resolve_names([name]) do
+      {:ok, %{cards: [card | _rest]}} -> {:ok, card}
+      {:ok, _none} -> {:error, not_a_card(name)}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp find_any_board(deck, card) do
+    Enum.find_value([:main, :commander, :maybe], fn board ->
+      DeckQuery.get_deck_card(deck, card.id, board)
+    end)
+  end
+
+  defp upsert_deck_card!(deck, card, board, quantity) do
+    case DeckQuery.get_deck_card(deck, card.id, board) do
+      nil ->
+        %DeckCard{}
+        |> DeckCard.changeset(%{
+          deck_id: deck.id,
+          card_id: card.id,
+          quantity: quantity,
+          board: board
+        })
+        |> Repo.insert!()
+
+      existing ->
+        existing
+        |> DeckCard.changeset(%{quantity: existing.quantity + quantity})
+        |> Repo.update!()
+    end
+  end
+
+  defp drop_one!(%DeckCard{quantity: 1} = deck_card), do: Repo.delete!(deck_card)
+
+  defp drop_one!(%DeckCard{} = deck_card) do
+    deck_card |> DeckCard.changeset(%{quantity: deck_card.quantity - 1}) |> Repo.update!()
+  end
+
+  defp not_a_card(name) do
+    Error.new(:cards_not_found, "Não achei “#{name}” na Scryfall.", %{name: name})
+  end
+
+  defp not_in_deck(name) do
+    Error.new(:cards_not_found, "“#{name}” não está nesse deck.", %{name: name})
+  end
+
   @doc "Hides a deck from the list without deleting anything."
   @spec archive_deck(Deck.t()) :: {:ok, Deck.t()} | {:error, Ecto.Changeset.t()}
   def archive_deck(%Deck{} = deck) do

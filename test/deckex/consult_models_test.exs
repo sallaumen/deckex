@@ -1,0 +1,111 @@
+defmodule Deckex.ConsultModelsTest do
+  use Deckex.DataCase, async: true
+
+  import Mox
+
+  alias Deckex.CatalogueFixture
+  alias Deckex.Consults
+  alias Deckex.Consults.Consult
+  alias Deckex.Decks
+  alias Deckex.Settings
+
+  setup :verify_on_exit!
+
+  defp deck do
+    CatalogueFixture.seed!(~w(sol_ring forest counterspell))
+
+    {:ok, deck} =
+      Decks.import_from_text("1 Sol Ring\n1 Counterspell\n4 Forest", %{
+        name: "Deck do Modelo",
+        source: :paste
+      })
+
+    deck
+  end
+
+  describe "request/3 with a model" do
+    test "records the model it was asked for, before it runs" do
+      assert {:ok, consult} = Consults.request(deck(), :full, model: "opus")
+
+      assert consult.model == "opus"
+      assert consult.status == :pending
+    end
+
+    test "falls back to the configured model" do
+      {:ok, _value} = Settings.put(:claude_model, "fable")
+
+      assert {:ok, consult} = Consults.request(deck(), :full)
+      assert consult.model == "fable"
+    end
+
+    test "sends the recorded model to the port, not the current setting" do
+      {:ok, consult} = Consults.request(deck(), :full, model: "opus")
+      # Changing the setting afterwards must not change what this consult runs.
+      {:ok, _value} = Settings.put(:claude_model, "fable")
+
+      expect(Deckex.AI.Mock, :complete, fn _prompt, _schema, opts ->
+        assert opts[:model] == "opus"
+
+        {:ok, %{"diagnosis" => "ok", "cuts" => [], "adds" => []}}
+      end)
+
+      assert {:ok, done} = Consults.run(consult)
+      assert done.model == "opus"
+    end
+  end
+
+  describe "compare/4" do
+    test "runs one identical briefing across several models" do
+      assert {:ok, consults} = Consults.compare(deck(), :full, ["sonnet", "opus"])
+
+      assert length(consults) == 2
+      assert consults |> Enum.map(& &1.model) |> Enum.sort() == ["opus", "sonnet"]
+
+      # The experiment is only clean if the input is byte-identical.
+      assert consults |> Enum.map(& &1.briefing) |> Enum.uniq() |> length() == 1
+    end
+
+    test "queues one job per model" do
+      {:ok, _consults} = Consults.compare(deck(), :full, ["sonnet", "opus", "fable"])
+
+      assert Deckex.Repo.aggregate(Oban.Job, :count) == 3
+    end
+  end
+
+  describe "the new lenses" do
+    test "matchup carries the opponent into the prompt" do
+      assert {:ok, consult} =
+               Consults.request(deck(), :matchup, against: "deck agressivo vermelho")
+
+      assert consult.lens == :matchup
+      assert consult.briefing =~ "deck agressivo vermelho"
+    end
+
+    test "budget states a ceiling" do
+      {:ok, _value} = Settings.put(:consult_budget_usd, 15)
+
+      assert {:ok, consult} = Consults.request(deck(), :budget)
+      assert consult.briefing =~ "15"
+    end
+
+    test "upgrade says price is no object" do
+      assert {:ok, consult} = Consults.request(deck(), :upgrade)
+      assert consult.briefing =~ "regardless of price"
+    end
+
+    test "every pickable lens has a label" do
+      labels = Map.new(Consults.lens_labels())
+
+      for lens <- Consult.lenses(), lens != :finding do
+        assert Map.has_key?(labels, lens), "sem rótulo para #{lens}"
+      end
+    end
+  end
+
+  describe "models/0" do
+    test "offers the aliases the CLI accepts" do
+      assert "sonnet" in Consults.models()
+      assert "opus" in Consults.models()
+    end
+  end
+end

@@ -13,7 +13,17 @@ defmodule Deckex.Consults.Consult do
 
   alias Deckex.Decks.Deck
 
-  @lenses [:speed_curve, :mana_ramp, :interaction, :consistency, :full, :finding]
+  @lenses [
+    :speed_curve,
+    :mana_ramp,
+    :interaction,
+    :consistency,
+    :full,
+    :finding,
+    :matchup,
+    :budget,
+    :upgrade
+  ]
 
   @type t :: %__MODULE__{}
 
