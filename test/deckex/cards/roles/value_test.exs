@@ -33,6 +33,13 @@ defmodule Deckex.Cards.Roles.ValueTest do
       assert :tutor in kinds("mystical_tutor")
     end
 
+    test "a search that names another zone is still a tutor" do
+      # Finale of Devastation reads "Search your library and/or graveyard for a
+      # creature card" — a rule expecting "search your library for" verbatim
+      # misses it.
+      assert :tutor in kinds("finale_of_devastation")
+    end
+
     test "searching for a LAND is ramp, not a tutor" do
       # Cultivate and the fetchlands search the library too. They are handled by
       # the mana rules; counting them as tutors would inflate a deck's apparent

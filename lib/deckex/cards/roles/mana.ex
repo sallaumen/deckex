@@ -26,15 +26,18 @@ defmodule Deckex.Cards.Roles.Mana do
 
   # "Search your library for ... land ... onto the battlefield" — the Cultivate
   # shape. `[^.]*` keeps the match inside one sentence so an unrelated later
-  # clause cannot satisfy it.
-  @fetches_land ~r/search your library for[^.]*\bland\b[^.]*onto the battlefield/i
+  # clause cannot satisfy it, and the gap after "library" absorbs "and/or
+  # graveyard".
+  @fetches_land ~r/search your library[^.]{0,30}?\bfor\b[^.]*\bland\b[^.]*onto the battlefield/i
 
   # A land type named directly, as fetchlands and Nature's Lore do.
-  @fetches_land_type ~r/search your library for[^.]*\b(plains|island|swamp|mountain|forest)\b/i
+  @fetches_land_type ~r/search your library[^.]{0,30}?\bfor\b[^.]*\b(plains|island|swamp|mountain|forest)\b/i
 
-  # "... spells you cast cost {1} less" — a discount on OTHER cards. Deliberately
-  # does not match "This spell costs {1} less".
-  @discounts_your_spells ~r/spells?\s+you\s+cast\s+cost\s+\{[^}]+\}\s+less/i
+  # "... spells you cast cost {1} less" — a discount on OTHER cards. The gap
+  # absorbs a condition ("Each spell you cast that's red or green costs {1}
+  # less"). Deliberately does not match "This spell costs {1} less", which
+  # discounts nothing but itself.
+  @discounts_your_spells ~r/spells?\s+you\s+cast[^.]{0,40}?costs?\s+\{[^}]+\}\s+less/i
 
   @treasure ~r/create[sd]?\s+.*\btreasure\b/i
 

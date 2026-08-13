@@ -20,7 +20,9 @@ defmodule Deckex.Cards.Roles.Value do
   # NOT a bare "draws a card".
   @draw ~r/(?:you may draw|you draw|^draw)\s+(?:a|\w+)\s+cards?/im
 
-  @search ~r/search your library for([^.]*)/i
+  # The gap after "library" absorbs another zone: Finale of Devastation reads
+  # "Search your library and/or graveyard for a creature card".
+  @search ~r/search your library[^.]{0,30}?\bfor\b([^.]*)/i
   @land_search ~r/\b(land|plains|island|swamp|mountain|forest)\b/i
 
   @recursion ~r/return .* from your graveyard|\bflashback\b|cast .* from your graveyard/i

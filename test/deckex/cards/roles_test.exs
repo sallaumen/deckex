@@ -45,6 +45,15 @@ defmodule Deckex.Cards.RolesTest do
       refute Roles.residue?(card("counterspell"))
     end
 
+    test "a land that taps for mana is never residue" do
+      # Asking a model "what role does Forest play" is a question with no useful
+      # answer, and a 100-card deck holds dozens of them. The mana lens reads
+      # produced_mana directly; no classification is needed.
+      refute Roles.residue?(card("forest"))
+      refute Roles.residue?(card("reliquary_tower"))
+      refute Roles.residue?(card("command_tower"))
+    end
+
     test "an unmatched card is residue and goes to the AI" do
       # Young Pyromancer makes creature tokens off spells. No rule touches it:
       # it produces no mana, answers nothing, and draws nothing. This is exactly

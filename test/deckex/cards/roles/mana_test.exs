@@ -73,6 +73,13 @@ defmodule Deckex.Cards.Roles.ManaTest do
       assert :cost_reduction in kinds("goblin_electromancer")
     end
 
+    test "a conditional discount is still cost reduction" do
+      # Goblin Anarchomancer reads "Each spell you cast that's red or green
+      # costs {1} less to cast" — the condition sits between "you cast" and
+      # "costs", which a rule requiring them adjacent misses entirely.
+      assert :cost_reduction in kinds("goblin_anarchomancer")
+    end
+
     test "a spell that discounts ITSELF is not cost reduction" do
       # Blasphemous Act says "This spell costs {1} less to cast for each
       # creature on the battlefield" — that discounts nothing but itself.

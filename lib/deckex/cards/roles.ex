@@ -37,10 +37,23 @@ defmodule Deckex.Cards.Roles do
   """
   @spec residue?(Card.t()) :: boolean()
   def residue?(%Card{} = card) do
-    case classify(card) do
-      [] -> true
-      matches -> Enum.all?(matches, &(&1.confidence == :low))
+    cond do
+      self_evident_land?(card) -> false
+      classify(card) == [] -> true
+      true -> Enum.all?(classify(card), &(&1.confidence == :low))
     end
+  end
+
+  # A land that taps for mana needs no AI. The mana lens reads `produced_mana`
+  # directly, and "what role does Forest play" is a question with no useful
+  # answer — while a 100-card deck holds dozens of basics and utility lands, so
+  # the waste is not marginal.
+  defp self_evident_land?(%Card{} = card) do
+    land?(card) and card.produced_mana != []
+  end
+
+  defp land?(%Card{type_line: type_line}) do
+    type_line |> String.split("//") |> hd() |> String.contains?("Land")
   end
 
   defp best_per_kind(matches) do
