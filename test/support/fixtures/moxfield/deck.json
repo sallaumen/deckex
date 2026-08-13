@@ -1,0 +1,24 @@
+{
+  "name": "Iroh das Lontra",
+  "boards": {
+    "mainboard": {
+      "count": 5,
+      "cards": {
+        "a1": { "quantity": 1, "card": { "name": "Sol Ring" } },
+        "a2": { "quantity": 4, "card": { "name": "Forest" } }
+      }
+    },
+    "commanders": {
+      "count": 1,
+      "cards": {
+        "c1": { "quantity": 1, "card": { "name": "Iroh, Grand Lotus" } }
+      }
+    },
+    "maybeboard": {
+      "count": 1,
+      "cards": {
+        "m1": { "quantity": 1, "card": { "name": "Cultivate" } }
+      }
+    }
+  }
+}
