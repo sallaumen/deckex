@@ -40,7 +40,7 @@ defmodule DeckexWeb.MesaLive do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <div class="mx-auto max-w-5xl px-6 py-10">
+    <div class="mx-auto max-w-[1800px] px-6 py-10 lg:px-10 lg:py-14">
       <header class="mb-8 flex items-end justify-between gap-4">
         <div>
           <h1 class="text-hero font-semibold text-ink">A Mesa</h1>
@@ -60,7 +60,7 @@ defmodule DeckexWeb.MesaLive do
         </p>
       </div>
 
-      <ul class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <ul class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
         <li :for={row <- @decks}>
           <.link
             navigate={~p"/decks/#{row.deck.id}"}
