@@ -5,8 +5,10 @@ defmodule Deckex.Analysis.ManaTest do
   alias Deckex.Analysis.Mana
   alias Deckex.AnalysisFixture
 
+  # `opts` comes FIRST: AnalysisFixture reads with Keyword.get, which returns the
+  # first occurrence, so an override has to precede the default it replaces.
   defp land(name, opts) do
-    AnalysisFixture.entry([name: name, type_line: "Land", cmc: "0.0", mana_cost: nil] ++ opts)
+    AnalysisFixture.entry(opts ++ [name: name, type_line: "Land", cmc: "0.0", mana_cost: nil])
   end
 
   defp codes(snapshot, baselines \\ Baselines.default()) do
