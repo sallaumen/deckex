@@ -16,6 +16,7 @@ defmodule Deckex.Error do
           | :cards_not_found
           | :empty_decklist
           | :deck_not_found
+          | :consult_not_found
           | :not_commander_legal
           | :ai_timeout
           | :ai_unavailable

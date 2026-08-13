@@ -11,8 +11,10 @@ defmodule DeckexWeb.DeckLive do
   use DeckexWeb, :live_view
 
   alias Deckex.Analysis
+  alias Deckex.Consults
   alias Deckex.Decks
   alias Deckex.Error
+  alias Deckex.Events
 
   @impl Phoenix.LiveView
   def mount(%{"id" => id}, _session, socket) do
@@ -26,14 +28,41 @@ defmodule DeckexWeb.DeckLive do
   end
 
   defp assign_deck(socket, deck) do
+    if connected?(socket), do: Events.subscribe_consults(deck.id)
+
     snapshot = Decks.snapshot(deck)
 
     assign(socket,
       deck: deck,
       snapshot: snapshot,
       report: Analysis.report(snapshot),
+      consults: Consults.list_for_deck(deck),
       page_title: deck.name
     )
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("consult-finding", %{"code" => code}, socket) do
+    {:noreply, start_consult(socket, :finding, finding_code: code)}
+  end
+
+  def handle_event("consult-full", _params, socket) do
+    {:noreply, start_consult(socket, :full)}
+  end
+
+  @impl Phoenix.LiveView
+  def handle_info({:consult_updated, _id}, socket) do
+    {:noreply, assign(socket, consults: Consults.list_for_deck(socket.assigns.deck))}
+  end
+
+  # Consults.request/3 raises rather than returning a tagged error — every
+  # field it writes is built here, so a failure is a bug, not a user problem.
+  defp start_consult(socket, lens, opts \\ []) do
+    {:ok, _consult} = Consults.request(socket.assigns.deck, lens, opts)
+
+    socket
+    |> put_flash(:info, "Consulta enviada. A resposta aparece aqui quando chegar.")
+    |> assign(consults: Consults.list_for_deck(socket.assigns.deck))
   end
 
   @impl Phoenix.LiveView
@@ -56,10 +85,20 @@ defmodule DeckexWeb.DeckLive do
       </header>
 
       <div class="grid gap-10 xl:grid-cols-[minmax(340px,26rem)_1fr] xl:items-start">
-        <aside class="xl:sticky xl:top-8">
-          <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
-            Achados
-          </h2>
+        <aside class="xl:sticky xl:top-8 xl:max-h-[calc(100vh-4rem)] xl:overflow-y-auto">
+          <div class="mb-3 flex items-center justify-between gap-3">
+            <h2 class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+              Achados
+            </h2>
+
+            <button
+              type="button"
+              phx-click="consult-full"
+              class="text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+            >
+              Consultar o deck inteiro
+            </button>
+          </div>
 
           <p
             :if={@report.findings == []}
@@ -77,8 +116,78 @@ defmodule DeckexWeb.DeckLive do
               cards={finding.card_names}
             >
               <:detail>{finding.detail}</:detail>
+              <:actions>
+                <button
+                  type="button"
+                  phx-click="consult-finding"
+                  phx-value-code={finding.code}
+                  class="text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+                >
+                  Pedir diagnóstico
+                </button>
+              </:actions>
             </.finding>
           </div>
+
+          <section :if={@consults != []} class="mt-8">
+            <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+              Consultas
+            </h2>
+
+            <div class="space-y-3">
+              <article
+                :for={consult <- @consults}
+                class="rounded-lg border border-hairline-soft bg-surface p-4"
+              >
+                <header class="mb-2 flex items-center justify-between gap-3">
+                  <span class="font-mono text-caption text-ink-faint">
+                    {consult.finding_code || consult.lens}
+                  </span>
+                  <span class={[
+                    "font-mono text-caption",
+                    consult.status == :done && "text-sev-healthy",
+                    consult.status == :failed && "text-sev-critical",
+                    consult.status in [:pending, :running] && "text-ink-faint"
+                  ]}>
+                    {consult_status(consult.status)}
+                  </span>
+                </header>
+
+                <p :if={consult.error} class="text-body-sm text-ink-secondary">{consult.error}</p>
+
+                <div :if={consult.response} class="space-y-3">
+                  <p class="text-body-sm text-ink">{consult.response["diagnosis"]}</p>
+
+                  <div :if={consult.response["cuts"] not in [nil, []]}>
+                    <p class="mb-1 text-label uppercase tracking-[0.1em] text-ink-faint">Cortar</p>
+                    <ul class="space-y-1">
+                      <li :for={cut <- consult.response["cuts"]} class="text-caption">
+                        <span class="text-ink">{cut["card"]}</span>
+                        <span class="text-ink-muted">— {cut["reason"]}</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div :if={consult.response["adds"] not in [nil, []]}>
+                    <p class="mb-1 text-label uppercase tracking-[0.1em] text-ink-faint">Colocar</p>
+                    <ul class="space-y-1">
+                      <li :for={add <- consult.response["adds"]} class="text-caption">
+                        <span class="text-ink">{add["card"]}</span>
+                        <span class="text-ink-muted">— {add["reason"]}</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+
+                <details class="mt-3">
+                  <summary class="cursor-pointer text-caption text-ink-faint hover:text-ink">
+                    Ver o prompt
+                  </summary>
+                  <pre class="mt-2 max-h-64 overflow-auto rounded-md bg-inlay p-3 font-mono text-micro text-ink-muted">{consult.briefing}</pre>
+                </details>
+              </article>
+            </div>
+          </section>
         </aside>
 
         <div class="space-y-8">
@@ -225,6 +334,11 @@ defmodule DeckexWeb.DeckLive do
 
   # Format speaks in mana costs, so a bare colour code becomes a one-symbol cost.
   defp pip(colour), do: "{#{colour}}" |> Format.mana_symbols() |> hd()
+
+  defp consult_status(:pending), do: "na fila"
+  defp consult_status(:running), do: "pensando…"
+  defp consult_status(:done), do: "pronto"
+  defp consult_status(:failed), do: "falhou"
 
   defp curve_max(histogram) do
     histogram |> Map.values() |> Enum.max(fn -> 1 end) |> max(1)

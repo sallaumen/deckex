@@ -4,6 +4,7 @@ defmodule Deckex.Factory do
 
   alias Deckex.Cards.Card
   alias Deckex.Cards.Name
+  alias Deckex.Consults.Consult
   alias Deckex.Decks.Deck
   alias Deckex.Decks.DeckCard
 
@@ -37,6 +38,16 @@ defmodule Deckex.Factory do
       status: :ready,
       color_identity: [],
       raw_decklist: "1 Sol Ring"
+    }
+  end
+
+  def consult_factory do
+    %Consult{
+      deck: build(:deck),
+      lens: :mana_ramp,
+      status: :pending,
+      briefing: "Analise este deck.",
+      report_snapshot: %{"curve" => %{"avg_cmc" => 2.8}}
     }
   end
 

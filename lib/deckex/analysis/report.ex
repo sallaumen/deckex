@@ -19,6 +19,7 @@ defmodule Deckex.Analysis.Report do
           findings: [Finding.t()]
         }
 
+  @derive Jason.Encoder
   @enforce_keys [
     :deck_id,
     :deck_name,

@@ -21,6 +21,7 @@ defmodule Deckex.Analysis.Finding do
           card_names: [String.t()]
         }
 
+  @derive Jason.Encoder
   @enforce_keys [:code, :severity, :lens, :title, :detail]
   defstruct [:code, :severity, :lens, :title, :detail, evidence: %{}, card_names: []]
 
