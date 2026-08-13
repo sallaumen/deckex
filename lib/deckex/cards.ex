@@ -12,6 +12,7 @@ defmodule Deckex.Cards do
   alias Deckex.Cards.CardQuery
   alias Deckex.Cards.CardRole
   alias Deckex.Cards.Name
+  alias Deckex.Cards.RoleAI
   alias Deckex.Cards.RoleMatch
   alias Deckex.Cards.Roles
   alias Deckex.Cards.ScryfallMapper
@@ -112,6 +113,31 @@ defmodule Deckex.Cards do
       |> Enum.map(&upsert_role!(card, &1, :rule))
 
     {:ok, roles}
+  end
+
+  @doc """
+  Classifies every card in `cards`: rules first for free, then one AI call for
+  whatever the rules could not place. Returns how many cards each path handled.
+
+  The rule pass is committed before the AI is called, so an AI failure never
+  costs the work the rules already did.
+  """
+  @spec classify_all([Card.t()]) ::
+          {:ok, %{rules: non_neg_integer(), ai: non_neg_integer()}} | {:error, Error.t()}
+  def classify_all(cards) do
+    {residue, handled} = Enum.split_with(cards, &Roles.residue?/1)
+
+    Enum.each(handled, &classify_card/1)
+
+    with {:ok, ai_matches} <- RoleAI.classify(residue) do
+      Enum.each(residue, fn card ->
+        ai_matches
+        |> Map.get(card.id, [])
+        |> Enum.each(&upsert_role!(card, &1, :ai))
+      end)
+
+      {:ok, %{rules: length(handled), ai: map_size(ai_matches)}}
+    end
   end
 
   @doc """

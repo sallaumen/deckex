@@ -22,6 +22,8 @@ defmodule Deckex.DataCase do
     quote do
       alias Deckex.Repo
 
+      use Oban.Testing, repo: Deckex.Repo
+
       import Deckex.DataCase
       import Deckex.Factory
       import Ecto
