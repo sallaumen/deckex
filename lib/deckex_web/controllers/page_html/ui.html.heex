@@ -1,0 +1,192 @@
+<%!--
+  Design-system preview. Dev only (see the `/dev/ui` route). Every component in
+  `DeckexWeb.UI` rendered against real Scryfall data, so the vocabulary can be
+  looked at — and its contrast checked — without a deck in the database.
+--%>
+<Layouts.app flash={@flash}>
+  <.header>
+    Vocabulário
+    <:subtitle>
+      Os componentes de "A Mesa". Nenhum deles escreve uma cor — tudo passa por <code class="font-mono text-caption text-ink-secondary">DeckexWeb.UI.Format</code>.
+    </:subtitle>
+  </.header>
+
+  <div class="space-y-12">
+    <section>
+      <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.14em] text-ink-faint">
+        Identidade de cor
+      </h2>
+      <div class="flex flex-wrap items-center gap-8 rounded-lg border border-hairline bg-surface p-5">
+        <div class="space-y-2">
+          <p class="text-caption text-ink-muted">Só as cores do deck</p>
+          <.color_identity colors={["G", "U", "R"]} size={20} />
+        </div>
+        <div class="space-y-2">
+          <p class="text-caption text-ink-muted">Cinco casas fixas (grade)</p>
+          <.color_identity colors={["G", "U", "R"]} full size={20} />
+        </div>
+        <div class="space-y-2">
+          <p class="text-caption text-ink-muted">Incolor</p>
+          <.color_identity colors={[]} size={20} />
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.14em] text-ink-faint">
+        Custo de mana
+      </h2>
+      <div class="space-y-3 rounded-lg border border-hairline bg-surface p-5">
+        <div
+          :for={
+            cost <- [
+              "{3}{G}{U}{R}",
+              "{X}{B}{B}{B}",
+              "{2}{W/U}{W/U}",
+              "{2/W}{2/W}",
+              "{U/P}{U/P}",
+              "{1}{S}{C}",
+              "{T}"
+            ]
+          }
+          class="flex items-center gap-4"
+        >
+          <code class="w-40 shrink-0 font-mono text-caption text-ink-faint">{cost}</code>
+          <.mana_cost cost={cost} size={20} />
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.14em] text-ink-faint">
+        Métricas
+      </h2>
+      <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <.stat
+          label="CMC médio"
+          value={Format.decimal(3.24)}
+          target="banda 2,4–3,5"
+          tone={:healthy}
+        />
+        <.stat label="Terrenos" value="34" target="alvo 36" tone={:warning} />
+        <.stat label="Fontes de preto" value="12" target="alvo 25" tone={:critical} />
+        <.stat label="Rampa" value="10" unit="peças" target="4 delas a ≤2 CMC" />
+      </div>
+    </section>
+
+    <section>
+      <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.14em] text-ink-faint">
+        Curva de mana
+      </h2>
+      <div class="rounded-lg border border-hairline bg-surface p-5">
+        <div class="flex items-end gap-2">
+          <.curve_bar
+            :for={{label, count, tone} <- @curve}
+            label={label}
+            count={count}
+            max={18}
+            tone={tone}
+            class="flex-1"
+          />
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.14em] text-ink-faint">
+        Diagnósticos
+      </h2>
+      <div class="space-y-2.5">
+        <.finding
+          severity={:critical}
+          title="Fontes de preto insuficientes"
+          code="mana.color_starved"
+          cards={["Bolas's Citadel", "Sheoldred, the Apocalypse", "Damnation"]}
+        >
+          <:detail>
+            12 fontes de preto para 8 cartas que pedem dois pips. O alvo para pip duplo é 25.
+          </:detail>
+          <:actions>
+            <.button variant="primary">Pedir diagnóstico à IA</.button>
+            <.button>Ver as cartas</.button>
+          </:actions>
+        </.finding>
+
+        <.finding
+          severity={:warning}
+          title="Curva pesada no topo"
+          code="curve.top_heavy"
+          cards={["Blasphemous Act", "Finale of Devastation"]}
+        >
+          <:detail>24% das cartas não-terreno custam 6 ou mais. O limite saudável é 20%.</:detail>
+        </.finding>
+
+        <.finding
+          severity={:healthy}
+          title="Interação em quantidade saudável"
+          code="interaction.total"
+        >
+          <:detail>9 peças de interação, 6 delas em velocidade de instantâneo.</:detail>
+        </.finding>
+
+        <.finding severity={:info} title="Lista fora do caminho batido" code="consistency.edhrec">
+          <:detail>Rank mediano do EDHREC: 4.812.</:detail>
+        </.finding>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.14em] text-ink-faint">
+        Cartas
+      </h2>
+      <div class="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
+        <.card_tile
+          :for={card <- @cards}
+          name={card.name}
+          art={card.art}
+          mana_cost={card.mana_cost}
+          type_line={card.type_line}
+          quantity={card.quantity}
+        />
+        <.card_tile
+          name="Sem arte ainda"
+          type_line="A Scryfall não respondeu"
+          mana_cost="{2}{U}"
+        />
+      </div>
+    </section>
+
+    <section>
+      <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.14em] text-ink-faint">
+        Formulário
+      </h2>
+      <div class="max-w-lg space-y-1 rounded-lg border border-hairline bg-surface p-5">
+        <.input
+          name="url"
+          value=""
+          label="URL do Moxfield"
+          placeholder="https://moxfield.com/decks/…"
+        />
+        <.input
+          name="lista"
+          type="textarea"
+          rows="4"
+          label="Colar lista"
+          value={@decklist}
+        />
+        <.input
+          name="modelo"
+          type="select"
+          label="Modelo"
+          options={["Opus", "Sonnet"]}
+          value="Opus"
+        />
+        <.input name="quebrado" value="moxfield.com" label="Com erro" errors={["Link inválido."]} />
+        <div class="flex gap-2 pt-2">
+          <.button variant="primary">Importar</.button>
+          <.button>Cancelar</.button>
+        </div>
+      </div>
+    </section>
+  </div>
+</Layouts.app>

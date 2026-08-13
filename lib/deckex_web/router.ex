@@ -39,5 +39,13 @@ defmodule DeckexWeb.Router do
 
       live_dashboard "/dashboard", metrics: DeckexWeb.Telemetry
     end
+
+    # The design-system preview: every component in `DeckexWeb.UI` on one page,
+    # against real sample data. Dev only — it is a workbench, not a screen.
+    scope "/dev", DeckexWeb do
+      pipe_through :browser
+
+      get "/ui", PageController, :ui
+    end
   end
 end
