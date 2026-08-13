@@ -22,10 +22,11 @@ defmodule Deckex.DataCase do
     quote do
       alias Deckex.Repo
 
+      import Deckex.DataCase
+      import Deckex.Factory
       import Ecto
       import Ecto.Changeset
       import Ecto.Query
-      import Deckex.DataCase
     end
   end
 
