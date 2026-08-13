@@ -15,6 +15,8 @@ defmodule Deckex.Decks do
   alias Deckex.Decks.DecklistParser
   alias Deckex.Decks.DeckQuery
   alias Deckex.Error
+  alias Deckex.Events
+  alias Deckex.Moxfield
   alias Deckex.Repo
   alias Deckex.Workers.ClassifyCardsWorker
 
@@ -37,6 +39,27 @@ defmodule Deckex.Decks do
          {:ok, %{cards: cards, not_found: not_found}} <- resolve(entries),
          {:ok, deck} <- persist(text, attrs, entries, cards, not_found) do
       {:ok, classify(deck, cards)}
+    end
+  end
+
+  @doc """
+  Imports a deck from a Moxfield URL.
+
+  Every failure here is expected to be common — Moxfield blocks unapproved
+  clients — so the error carries a message the UI shows next to the paste form
+  rather than a stack trace.
+  """
+  @spec import_from_url(String.t()) :: {:ok, Deck.t()} | {:error, Error.t()}
+  def import_from_url(url) do
+    with {:ok, public_id} <- Moxfield.public_id_from_url(url),
+         {:ok, %{name: name, decklist: decklist}} <- Moxfield.fetch_deck(public_id) do
+      import_from_text(decklist, %{
+        name: name,
+        source: :moxfield,
+        moxfield_url: url,
+        moxfield_public_id: public_id,
+        last_synced_at: DateTime.utc_now(:second)
+      })
     end
   end
 
@@ -132,6 +155,10 @@ defmodule Deckex.Decks do
   end
 
   defp update_status!(deck, status) do
-    deck |> Deck.changeset(%{status: status}) |> Repo.update!()
+    updated = deck |> Deck.changeset(%{status: status}) |> Repo.update!()
+
+    Events.broadcast_deck_updated(updated)
+
+    updated
   end
 end
