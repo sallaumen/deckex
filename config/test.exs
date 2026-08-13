@@ -30,6 +30,7 @@ config :deckex, Oban, testing: :manual
 
 # Integration ports → Mox mocks (see test/support/mocks.ex).
 config :deckex, Deckex.Scryfall.Client, adapter: Deckex.Scryfall.Mock
+config :deckex, Deckex.AI.Client, adapter: Deckex.AI.Mock
 
 # When the real adapter is exercised directly (test/deckex/scryfall/http_test.exs)
 # it routes through Req.Test instead of the network, and does not really sleep.

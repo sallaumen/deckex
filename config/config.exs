@@ -29,6 +29,10 @@ config :deckex, Oban,
 
 # Integration ports (ports & adapters). Tests override these with Mox mocks.
 config :deckex, Deckex.Scryfall.Client, adapter: Deckex.Scryfall.Http
+config :deckex, Deckex.AI.Client, adapter: Deckex.AI.ClaudeCli
+
+# Model for bulk role classification, and how many cards go in one call.
+config :deckex, Deckex.AI, model: "sonnet", batch_size: 15
 
 # Configure the endpoint
 config :deckex, DeckexWeb.Endpoint,
