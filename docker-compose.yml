@@ -1,0 +1,24 @@
+services:
+  db:
+    image: postgres:16-alpine
+    # This is a desktop machine and the app is used in short sessions; bring the
+    # database back with Docker Desktop rather than starting every session with
+    # a manual `compose up`. "unless-stopped" still honours a deliberate stop.
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: deckex_dev
+    # Host port 5435 (5432/5433/5434 are other projects on this machine).
+    ports:
+      - "5435:5432"
+    volumes:
+      - deckex_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  deckex_pg:
