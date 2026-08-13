@@ -81,9 +81,12 @@ defmodule DeckexWeb do
       import Phoenix.HTML
       # Core UI components
       import DeckexWeb.CoreComponents
+      # The "A Mesa" design system vocabulary (see DESIGN.md)
+      import DeckexWeb.UI
 
       # Common modules used in templates
       alias DeckexWeb.Layouts
+      alias DeckexWeb.UI.Format
       alias Phoenix.LiveView.JS
 
       # Routes generation with the ~p sigil
