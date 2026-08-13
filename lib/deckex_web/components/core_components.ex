@@ -1,19 +1,14 @@
 defmodule DeckexWeb.CoreComponents do
   @moduledoc """
-  Provides core UI components.
+  Chrome that Phoenix itself expects: flashes, buttons, form inputs, headers,
+  tables and the Heroicon wrapper.
 
-  At first glance, this module may seem daunting, but its goal is to provide
-  core building blocks for your application, such as tables, forms, and
-  inputs. The components consist mostly of markup and are well-documented
-  with doc strings and declarative assigns. You may customize and style
-  them in any way you want, based on your application growth and needs.
+  These are the generator's components, restyled onto the "A Mesa" tokens.
+  daisyUI is gone — it carried a light theme this app must never have — so
+  every class here resolves through `assets/css/tokens.css`. The product
+  vocabulary (mana pips, findings, card tiles) lives in `DeckexWeb.UI`.
 
-  The foundation for styling is Tailwind CSS, a utility-first CSS framework,
-  augmented with daisyUI, a Tailwind CSS plugin that provides UI components
-  and themes. Here are useful references:
-
-    * [daisyUI](https://daisyui.com/docs/intro/) - a good place to get
-      started and see the available components.
+  Useful references:
 
     * [Tailwind CSS](https://tailwindcss.com) - the foundational framework
       we build on. You will use it for layout, sizing, flexbox, grid, and
@@ -28,9 +23,30 @@ defmodule DeckexWeb.CoreComponents do
   """
   use Phoenix.Component
 
+  alias DeckexWeb.UI.Format
   alias Phoenix.HTML.Form
   alias Phoenix.HTML.FormField
   alias Phoenix.LiveView.JS
+
+  # Shared field chrome. Inputs are recessed into the table (`inlay`), the one
+  # surface step below the mat — see The Felt Rule in DESIGN.md. These are
+  # functions rather than module attributes because `@name` inside `~H` means
+  # `assigns.name`, not the attribute.
+  defp field_class do
+    "w-full rounded-md border bg-inlay px-3 py-2 text-body text-ink " <>
+      "placeholder:text-ink-faint focus:border-ink-faint disabled:opacity-40"
+  end
+
+  # The border colour is applied separately from `field_class/0`: two `border-*`
+  # colour utilities on one element are resolved by Tailwind's own output order,
+  # not by the order they appear in the attribute, so the resting border must
+  # not be in the base string or the invalid state silently loses.
+  defp border_class([], _override), do: "border-hairline-soft"
+  defp border_class(_errors, nil), do: "border-sev-critical"
+  defp border_class(_errors, override), do: override
+
+  defp label_class,
+    do: "mb-1.5 block text-label font-semibold uppercase tracking-[0.1em] text-ink-faint"
 
   @doc """
   Renders flash notices.
@@ -64,23 +80,29 @@ defmodule DeckexWeb.CoreComponents do
       id={@id}
       phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
       role="alert"
-      class="toast toast-top toast-end z-50"
+      class="fixed right-4 top-4 z-50 w-80 sm:w-96"
+      style={"--c:#{Format.severity_var(if(@kind == :error, do: :critical, else: :healthy))}"}
       {@rest}
     >
-      <div class={[
-        "alert w-80 sm:w-96 max-w-80 sm:max-w-96 text-wrap",
-        @kind == :info && "alert-info",
-        @kind == :error && "alert-error"
-      ]}>
-        <.icon :if={@kind == :info} name="hero-information-circle" class="size-5 shrink-0" />
-        <.icon :if={@kind == :error} name="hero-exclamation-circle" class="size-5 shrink-0" />
-        <div>
-          <p :if={@title} class="font-semibold">{@title}</p>
-          <p>{msg}</p>
+      <div
+        class="flex items-start gap-2.5 rounded-lg border bg-surface px-3.5 py-3 shadow-lifted"
+        style="border-color:color-mix(in srgb, var(--c) 30%, transparent)"
+      >
+        <.icon
+          name={if @kind == :error, do: "hero-exclamation-circle", else: "hero-information-circle"}
+          class="mt-px size-4 shrink-0"
+          style="color:var(--c)"
+        />
+        <div class="min-w-0 flex-1">
+          <p :if={@title} class="text-body font-semibold text-ink">{@title}</p>
+          <p class="text-body text-ink-secondary">{msg}</p>
         </div>
-        <div class="flex-1" />
-        <button type="button" class="group self-start cursor-pointer" aria-label="close">
-          <.icon name="hero-x-mark" class="size-5 opacity-40 group-hover:opacity-70" />
+        <button
+          type="button"
+          class="shrink-0 text-ink-faint transition-colors hover:text-ink"
+          aria-label="Fechar"
+        >
+          <.icon name="hero-x-mark" class="size-4" />
         </button>
       </div>
     </div>
@@ -90,11 +112,15 @@ defmodule DeckexWeb.CoreComponents do
   @doc """
   Renders a button with navigation support.
 
+  The primary variant is a solid ink fill with felt-coloured text: the loudest
+  thing the chrome is allowed to be, because every saturated hue in this app
+  already means a mana colour or a severity.
+
   ## Examples
 
-      <.button>Send!</.button>
-      <.button phx-click="go" variant="primary">Send!</.button>
-      <.button navigate={~p"/"}>Home</.button>
+      <.button>Colar lista</.button>
+      <.button phx-click="go" variant="primary">Importar</.button>
+      <.button navigate={~p"/"}>Mesa</.button>
   """
   attr :rest, :global, include: ~w(href navigate patch method download name value disabled)
   attr :class, :any
@@ -102,11 +128,18 @@ defmodule DeckexWeb.CoreComponents do
   slot :inner_block, required: true
 
   def button(%{rest: rest} = assigns) do
-    variants = %{"primary" => "btn-primary", nil => "btn-primary btn-soft"}
+    base =
+      "inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 " <>
+        "text-body font-semibold transition-colors disabled:opacity-40"
+
+    variants = %{
+      "primary" => "bg-ink text-felt hover:bg-ink-secondary",
+      nil => "border border-hairline-soft bg-surface-2 text-ink-secondary hover:text-ink"
+    }
 
     assigns =
       assign_new(assigns, :class, fn ->
-        ["btn", Map.fetch!(variants, assigns[:variant])]
+        [base, Map.fetch!(variants, assigns[:variant])]
       end)
 
     if rest[:href] || rest[:navigate] || rest[:patch] do
@@ -213,8 +246,8 @@ defmodule DeckexWeb.CoreComponents do
       end)
 
     ~H"""
-    <div class="fieldset mb-2">
-      <label for={@id}>
+    <div class="mb-3">
+      <label for={@id} class="flex items-center gap-2 text-body text-ink-secondary">
         <input
           type="hidden"
           name={@name}
@@ -222,17 +255,15 @@ defmodule DeckexWeb.CoreComponents do
           disabled={@rest[:disabled]}
           form={@rest[:form]}
         />
-        <span class="label">
-          <input
-            type="checkbox"
-            id={@id}
-            name={@name}
-            value="true"
-            checked={@checked}
-            class={@class || "checkbox checkbox-sm"}
-            {@rest}
-          />{@label}
-        </span>
+        <input
+          type="checkbox"
+          id={@id}
+          name={@name}
+          value="true"
+          checked={@checked}
+          class={@class || "size-4 rounded-xs border-hairline-strong bg-inlay text-ink"}
+          {@rest}
+        />{@label}
       </label>
       <.error :for={msg <- @errors}>{msg}</.error>
     </div>
@@ -241,13 +272,13 @@ defmodule DeckexWeb.CoreComponents do
 
   def input(%{type: "select"} = assigns) do
     ~H"""
-    <div class="fieldset mb-2">
+    <div class="mb-3">
       <label for={@id}>
-        <span :if={@label} class="label mb-1">{@label}</span>
+        <span :if={@label} class={label_class()}>{@label}</span>
         <select
           id={@id}
           name={@name}
-          class={[@class || "w-full select", @errors != [] && (@error_class || "select-error")]}
+          class={[@class || field_class(), border_class(@errors, @error_class)]}
           multiple={@multiple}
           {@rest}
         >
@@ -262,15 +293,15 @@ defmodule DeckexWeb.CoreComponents do
 
   def input(%{type: "textarea"} = assigns) do
     ~H"""
-    <div class="fieldset mb-2">
+    <div class="mb-3">
       <label for={@id}>
-        <span :if={@label} class="label mb-1">{@label}</span>
+        <span :if={@label} class={label_class()}>{@label}</span>
         <textarea
           id={@id}
           name={@name}
           class={[
-            @class || "w-full textarea",
-            @errors != [] && (@error_class || "textarea-error")
+            @class || [field_class(), "font-mono leading-relaxed"],
+            border_class(@errors, @error_class)
           ]}
           {@rest}
         >{Form.normalize_value("textarea", @value)}</textarea>
@@ -283,18 +314,15 @@ defmodule DeckexWeb.CoreComponents do
   # All other inputs text, datetime-local, url, password, etc. are handled here...
   def input(assigns) do
     ~H"""
-    <div class="fieldset mb-2">
+    <div class="mb-3">
       <label for={@id}>
-        <span :if={@label} class="label mb-1">{@label}</span>
+        <span :if={@label} class={label_class()}>{@label}</span>
         <input
           type={@type}
           name={@name}
           id={@id}
           value={Form.normalize_value(@type, @value)}
-          class={[
-            @class || "w-full input",
-            @errors != [] && (@error_class || "input-error")
-          ]}
+          class={[@class || field_class(), border_class(@errors, @error_class)]}
           {@rest}
         />
       </label>
@@ -306,8 +334,11 @@ defmodule DeckexWeb.CoreComponents do
   # Helper used by inputs to generate form errors
   defp error(assigns) do
     ~H"""
-    <p class="mt-1.5 flex gap-2 items-center text-sm text-error">
-      <.icon name="hero-exclamation-circle" class="size-5" />
+    <p
+      class="mt-1.5 flex items-center gap-1.5 text-caption"
+      style={"color:#{Format.severity_var(:critical)}"}
+    >
+      <.icon name="hero-exclamation-circle" class="size-4 shrink-0" />
       {render_slot(@inner_block)}
     </p>
     """
@@ -322,12 +353,12 @@ defmodule DeckexWeb.CoreComponents do
 
   def header(assigns) do
     ~H"""
-    <header class={[@actions != [] && "flex items-center justify-between gap-6", "pb-4"]}>
-      <div>
-        <h1 class="text-lg font-semibold leading-8">
+    <header class={[@actions != [] && "flex items-end justify-between gap-6", "pb-5"]}>
+      <div class="min-w-0">
+        <h1 class="text-heading font-semibold leading-tight text-ink">
           {render_slot(@inner_block)}
         </h1>
-        <p :if={@subtitle != []} class="text-sm text-base-content/70">
+        <p :if={@subtitle != []} class="mt-1 text-body text-ink-muted">
           {render_slot(@subtitle)}
         </p>
       </div>
@@ -368,26 +399,35 @@ defmodule DeckexWeb.CoreComponents do
       end
 
     ~H"""
-    <table class="table table-zebra">
+    <table class="w-full border-collapse text-body">
       <thead>
-        <tr>
-          <th :for={col <- @col}>{col[:label]}</th>
-          <th :if={@action != []}>
-            <span class="sr-only">Actions</span>
+        <tr class="border-b border-hairline-soft">
+          <th
+            :for={col <- @col}
+            class="px-3 py-2 text-left text-label font-semibold uppercase tracking-[0.1em] text-ink-faint"
+          >
+            {col[:label]}
+          </th>
+          <th :if={@action != []} class="px-3 py-2">
+            <span class="sr-only">Ações</span>
           </th>
         </tr>
       </thead>
       <tbody id={@id} phx-update={is_struct(@rows, Phoenix.LiveView.LiveStream) && "stream"}>
-        <tr :for={row <- @rows} id={@row_id && @row_id.(row)}>
+        <tr
+          :for={row <- @rows}
+          id={@row_id && @row_id.(row)}
+          class="border-b border-hairline hover:bg-surface-2"
+        >
           <td
             :for={col <- @col}
             phx-click={@row_click && @row_click.(row)}
-            class={@row_click && "hover:cursor-pointer"}
+            class={["px-3 py-2.5 text-ink-secondary", @row_click && "hover:cursor-pointer"]}
           >
             {render_slot(col, @row_item.(row))}
           </td>
-          <td :if={@action != []} class="w-0 font-semibold">
-            <div class="flex gap-4">
+          <td :if={@action != []} class="w-0 px-3 py-2.5">
+            <div class="flex gap-3">
               <%= for action <- @action do %>
                 {render_slot(action, @row_item.(row))}
               <% end %>
@@ -415,12 +455,12 @@ defmodule DeckexWeb.CoreComponents do
 
   def list(assigns) do
     ~H"""
-    <ul class="list">
-      <li :for={item <- @item} class="list-row">
-        <div class="list-col-grow">
-          <div class="font-bold">{item.title}</div>
-          <div>{render_slot(item)}</div>
+    <ul class="divide-y divide-[color:var(--hairline)]">
+      <li :for={item <- @item} class="flex flex-wrap items-baseline gap-x-4 gap-y-1 py-2.5">
+        <div class="w-40 shrink-0 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+          {item.title}
         </div>
+        <div class="min-w-0 flex-1 text-body text-ink-secondary">{render_slot(item)}</div>
       </li>
     </ul>
     """
@@ -446,10 +486,11 @@ defmodule DeckexWeb.CoreComponents do
   """
   attr :name, :string, required: true
   attr :class, :any, default: "size-4"
+  attr :rest, :global
 
   def icon(%{name: "hero-" <> _} = assigns) do
     ~H"""
-    <span class={[@name, @class]} />
+    <span class={[@name, @class]} {@rest} />
     """
   end
 

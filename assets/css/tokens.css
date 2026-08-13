@@ -1,0 +1,174 @@
+/* deckex — "A Mesa" design tokens.
+ *
+ * The single source of truth for every colour, radius, shadow and type step in
+ * the app. Each value is written here exactly once; `app.css` re-exports them
+ * as Tailwind v4 utilities through `@theme` by pointing at these variables
+ * rather than repeating the literals. That is why the names below are
+ * product names (`--felt`, `--corner-card`, `--type-body`) and not Tailwind
+ * namespace names — a token called `--radius-md` here would alias itself.
+ *
+ * The app is DARK ONLY. There is no light theme and no `prefers-color-scheme`
+ * branch: the table is always under low light. Do not add one.
+ */
+:root {
+  /* ── Surfaces: the felt ────────────────────────────────────────────────────
+   * A playmat under a low lamp: hue 144–150 throughout, with the chroma rising
+   * as the step gets lighter (5 → 16 of 255). That is the lamp doing its job —
+   * the shadowed mat is nearly neutral and the lit surfaces are visibly green.
+   * A flat-chroma ramp was measured and rejected: at these luminances the green
+   * was imperceptible on every step, which is a north star that never arrives.
+   * Depth is one tonal step per layer, never a shadow. `inlay` is the only step
+   * *below* the mat: recesses (inputs, wells, empty art frames). */
+  --felt: #0b120e;
+  --rail: #0f1813;
+  --surface: #131d17;
+  --surface-2: #192720;
+  --inlay: #070c09;
+  --chip: #203028;
+
+  /* ── Ink ───────────────────────────────────────────────────────────────────
+   * Warm off-white, tinted from the felt so text belongs to the table. Every
+   * step down to `ink-faint` clears 4.5:1 on every ground text is allowed to
+   * land on — `felt` (15.9 / 10.1 / 6.9 / 5.6) through `surface-2` (13.0 / 8.3
+   * / 5.7 / 4.6). `ink-disabled` is a marker tone and never carries text.
+   * `chip` is the one ground that is not on that list: it carries
+   * `ink-secondary` (7.4:1) and nothing dimmer. */
+  --ink: #e8ece5;
+  --ink-secondary: #b6c0b6;
+  --ink-muted: #949f96;
+  --ink-faint: #848f85;
+  --ink-disabled: #4a544c;
+
+  /* ── Hairlines ─────────────────────────────────────────────────────────────
+   * The ink at low alpha, never pure white: a cold hairline on warm felt reads
+   * as a seam. All separation happens here or in the surface ramp. */
+  --hairline: rgb(232 236 229 / 7%);
+  --hairline-soft: rgb(232 236 229 / 10%);
+  --hairline-strong: rgb(232 236 229 / 15%);
+
+  /* Keyboard focus. Neutral on purpose — every saturated hue in this app is
+   * already spoken for by mana or severity, so chrome borrows from the ink. */
+  --focus-ring: rgb(232 236 229 / 55%);
+
+  /* Scrims are the felt at alpha, not black: black opens a hole in the table. */
+  --scrim: rgb(7 12 9 / 72%);
+  --scrim-soft: rgb(7 12 9 / 45%);
+
+  /* ── Mana: the whole semantic palette ──────────────────────────────────────
+   * Fixed by the spec. Every Magic player reads these without a legend, which
+   * is why nothing else in the app is allowed to be a saturated hue.
+   *   W  parchment, not white — pure white blows out against the table
+   *   B  lifted grey-violet, not black — pure black vanishes on the felt
+   * A pip's glyph is `--inlay` on the colour, the way a printed mana symbol is
+   * a dark mark on a coloured disc. All six clear 5:1 that way. */
+  --mana-w: #f8f0d8;
+  --mana-u: #4a90d9;
+  --mana-b: #8b7d94;
+  --mana-r: #e05c48;
+  --mana-g: #4fa363;
+  --mana-c: #9aa0aa;
+
+  /* ── Severity: a separate ramp, in the hues mana does not own ──────────────
+   * critical sits at 328° — magenta, the one hue Magic's colour pie has no
+   * claim on, and 39° off R so an alarm is never read as a Mountain.
+   * warning is table gold at 39°: it shares W's hue family but never W's
+   * lightness, because W is always the palest thing on screen and gold is not.
+   * healthy is jade at 170°, the widest gap available between G (134°) and
+   * U (211°) — and deliberately the quietest of the three.
+   * info is not an alarm, so it gets no hue at all. */
+  --sev-critical: #e2559f;
+  --sev-warning: #e3a93c;
+  --sev-healthy: #35bda6;
+  --sev-info: var(--ink-muted);
+
+  /* ── Type ──────────────────────────────────────────────────────────────────
+   * Archivo carries names and prose; Azeret Mono carries every measurement. */
+  --face-sans: "Archivo", system-ui, sans-serif;
+  --face-mono: "Azeret Mono", ui-monospace, monospace;
+
+  /* Read at table distance, not cockpit distance: the art carries the page, so
+   * the interface band starts at 11px and the workhorse is 13px. */
+  --type-micro: 10px;
+  --type-label: 11px;
+  --type-caption: 12px;
+  --type-body: 13px;
+  --type-body-lg: 14px;
+  --type-lead: 16px;
+  --type-heading: 20px;
+  --type-title: 26px;
+  --type-display: 34px;
+  --type-numeral-sm: 15px;
+  --type-numeral: 28px;
+
+  /* ── Radii ─────────────────────────────────────────────────────────────────
+   * A real Magic card is 63mm wide with a 3mm corner — 4.8% of its width. Any
+   * element standing in for a card uses `corner-card` at tile scale (~270px),
+   * so the printed proportion survives. Everything else is tighter. */
+  --corner-xs: 4px;
+  --corner-sm: 6px;
+  --corner-md: 8px;
+  --corner-lg: 11px;
+  --corner-card: 13px;
+  --corner-xl: 16px;
+  --corner-pill: 9999px;
+
+  /* ── Elevation ─────────────────────────────────────────────────────────────
+   * Only objects *on* the table get one; panels printed on the mat get a
+   * hairline instead. Each is a pair, because on a near-black table a cast
+   * shadow alone is invisible — the readable half is the lit top edge, the lamp
+   * catching the object's near corner. The drop shadow still does the work at
+   * larger separations. There are no glows. */
+  --elevation-contact:
+    0 8px 20px -10px rgb(0 0 0 / 85%), inset 0 1px 0 rgb(232 236 229 / 7%);
+  --elevation-lifted:
+    0 24px 50px -16px rgb(0 0 0 / 90%), inset 0 1px 0 rgb(232 236 229 / 10%);
+
+  /* ── Card imagery ──────────────────────────────────────────────────────────
+   * Scryfall's fixed crop sizes. Declaring them as tokens keeps every frame at
+   * the source aspect, so art is never letterboxed or stretched. */
+  --frame-art-crop: 626 / 457;
+  --frame-card: 488 / 680;
+
+  /* Scrims are the felt at alpha. `scrim-deep` is the only one strong enough to
+   * carry `--ink` over an unknown image (6.4:1 against pure white art) — but
+   * see The Art-Is-Not-A-Background Rule before reaching for it. */
+  --scrim-deep: rgb(7 12 9 / 92%);
+}
+
+/* Wash behind a severity row. Set `--c` to the accent. 10% is enough to read
+ * and low enough that `--ink` still clears 12:1 on top of it — which is the
+ * point: on a wash the text stays ink and only the mark carries the hue. */
+.tint {
+  background: color-mix(in srgb, var(--c) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c) 28%, transparent);
+}
+
+/* A mana pip: a coloured disc with a dark glyph, the way the printed symbol
+ * works. `--pip` is the disc; a hybrid pip overrides `background` with a
+ * hard-stop gradient across the same two tokens. */
+.pip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--corner-pill);
+  background: var(--pip, var(--mana-c));
+  color: var(--inlay);
+  font-family: var(--face-mono);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.pip svg {
+  width: 64%;
+  height: 64%;
+  fill: currentcolor;
+}
+
+/* An absent colour in a fixed WUBRG row: the slot stays so decks line up
+ * column-for-column across a grid, but the disc drops to a hairline ring. */
+.pip-absent {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--hairline-strong);
+  color: var(--ink-disabled);
+}
