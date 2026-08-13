@@ -46,7 +46,11 @@ defmodule Deckex.Cards do
   end
 
   defp fetch_missing([]), do: {:ok, %{found: [], not_found: []}}
-  defp fetch_missing(names), do: Scryfall.fetch_by_names(names)
+
+  # Scryfall is asked for the card's REAL name, not our lossy lookup key and not
+  # the raw decklist line: "Cultivate (M21) 177" and "juzam djinn" both resolve
+  # to nothing.
+  defp fetch_missing(names), do: names |> Enum.map(&Name.display/1) |> Scryfall.fetch_by_names()
 
   defp insert_all(scryfall_cards) do
     scryfall_cards

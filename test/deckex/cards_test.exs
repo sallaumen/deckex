@@ -57,6 +57,31 @@ defmodule Deckex.CardsTest do
       assert length(cards) == 2
     end
 
+    test "asks Scryfall for the card's real name, not the raw decklist line" do
+      expect(Deckex.Scryfall.Mock, :fetch_by_names, fn names ->
+        # Not "Cultivate (M21) 177" — the API would resolve nothing.
+        assert names == ["Cultivate"]
+        {:ok, %{found: [ScryfallFixture.load!("cultivate")], not_found: []}}
+      end)
+
+      assert {:ok, %{cards: [card]}} = Cards.resolve_names(["Cultivate (M21) 177"])
+      assert card.name == "Cultivate"
+    end
+
+    test "asks Scryfall for the front face of a Moxfield double-faced line" do
+      expect(Deckex.Scryfall.Mock, :fetch_by_names, fn names ->
+        assert names == ["Agadeem's Awakening"]
+        {:ok, %{found: [ScryfallFixture.load!("agadeems_awakening")], not_found: []}}
+      end)
+
+      assert {:ok, %{cards: [card]}} =
+               Cards.resolve_names([
+                 "Agadeem's Awakening / Agadeem, the Undercrypt (ZNR) 90"
+               ])
+
+      assert card.mana_cost == "{X}{B}{B}{B}"
+    end
+
     test "reports names Scryfall could not resolve instead of dropping them" do
       expect(Deckex.Scryfall.Mock, :fetch_by_names, fn _names ->
         {:ok, %{found: [], not_found: ["Not A Real Card"]}}
