@@ -10,7 +10,10 @@ defmodule Deckex.Cards do
 
   alias Deckex.Cards.Card
   alias Deckex.Cards.CardQuery
+  alias Deckex.Cards.CardRole
   alias Deckex.Cards.Name
+  alias Deckex.Cards.RoleMatch
+  alias Deckex.Cards.Roles
   alias Deckex.Cards.ScryfallMapper
   alias Deckex.Error
   alias Deckex.Repo
@@ -18,6 +21,8 @@ defmodule Deckex.Cards do
 
   defdelegate get_by_name(name), to: CardQuery
   defdelegate list_by_normalized_names(names), to: CardQuery
+  defdelegate list_by_ids(ids), to: CardQuery
+  defdelegate roles_for(card), to: CardQuery, as: :list_roles
 
   @doc """
   Resolves card names to `Card` structs, fetching and caching whatever is
@@ -82,6 +87,54 @@ defmodule Deckex.Cards do
     |> Repo.insert(
       on_conflict: {:replace, [:price_usd, :prices_updated_at, :edhrec_rank, :updated_at]},
       conflict_target: :oracle_id,
+      returning: true
+    )
+  end
+
+  @doc """
+  Runs the rule engine over `card` and persists what it finds.
+
+  Idempotent: re-running replaces a rule verdict with the fresh one. A
+  `:manual` role is left untouched — the user's correction is permanent.
+  """
+  @spec classify_card(Card.t()) :: {:ok, [CardRole.t()]}
+  def classify_card(%Card{} = card) do
+    protected =
+      card
+      |> CardQuery.list_roles()
+      |> Enum.filter(&(&1.source == :manual))
+      |> MapSet.new(& &1.kind)
+
+    roles =
+      card
+      |> Roles.classify()
+      |> Enum.reject(&MapSet.member?(protected, &1.kind))
+      |> Enum.map(&upsert_role!(card, &1, :rule))
+
+    {:ok, roles}
+  end
+
+  @doc """
+  Records a role chosen by the user. Manual roles are never overwritten by a
+  later rule or AI pass, and they are the signal for improving the rules.
+  """
+  @spec set_role_manually(Card.t(), atom(), String.t()) :: {:ok, CardRole.t()}
+  def set_role_manually(%Card{} = card, kind, evidence) do
+    {:ok, upsert_role!(card, RoleMatch.new(kind, :high, evidence), :manual)}
+  end
+
+  defp upsert_role!(card, %RoleMatch{} = match, source) do
+    %CardRole{}
+    |> CardRole.changeset(%{
+      card_id: card.id,
+      kind: match.kind,
+      confidence: match.confidence,
+      source: source,
+      evidence: match.evidence
+    })
+    |> Repo.insert!(
+      on_conflict: {:replace, [:confidence, :source, :evidence, :updated_at]},
+      conflict_target: [:card_id, :kind],
       returning: true
     )
   end
