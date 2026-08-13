@@ -319,12 +319,26 @@ modern decks.
 
 Unique index on `(card_id, kind)`.
 
-**Role kinds** (`Ecto.Enum`): `:ramp`, `:fixing`, `:counter`, `:spot_removal`,
-`:board_wipe`, `:protection`, `:draw`, `:tutor`, `:recursion`, `:wincon`,
-`:graveyard_hate`, `:stax`.
+**Role kinds** (`Ecto.Enum`): `:ramp`, `:ritual`, `:cost_reduction`, `:fixing`,
+`:counter`, `:spot_removal`, `:board_wipe`, `:protection`, `:draw`, `:tutor`,
+`:recursion`, `:wincon`, `:graveyard_hate`, `:stax`.
 
 A card may hold several: `Cultivate` is `:ramp` + `:fixing`; `Chromatic Lantern`
 is `:ramp` + `:fixing`; `Cyclonic Rift` is `:board_wipe` + `:protection`.
+
+**`:ritual` and `:cost_reduction` are separate from `:ramp` on purpose**, added
+2026-08-13 after a manual pass over a real deck. Lumping them together reported
+five ramp pieces where the deck had one: `Desperate Ritual` and `Seething Song`
+are one-shot bursts that do not help you cast a 6-drop a turn earlier on an
+empty board, and `Goblin Electromancer` / `Baral` / `Sorcerer Class` reduce
+spell costs without adding mana. All three behave differently on the curve, and
+the mana lens must not count them as the same thing.
+
+Likewise **`:counter` and `:spot_removal` must never be summed into a single
+"interaction" figure.** A counterspell is a dead card once the threat has
+resolved; against an aggressive deck only the answers that address a permanent
+already on the battlefield count. The interaction lens reports them separately
+for this reason.
 
 `:manual` is never overwritten by a later rule or AI pass. A user correction is
 permanent and becomes evidence for improving the rules.
