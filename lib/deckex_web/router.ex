@@ -12,12 +12,13 @@ defmodule DeckexWeb.Router do
   #     cannot execute code, which is why 'unsafe-inline' is granted here and
   #     never in `script-src`.
   #   * `connect-src` allows ws:/wss: for the LiveView socket.
-  #   * The two fonts.g* entries are the only reason a fresh page load talks to
-  #     anyone but us. Self-host the fonts and this policy gets shorter.
+  #   * Nothing here names another host except Scryfall's image CDN. The
+  #     typefaces are self-hosted (see assets/css/fonts.css), so a page load
+  #     talks to nobody but us.
   @csp "default-src 'self'; " <>
          "script-src 'self'; " <>
-         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " <>
-         "font-src 'self' https://fonts.gstatic.com; " <>
+         "style-src 'self' 'unsafe-inline'; " <>
+         "font-src 'self'; " <>
          "img-src 'self' data: https://cards.scryfall.io; " <>
          "connect-src 'self' ws: wss:; " <>
          "frame-ancestors 'none'; " <>

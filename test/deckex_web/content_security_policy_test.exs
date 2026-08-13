@@ -37,4 +37,28 @@ defmodule DeckexWeb.ContentSecurityPolicyTest do
   test "the app cannot be framed", %{conn: conn} do
     assert conn |> get(~p"/") |> policy() |> Map.fetch!("frame-ancestors") == "'none'"
   end
+
+  # Scryfall's image CDN is the only third party a page load is allowed to
+  # touch. The typefaces used to be a second one; they are self-hosted now, and
+  # putting them back would be a silent regression.
+  test "no host but Scryfall's image CDN is reachable", %{conn: conn} do
+    hosts =
+      conn
+      |> get(~p"/")
+      |> policy()
+      |> Map.values()
+      |> Enum.flat_map(&Regex.scan(~r{https?://[^\s;]+}, &1))
+      |> List.flatten()
+      |> Enum.uniq()
+
+    assert hosts == ["https://cards.scryfall.io"]
+  end
+
+  test "the typefaces are served from this app, not a CDN", %{conn: conn} do
+    html = conn |> get(~p"/") |> html_response(200)
+
+    assert html =~ "/fonts/archivo-latin.woff2"
+    refute html =~ "fonts.googleapis.com"
+    refute html =~ "fonts.gstatic.com"
+  end
 end

@@ -26,6 +26,9 @@
 /* Make LiveView wrapper divs transparent for layout */
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 
+/* ── The typefaces, self-hosted ────────────────────────────────────────────── */
+@import "./fonts.css";
+
 /* ── The design tokens (see DESIGN.md) ─────────────────────────────────────── */
 @import "./tokens.css";
 
