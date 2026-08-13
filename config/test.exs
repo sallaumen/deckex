@@ -28,6 +28,15 @@ config :logger, level: :warning
 # Oban: don't run jobs automatically in tests — drive them with perform_job/2.
 config :deckex, Oban, testing: :manual
 
+# Integration ports → Mox mocks (see test/support/mocks.ex).
+config :deckex, Deckex.Scryfall.Client, adapter: Deckex.Scryfall.Mock
+
+# When the real adapter is exercised directly (test/deckex/scryfall/http_test.exs)
+# it routes through Req.Test instead of the network, and does not really sleep.
+config :deckex, Deckex.Scryfall.Http,
+  req_options: [plug: {Req.Test, Deckex.Scryfall.Http}],
+  throttle_ms: 0
+
 # Initialize plugs at runtime for faster test compilation
 config :phoenix, :plug_init_mode, :runtime
 
