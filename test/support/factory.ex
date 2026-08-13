@@ -4,6 +4,8 @@ defmodule Deckex.Factory do
 
   alias Deckex.Cards.Card
   alias Deckex.Cards.Name
+  alias Deckex.Decks.Deck
+  alias Deckex.Decks.DeckCard
 
   def card_factory do
     name = sequence(:card_name, &"Test Card #{&1}")
@@ -25,6 +27,25 @@ defmodule Deckex.Factory do
       card_faces: [],
       commander_legal: true,
       fetched_at: DateTime.utc_now(:second)
+    }
+  end
+
+  def deck_factory do
+    %Deck{
+      name: sequence(:deck_name, &"Deck #{&1}"),
+      source: :paste,
+      status: :ready,
+      color_identity: [],
+      raw_decklist: "1 Sol Ring"
+    }
+  end
+
+  def deck_card_factory do
+    %DeckCard{
+      deck: build(:deck),
+      card: build(:card),
+      quantity: 1,
+      board: :main
     }
   end
 end
