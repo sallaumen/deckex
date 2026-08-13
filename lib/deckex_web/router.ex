@@ -17,7 +17,8 @@ defmodule DeckexWeb.Router do
   scope "/", DeckexWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
+    live "/", MesaLive, :index
+    live "/decks/:id", DeckLive, :show
   end
 
   # Other scopes may use custom stacks.
