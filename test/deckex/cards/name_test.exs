@@ -43,6 +43,17 @@ defmodule Deckex.Cards.NameTest do
       assert Name.normalize("Sol Ring (LTC)") == "sol ring"
     end
 
+    test "strips collector numbers that are not plain digits" do
+      # Every one of these appeared in a real Moxfield export. Promo, variant and
+      # List printings suffix a letter or use a set-prefixed number, and a
+      # digits-only pattern silently leaves the set code glued to the name.
+      assert Name.normalize("Alania, Divergent Storm (PBLB) 204p") == "alania, divergent storm"
+      assert Name.normalize("Island (BFZ) 256a") == "island"
+      assert Name.normalize("Bonus Round (PLST) BBD-56") == "bonus round"
+      assert Name.normalize("Windfall (PLST) USG-111") == "windfall"
+      assert Name.normalize("Three Steps Ahead (POTJ) 75p") == "three steps ahead"
+    end
+
     test "strips accents so typed names match" do
       assert Name.normalize("Juzám Djinn") == "juzam djinn"
       assert Name.normalize("Márton Stromgald") == "marton stromgald"

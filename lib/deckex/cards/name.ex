@@ -19,7 +19,12 @@ defmodule Deckex.Cards.Name do
   @combining_marks ~r/[\x{0300}-\x{036F}]/u
 
   # A trailing " (SET) 123" / " (SET)" printed by most decklist exporters.
-  @set_code ~r/\s*\([^)]*\)\s*\d*\s*$/
+  #
+  # The collector number is NOT always digits: promos and variants suffix a
+  # letter ("204p", "256a") and List printings carry the original set as a
+  # prefix ("BBD-56", "USG-111"). A digits-only pattern leaves the set code
+  # glued to the name, which then resolves to nothing.
+  @set_code ~r/\s*\([^)]*\)\s*[\p{L}\p{N}\-★]*\s*$/u
 
   # The face separator, in either spelling. No real Magic card name contains a
   # slash for any other reason.
