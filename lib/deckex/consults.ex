@@ -10,7 +10,9 @@ defmodule Deckex.Consults do
 
   alias Deckex.AI
   alias Deckex.Analysis
+  alias Deckex.Analysis.DeckSnapshot
   alias Deckex.Cards
+  alias Deckex.Consults.Audit
   alias Deckex.Consults.Briefing
   alias Deckex.Consults.Consult
   alias Deckex.Consults.ConsultQuery
@@ -118,6 +120,24 @@ defmodule Deckex.Consults do
       {:ok, response} -> {:ok, succeed(running, response, started)}
       {:error, %Error{} = error} -> fail(running, error)
     end
+  end
+
+  @doc """
+  The engine's verdict on an answer's suggestions: legality problems per
+  suggestion, and the measured findings diff of applying the clean ones.
+
+  Computed on read, never stored — it always answers "what would happen if
+  applied **now**", against the deck as it currently is.
+  """
+  @spec audit(DeckSnapshot.t(), [Suggestions.Suggestion.t()]) :: Audit.t()
+  def audit(%DeckSnapshot{} = snapshot, suggestions) do
+    roles =
+      suggestions
+      |> Enum.filter(&(&1.resolved? and &1.action == :add))
+      |> Enum.map(& &1.card.id)
+      |> Cards.roles_by_card_ids()
+
+    Audit.run(snapshot, suggestions, roles, Settings.baselines())
   end
 
   @doc "How long a consult may take before it is called a timeout."
