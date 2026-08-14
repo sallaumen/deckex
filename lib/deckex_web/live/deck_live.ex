@@ -23,6 +23,11 @@ defmodule DeckexWeb.DeckLive do
   def mount(%{"id" => id}, _session, socket) do
     case Decks.fetch_deck(id) do
       {:ok, deck} ->
+        # Subscribe HERE and only here. assign_deck runs again on every edit
+        # and consult event; a subscribe inside it would stack subscriptions,
+        # and PubSub delivers once per subscription.
+        if connected?(socket), do: Events.subscribe_consults(deck.id)
+
         {:ok, assign_deck(socket, deck)}
 
       {:error, %Error{} = error} ->
@@ -31,8 +36,6 @@ defmodule DeckexWeb.DeckLive do
   end
 
   defp assign_deck(socket, deck) do
-    if connected?(socket), do: Events.subscribe_consults(deck.id)
-
     snapshot = Decks.snapshot(deck)
 
     socket
@@ -68,6 +71,17 @@ defmodule DeckexWeb.DeckLive do
      |> refresh_consults()}
   end
 
+  def handle_event("gerar-dossie", _params, socket) do
+    {:noreply, start_consult(socket, :scout, [])}
+  end
+
+  def handle_event("salvar-dossie", %{"dossier" => params}, socket) do
+    {:ok, _deck} = Decks.edit_dossier(socket.assigns.deck, params)
+    {:ok, fresh} = Decks.fetch_deck(socket.assigns.deck.id)
+
+    {:noreply, socket |> assign_deck(fresh) |> put_flash(:info, "Dossiê salvo.")}
+  end
+
   def handle_event("apply-add", %{"name" => name}, socket) do
     {:noreply, apply_edit(socket, Decks.add_card(socket.assigns.deck, name), "#{name} entrou.")}
   end
@@ -76,9 +90,13 @@ defmodule DeckexWeb.DeckLive do
     {:noreply, apply_edit(socket, Decks.remove_card(socket.assigns.deck, name), "#{name} saiu.")}
   end
 
+  # A finished scout wrote the dossier onto the deck, and a catalogued answer
+  # may have reclassified cards — re-read the deck, not just the consults.
   @impl Phoenix.LiveView
   def handle_info({:consult_updated, _id}, socket) do
-    {:noreply, refresh_consults(socket)}
+    {:ok, fresh} = Decks.fetch_deck(socket.assigns.deck.id)
+
+    {:noreply, assign_deck(socket, fresh)}
   end
 
   # Consults.request/3 raises rather than returning a tagged error — every
@@ -93,9 +111,12 @@ defmodule DeckexWeb.DeckLive do
   end
 
   # An edit changes the deck, so the whole report is rebuilt — that is the point
-  # of reports being computed rather than cached.
+  # of reports being computed rather than cached. Re-fetched, not reused: the
+  # edit may have flipped dossier_stale, and the struct in assigns predates it.
   defp apply_edit(socket, {:ok, _result}, message) do
-    socket |> assign_deck(socket.assigns.deck) |> put_flash(:info, message)
+    {:ok, fresh} = Decks.fetch_deck(socket.assigns.deck.id)
+
+    socket |> assign_deck(fresh) |> put_flash(:info, message)
   end
 
   defp apply_edit(socket, {:error, error}, _message) do
@@ -107,9 +128,19 @@ defmodule DeckexWeb.DeckLive do
 
     assign(socket,
       consults: consults,
-      suggestions: Map.new(consults, &{&1.id, Suggestions.for_consult(&1)})
+      suggestions: Map.new(consults, &{&1.id, Suggestions.for_consult(&1)}),
+      scout_running?:
+        Enum.any?(consults, &(&1.lens == :scout and &1.status in [:pending, :running]))
     )
   end
+
+  defp dossier_label("plano"), do: "Plano"
+  defp dossier_label("sinergias"), do: "Sinergias"
+  defp dossier_label("linhas_de_vitoria"), do: "Linhas de vitória"
+  defp dossier_label("fraquezas"), do: "Fraquezas que os números não veem"
+
+  defp dossier_source_label(:scout), do: "escrito pelo scout"
+  defp dossier_source_label(:manual), do: "editado por você"
 
   defp blank_to_nil(nil), do: nil
   defp blank_to_nil(""), do: nil
@@ -336,6 +367,97 @@ defmodule DeckexWeb.DeckLive do
               </section>
             </div>
           </div>
+          <section>
+            <div class="mb-3 flex items-center gap-3">
+              <h2 class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+                Dossiê
+              </h2>
+              <span
+                :if={@deck.dossier && @deck.dossier_stale}
+                class="font-mono text-micro text-sev-warning"
+              >
+                desatualizado — o deck mudou depois que ele foi escrito
+              </span>
+            </div>
+
+            <div class="rounded-xl border border-hairline-soft bg-surface p-6">
+              <div :if={is_nil(@deck.dossier) && !@scout_running?} class="text-center">
+                <p class="text-body text-ink-secondary">
+                  A leitura estratégica que os números não fazem: plano, sinergias,
+                  linhas de vitória e fraquezas. Entra em toda consulta.
+                </p>
+                <div class="mt-4">
+                  <.button type="button" phx-click="gerar-dossie" variant="primary">
+                    Gerar dossiê
+                  </.button>
+                </div>
+              </div>
+
+              <p :if={@scout_running?} class="font-mono text-caption text-ink-faint">
+                scout lendo o deck…
+              </p>
+
+              <div :if={@deck.dossier && !@scout_running?} class="space-y-4">
+                <div :for={field <- Decks.dossier_fields()}>
+                  <h3 class="mb-1 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+                    {dossier_label(field)}
+                  </h3>
+                  <p class="text-body text-ink-secondary">{@deck.dossier[field]}</p>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-between gap-3 border-t border-hairline-soft pt-4">
+                  <span class="font-mono text-micro text-ink-faint">
+                    {dossier_source_label(@deck.dossier_source)} · {Calendar.strftime(
+                      @deck.dossier_updated_at,
+                      "%d/%m %H:%M"
+                    )}
+                  </span>
+
+                  <button
+                    type="button"
+                    phx-click="gerar-dossie"
+                    data-confirm={
+                      @deck.dossier_source == :manual &&
+                        "Isso substitui a sua edição pelo texto do scout. Continuar?"
+                    }
+                    class="text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+                  >
+                    Rerodar o scout
+                  </button>
+                </div>
+
+                <details>
+                  <summary class="cursor-pointer text-caption text-ink-faint hover:text-ink">
+                    Editar dossiê
+                  </summary>
+                  <.form
+                    for={%{}}
+                    as={:dossier}
+                    id="dossier-form"
+                    phx-submit="salvar-dossie"
+                    class="mt-3 space-y-3"
+                  >
+                    <div :for={field <- Decks.dossier_fields()}>
+                      <label
+                        for={"dossier-#{field}"}
+                        class="mb-1 block text-label font-semibold uppercase tracking-[0.1em] text-ink-faint"
+                      >
+                        {dossier_label(field)}
+                      </label>
+                      <textarea
+                        id={"dossier-#{field}"}
+                        name={"dossier[#{field}]"}
+                        rows="3"
+                        class="w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-caption text-ink"
+                      >{@deck.dossier[field]}</textarea>
+                    </div>
+                    <.button type="submit">Salvar</.button>
+                  </.form>
+                </details>
+              </div>
+            </div>
+          </section>
+
           <section :if={@consults != []}>
             <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
               Consultas
