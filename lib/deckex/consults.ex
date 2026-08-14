@@ -83,7 +83,7 @@ defmodule Deckex.Consults do
   defp start(deck, lens, models, opts) do
     snapshot = Decks.snapshot(deck)
     report = Analysis.report(snapshot, Settings.baselines())
-    briefing = Briefing.build(report, snapshot, lens, briefing_opts(opts))
+    briefing = Briefing.build(report, snapshot, lens, briefing_opts(deck, opts))
     frozen = freeze(report)
 
     Enum.map(models, fn model ->
@@ -96,7 +96,12 @@ defmodule Deckex.Consults do
     end)
   end
 
-  defp briefing_opts(opts), do: Keyword.put_new(opts, :budget_usd, Settings.budget_usd())
+  defp briefing_opts(deck, opts) do
+    opts
+    |> Keyword.put_new(:budget_usd, Settings.budget_usd())
+    |> Keyword.put(:dossier, deck.dossier)
+    |> Keyword.put(:dossier_stale, deck.dossier_stale)
+  end
 
   @doc "Sends a consult's stored briefing to the model and records the answer."
   @spec run(Consult.t()) :: {:ok, Consult.t()} | {:error, Error.t()}
@@ -150,8 +155,19 @@ defmodule Deckex.Consults do
         error: nil
       })
 
-    catalogue(done)
+    done |> deliver_dossier() |> catalogue()
   end
+
+  # A scout's answer IS the dossier. Writing it here — in the background job
+  # that already ran — is what lets the deck page only ever read.
+  defp deliver_dossier(%Consult{lens: :scout} = consult) do
+    {:ok, deck} = Decks.fetch_deck(consult.deck_id)
+    {:ok, _deck} = Decks.put_dossier(deck, consult.response)
+
+    consult
+  end
+
+  defp deliver_dossier(%Consult{} = consult), do: consult
 
   # The answer names cards we may never have seen. Fetch them here, once, while
   # we are already in a background job — the suggestion table only reads, so a

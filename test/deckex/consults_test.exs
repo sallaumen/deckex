@@ -149,4 +149,64 @@ defmodule Deckex.ConsultsTest do
                perform_job(ConsultWorker, %{consult_id: consult.id})
     end
   end
+
+  describe "the scout" do
+    @scout_answer {:ok,
+                   %{
+                     "plano" => "Spellslinger Temur.",
+                     "sinergias" => "Sol Ring acelera tudo.",
+                     "linhas_de_vitoria" => "Valor incremental.",
+                     "fraquezas" => "Sem win condition clara."
+                   }}
+
+    test "a finished scout writes the dossier onto the deck" do
+      deck = deck()
+      {:ok, consult} = Consults.request(deck, :scout)
+
+      expect(Deckex.AI.Mock, :complete, fn prompt, schema, _opts ->
+        assert prompt =~ "scout, not the consultant"
+        assert schema["required"] == ["plano", "sinergias", "linhas_de_vitoria", "fraquezas"]
+
+        @scout_answer
+      end)
+
+      assert {:ok, done} = Consults.run(consult)
+      assert done.status == :done
+
+      {:ok, fresh} = Decks.fetch_deck(deck.id)
+      assert fresh.dossier["plano"] == "Spellslinger Temur."
+      assert fresh.dossier_source == :scout
+      assert fresh.dossier_stale == false
+    end
+
+    test "a failed scout leaves the deck untouched" do
+      deck = deck()
+      {:ok, consult} = Consults.request(deck, :scout)
+
+      expect(Deckex.AI.Mock, :complete, fn _prompt, _schema, _opts ->
+        {:error, Error.new(:ai_timeout, "estourou")}
+      end)
+
+      assert {:error, %Error{}} = Consults.run(consult)
+
+      {:ok, fresh} = Decks.fetch_deck(deck.id)
+      assert fresh.dossier == nil
+    end
+
+    test "a consult on a deck with a dossier carries it in the briefing" do
+      deck = deck()
+      {:ok, deck} = Decks.put_dossier(deck, elem(@scout_answer, 1))
+
+      {:ok, consult} = Consults.request(deck, :full)
+
+      assert consult.briefing =~ "Leitura estratégica"
+      assert consult.briefing =~ "Sol Ring acelera tudo."
+    end
+
+    test "a consult on a deck without a dossier still works" do
+      {:ok, consult} = Consults.request(deck(), :full)
+
+      refute consult.briefing =~ "Leitura estratégica"
+    end
+  end
 end
