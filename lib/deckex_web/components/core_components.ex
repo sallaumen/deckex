@@ -124,25 +124,29 @@ defmodule DeckexWeb.CoreComponents do
   """
   # `type` is here so the same component can submit a form; without it a form's
   # button falls back to the browser default and the markup lies about intent.
-  attr :rest, :global, include: ~w(href navigate patch method download name value disabled type)
-  attr :class, :any
+  attr :rest, :global,
+    include: ~w(href navigate patch method download name value disabled type phx-disable-with)
+
+  attr :class, :any, default: nil, doc: "added to the variant's classes, never replacing them"
   attr :variant, :string, values: ~w(primary)
   slot :inner_block, required: true
 
   def button(%{rest: rest} = assigns) do
+    # min-h-11 is 44px: the floor for a touch target. A button that only looks
+    # tappable on a mouse is a button that misses on a phone.
     base =
-      "inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 " <>
-        "text-body font-semibold transition-colors disabled:opacity-40"
+      "inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md px-3 py-2 " <>
+        "text-body font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
 
     variants = %{
       "primary" => "bg-ink text-felt hover:bg-ink-secondary",
       nil => "border border-hairline-soft bg-surface-2 text-ink-secondary hover:text-ink"
     }
 
+    # Appended, not replaced: a caller asking for `w-full` wants a full-width
+    # button, not a button stripped of every style it had.
     assigns =
-      assign_new(assigns, :class, fn ->
-        [base, Map.fetch!(variants, assigns[:variant])]
-      end)
+      assign(assigns, :class, [base, Map.fetch!(variants, assigns[:variant]), assigns.class])
 
     if rest[:href] || rest[:navigate] || rest[:patch] do
       ~H"""

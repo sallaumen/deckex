@@ -70,7 +70,10 @@ defmodule DeckexWeb.ImportLive do
   def render(assigns) do
     ~H"""
     <div class="mx-auto max-w-[1400px] px-6 py-10 lg:px-10 lg:py-14">
-      <.link navigate={~p"/"} class="text-caption text-ink-faint transition-colors hover:text-ink">
+      <.link
+        navigate={~p"/"}
+        class="-my-2 inline-flex min-h-11 items-center py-2 text-caption text-ink-faint transition-colors hover:text-ink"
+      >
         ← A Mesa
       </.link>
 
@@ -114,7 +117,7 @@ defmodule DeckexWeb.ImportLive do
                 rows="16"
                 required
                 placeholder={decklist_example()}
-                class="w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 font-mono text-caption text-ink placeholder:text-ink-disabled focus:border-ink-faint"
+                class="w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 font-mono text-caption text-ink placeholder:text-ink-faint focus:border-ink-faint"
               >{@paste_form[:decklist].value}</textarea>
             </div>
 

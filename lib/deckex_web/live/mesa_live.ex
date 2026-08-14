@@ -52,7 +52,7 @@ defmodule DeckexWeb.MesaLive do
         <div class="flex items-center gap-4">
           <.link
             navigate={~p"/ajustes"}
-            class="text-caption text-ink-faint transition-colors hover:text-ink"
+            class="-my-2 inline-flex min-h-11 items-center py-2 text-caption text-ink-faint transition-colors hover:text-ink"
           >
             Ajustes
           </.link>

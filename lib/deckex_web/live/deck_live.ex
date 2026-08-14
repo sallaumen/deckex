@@ -62,13 +62,21 @@ defmodule DeckexWeb.DeckLive do
     {:noreply, start_consult(socket, lens, opts)}
   end
 
+  # The most expensive click in the app: one press buys a consult from every
+  # model. A second press before the first round finishes would silently
+  # double that, so it is refused with a reason rather than ignored.
   def handle_event("compare-models", _params, socket) do
-    {:ok, _consults} = Consults.compare(socket.assigns.deck, :full, Consults.models())
+    if socket.assigns.consult_running? do
+      {:noreply,
+       put_flash(socket, :error, "Já tem consulta rodando. Espere ela terminar para comparar.")}
+    else
+      {:ok, _consults} = Consults.compare(socket.assigns.deck, :full, Consults.models())
 
-    {:noreply,
-     socket
-     |> put_flash(:info, "Rodando a mesma pergunta em #{length(Consults.models())} modelos.")
-     |> refresh_consults()}
+      {:noreply,
+       socket
+       |> put_flash(:info, "Rodando a mesma pergunta em #{length(Consults.models())} modelos.")
+       |> refresh_consults()}
+    end
   end
 
   def handle_event("gerar-dossie", _params, socket) do
@@ -131,9 +139,15 @@ defmodule DeckexWeb.DeckLive do
       consults: consults,
       suggestions: suggestions,
       audits: audits(socket.assigns.snapshot, suggestions),
-      scout_running?:
-        Enum.any?(consults, &(&1.lens == :scout and &1.status in [:pending, :running]))
+      scout_running?: running?(consults, :scout),
+      consult_running?: running?(consults, :any)
     )
+  end
+
+  defp running?(consults, :any), do: Enum.any?(consults, &(&1.status in [:pending, :running]))
+
+  defp running?(consults, lens) do
+    Enum.any?(consults, &(&1.lens == lens and &1.status in [:pending, :running]))
   end
 
   # One audit per answered consult, recomputed against the deck as it is NOW —
@@ -164,7 +178,10 @@ defmodule DeckexWeb.DeckLive do
   def render(assigns) do
     ~H"""
     <div class="mx-auto max-w-[1800px] px-6 py-10 lg:px-10 lg:py-14">
-      <.link navigate={~p"/"} class="text-caption text-ink-faint transition-colors hover:text-ink">
+      <.link
+        navigate={~p"/"}
+        class="-my-2 inline-flex min-h-11 items-center py-2 text-caption text-ink-faint transition-colors hover:text-ink"
+      >
         ← A Mesa
       </.link>
 
@@ -187,29 +204,62 @@ defmodule DeckexWeb.DeckLive do
                 Achados
               </h2>
 
+              <%!-- Disabled while anything is running, rather than refused by a
+                    toast after the click: a control that cannot work should look
+                    like it cannot work, and keep saying so for as long as it is
+                    true. The server still guards — a stale tab can click too. --%>
               <button
                 type="button"
                 phx-click="compare-models"
-                class="text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+                phx-disable-with="enviando…"
+                disabled={@consult_running?}
+                title={
+                  if @consult_running?,
+                    do: "Espere a consulta que já está rodando terminar.",
+                    else: "Pede a mesma pergunta a todos os modelos, de uma vez."
+                }
+                data-confirm={"Isso pede uma consulta a cada um dos #{length(Consults.models())} modelos, de uma vez. Continuar?"}
+                class="-my-2 inline-flex min-h-11 items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink disabled:cursor-not-allowed disabled:text-ink-disabled disabled:no-underline"
               >
                 Comparar modelos
               </button>
             </div>
 
-            <.form for={%{}} as={:consult} phx-submit="consult-full" class="space-y-2">
-              <div class="flex items-center gap-2">
+            <.form
+              for={%{}}
+              as={:consult}
+              phx-submit="consult-full"
+              class="space-y-3 rounded-lg border border-hairline-soft bg-surface p-4"
+            >
+              <div>
+                <label
+                  for="consult-lens"
+                  class="mb-1 block text-label font-semibold uppercase tracking-[0.1em] text-ink-faint"
+                >
+                  O que perguntar
+                </label>
                 <select
+                  id="consult-lens"
                   name="consult[lens]"
-                  class="min-w-0 flex-1 rounded-md border border-hairline-soft bg-inlay px-2 py-1 text-caption text-ink"
+                  class="min-h-11 w-full rounded-md border border-hairline-soft bg-inlay px-2 py-2 text-caption text-ink"
                 >
                   <option :for={{lens, label} <- Consults.lens_labels()} value={lens}>
                     {label}
                   </option>
                 </select>
+              </div>
 
+              <div>
+                <label
+                  for="consult-model"
+                  class="mb-1 block text-label font-semibold uppercase tracking-[0.1em] text-ink-faint"
+                >
+                  Modelo
+                </label>
                 <select
+                  id="consult-model"
                   name="consult[model]"
-                  class="rounded-md border border-hairline-soft bg-inlay px-2 py-1 font-mono text-caption text-ink"
+                  class="min-h-11 w-full rounded-md border border-hairline-soft bg-inlay px-2 py-2 font-mono text-caption text-ink"
                 >
                   <option :for={model <- Consults.models()} value={model} selected={model == @model}>
                     {model}
@@ -217,19 +267,32 @@ defmodule DeckexWeb.DeckLive do
                 </select>
               </div>
 
-              <input
-                type="text"
-                name="consult[against]"
-                placeholder="Contra o quê? (só para a análise de matchup)"
-                class="w-full rounded-md border border-hairline-soft bg-inlay px-2 py-1 text-caption text-ink placeholder:text-ink-disabled"
-              />
+              <div>
+                <label
+                  for="consult-against"
+                  class="mb-1 block text-label font-semibold uppercase tracking-[0.1em] text-ink-faint"
+                >
+                  Contra qual deck
+                </label>
+                <input
+                  id="consult-against"
+                  type="text"
+                  name="consult[against]"
+                  placeholder="ex.: Krenko goblins"
+                  class="min-h-11 w-full rounded-md border border-hairline-soft bg-inlay px-2 py-2 text-caption text-ink placeholder:text-ink-faint"
+                />
+                <p class="mt-1 text-micro text-ink-muted">
+                  Só usado na análise de matchup.
+                </p>
+              </div>
 
-              <button
-                type="submit"
-                class="text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
-              >
+              <.button type="submit" variant="primary" phx-disable-with="Enviando…" class="w-full">
                 Perguntar
-              </button>
+              </.button>
+
+              <p class="text-micro text-ink-muted">
+                A resposta leva de 2 a 4 minutos e aparece aqui sozinha.
+              </p>
             </.form>
           </div>
 
@@ -253,8 +316,9 @@ defmodule DeckexWeb.DeckLive do
                 <button
                   type="button"
                   phx-click="consult-finding"
+                  phx-disable-with="enviando…"
                   phx-value-code={finding.code}
-                  class="text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+                  class="-my-2 inline-flex min-h-11 items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
                 >
                   Pedir diagnóstico
                 </button>
@@ -326,7 +390,7 @@ defmodule DeckexWeb.DeckLive do
                     <span class="font-mono text-caption">
                       <span class="text-ink">{measured.sources}</span><span class="text-ink-faint">/{measured.target}</span>
                       <span class="text-ink-faint">fontes</span>
-                      <span class="hidden text-ink-disabled sm:inline">
+                      <span class="hidden text-ink-faint sm:inline">
                         · pip máx {measured.max_pips}
                       </span>
                     </span>
@@ -401,7 +465,12 @@ defmodule DeckexWeb.DeckLive do
                   linhas de vitória e fraquezas. Entra em toda consulta.
                 </p>
                 <div class="mt-4">
-                  <.button type="button" phx-click="gerar-dossie" variant="primary">
+                  <.button
+                    type="button"
+                    phx-click="gerar-dossie"
+                    phx-disable-with="Enviando…"
+                    variant="primary"
+                  >
                     Gerar dossiê
                   </.button>
                 </div>
@@ -430,11 +499,12 @@ defmodule DeckexWeb.DeckLive do
                   <button
                     type="button"
                     phx-click="gerar-dossie"
+                    phx-disable-with="enviando…"
                     data-confirm={
                       @deck.dossier_source == :manual &&
                         "Isso substitui a sua edição pelo texto do scout. Continuar?"
                     }
-                    class="text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+                    class="-my-2 inline-flex min-h-11 items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
                   >
                     Rerodar o scout
                   </button>
@@ -485,7 +555,7 @@ defmodule DeckexWeb.DeckLive do
                 <header class="mb-2 flex items-center justify-between gap-3">
                   <span class="font-mono text-caption text-ink-faint">
                     {consult.finding_code || consult.lens}
-                    <span :if={consult.model} class="text-ink-disabled">· {consult.model}</span>
+                    <span :if={consult.model} class="text-ink-faint">· {consult.model}</span>
                   </span>
                   <span class={[
                     "font-mono text-caption",
@@ -542,7 +612,7 @@ defmodule DeckexWeb.DeckLive do
 
                             <p
                               :if={row.addresses}
-                              class="mt-0.5 font-mono text-micro text-ink-disabled"
+                              class="mt-0.5 font-mono text-micro text-ink-faint"
                             >
                               {row.addresses}
                             </p>
@@ -564,7 +634,7 @@ defmodule DeckexWeb.DeckLive do
 
                           <td class="py-2 pr-2 text-right font-mono text-micro whitespace-nowrap">
                             <div class="text-ink-secondary">{Money.brl(row.price_usd)}</div>
-                            <div class="text-ink-disabled">{Money.usd(row.price_usd)}</div>
+                            <div class="text-ink-muted">{Money.usd(row.price_usd)}</div>
                           </td>
 
                           <td class="py-2 text-right">
@@ -573,7 +643,7 @@ defmodule DeckexWeb.DeckLive do
                               type="button"
                               phx-click={if row.action == :cut, do: "apply-cut", else: "apply-add"}
                               phx-value-name={row.name}
-                              class="whitespace-nowrap text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+                              class="-my-2 inline-flex min-h-11 items-center whitespace-nowrap px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
                             >
                               {if row.action == :cut, do: "cortar", else: "colocar"}
                             </button>
@@ -629,7 +699,7 @@ defmodule DeckexWeb.DeckLive do
                       <a
                         href={~p"/consultas/#{consult.id}/csv"}
                         download
-                        class="text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+                        class="-my-2 inline-flex min-h-11 items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
                       >
                         Baixar CSV
                       </a>

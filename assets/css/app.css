@@ -117,6 +117,25 @@ html, body {
   outline-offset: 2px;
 }
 
+/* Motion is a preference, not a decoration. Someone who gets motion sickness
+   from a hover-scale has told their OS so; honouring it costs us the card
+   zoom and the colour fades, and costs them nothing. Kept at 0.01ms rather
+   than 0 so transition-end handlers still fire. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* The commander art zoom is the one purely-pleasurable motion on the Mesa.
+     It is also the one most likely to make someone queasy. */
+  .group:hover .group-hover\:scale-\[1\.03\] {
+    transform: none !important;
+  }
+}
+
 /* Measurements align in columns. Applied wherever mono runs, so a curve
    histogram's counts and a stat tile's numerals never jitter. */
 .font-mono, [class*="font-mono"] {
