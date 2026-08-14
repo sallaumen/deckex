@@ -85,6 +85,8 @@ defmodule DeckexWeb.OptimizationsLive do
 
   defp done_count(run), do: Enum.count(run.steps, &(&1.status in [:done, :skipped]))
 
+  defp current_stage(run), do: Enum.find(run.steps, &(&1.status == :running))
+
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
@@ -143,7 +145,8 @@ defmodule DeckexWeb.OptimizationsLive do
             <p class="mt-2 text-caption text-ink-muted">
               {done_count(run)}/{length(run.steps)} etapas · {Enum.sum(
                 Enum.map(run.steps, &length(&1.applied))
-              )} mudanças aplicadas
+              )} mudanças aplicadas{if stage = current_stage(run),
+                do: " · agora: #{stage.label}"}
             </p>
           </.link>
         </li>

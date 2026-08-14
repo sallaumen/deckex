@@ -18,6 +18,7 @@ defmodule DeckexWeb.DeckLive do
   alias Deckex.Error
   alias Deckex.Events
   alias Deckex.Money
+  alias Deckex.Optimizations
   alias Deckex.Settings
 
   @impl Phoenix.LiveView
@@ -45,6 +46,7 @@ defmodule DeckexWeb.DeckLive do
       snapshot: snapshot,
       report: Analysis.report(snapshot, Settings.baselines()),
       model: Settings.model(),
+      running_optimization: Optimizations.running_for_deck(deck.id),
       page_title: deck.name
     )
     |> refresh_consults()
@@ -202,7 +204,20 @@ defmodule DeckexWeb.DeckLive do
           </p>
         </div>
         <div class="flex items-center gap-4">
-          <.button navigate={~p"/decks/#{@deck.id}/otimizacoes"} variant="primary">
+          <.button
+            :if={@running_optimization}
+            navigate={~p"/otimizacoes/#{@running_optimization.id}"}
+            variant="primary"
+          >
+            {if @running_optimization.status == :paused,
+              do: "Otimização pausada →",
+              else: "Otimização rodando →"}
+          </.button>
+          <.button
+            :if={is_nil(@running_optimization)}
+            navigate={~p"/decks/#{@deck.id}/otimizacoes"}
+            variant="primary"
+          >
             Otimizar
           </.button>
 

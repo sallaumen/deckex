@@ -24,7 +24,10 @@ defmodule DeckexWeb.OptimizationLive do
     case Optimizations.fetch(id) do
       {:ok, optimization} ->
         # Mount-only, the duplicate-subscription law.
-        if connected?(socket), do: Events.subscribe_optimization(optimization.id)
+        if connected?(socket) do
+          Events.subscribe_optimization(optimization.id)
+          schedule_tick(optimization)
+        end
 
         {:ok, load(socket, optimization)}
 
@@ -50,17 +53,57 @@ defmodule DeckexWeb.OptimizationLive do
     assign(socket,
       optimization: optimization,
       deck: deck,
+      now: DateTime.utc_now(),
       report_original: Analysis.report(original, baselines),
       report_current: Analysis.report(current, baselines),
-      page_title: "Otimização · #{deck.name}"
+      page_title: page_title(optimization, deck)
     )
   end
+
+  # The tab title carries the progress: the owner leaves this page open in a
+  # background tab for half an hour, and the title is all they can see of it.
+  defp page_title(%{status: :running} = optimization, deck) do
+    "#{stage_counter(optimization)} · Otimização · #{deck.name}"
+  end
+
+  defp page_title(%{status: status} = optimization, deck) do
+    prefix =
+      case status do
+        :done -> "Concluída#{if optimization.outcome == "estabilizou", do: " (estabilizou)"}"
+        :paused -> "Pausada"
+        :failed -> "Falhou"
+        :cancelled -> "Cancelada"
+      end
+
+    "#{prefix} · Otimização · #{deck.name}"
+  end
+
+  defp stage_counter(optimization) do
+    total = length(optimization.steps)
+    settled = Enum.count(optimization.steps, &(&1.status in [:done, :skipped]))
+
+    "#{min(settled + 1, total)}/#{total}"
+  end
+
+  # A consult takes minutes; a wall clock that never moves reads as a hang.
+  # Tick only while there is something to time.
+  defp schedule_tick(%{status: status}) when status in [:running, :paused] do
+    Process.send_after(self(), :tick, 30_000)
+  end
+
+  defp schedule_tick(_settled), do: :ok
 
   @impl Phoenix.LiveView
   def handle_info({:optimization_updated, _id}, socket) do
     {:ok, optimization} = Optimizations.fetch(socket.assigns.optimization.id)
 
     {:noreply, load(socket, optimization)}
+  end
+
+  def handle_info(:tick, socket) do
+    schedule_tick(socket.assigns.optimization)
+
+    {:noreply, assign(socket, now: DateTime.utc_now())}
   end
 
   @impl Phoenix.LiveView
@@ -144,6 +187,16 @@ defmodule DeckexWeb.OptimizationLive do
     end)
   end
 
+  defp elapsed_label(started_at, now) do
+    minutes = DateTime.diff(now, started_at, :minute)
+    if minutes < 1, do: "começou agora", else: "há #{minutes} min"
+  end
+
+  defp duration_label(consult) do
+    minutes = DateTime.diff(consult.updated_at, consult.inserted_at, :minute)
+    if minutes < 1, do: "menos de 1 min", else: "#{minutes} min"
+  end
+
   defp status_label(:pending), do: "na fila"
   defp status_label(:running), do: "consultando…"
   defp status_label(:done), do: "feita"
@@ -219,7 +272,8 @@ defmodule DeckexWeb.OptimizationLive do
           <div>
             <h1 class="text-display font-semibold text-ink">Otimização</h1>
             <p class="mt-1 text-body text-ink-muted">
-              {run_status_label(@optimization.status)}{if @optimization.outcome,
+              {run_status_label(@optimization.status)}{if @optimization.status == :running,
+                do: " · etapa #{stage_counter(@optimization)}"}{if @optimization.outcome,
                 do: " · #{@optimization.outcome}"} · modelo {@optimization.contract["model"]}
             </p>
           </div>
@@ -305,9 +359,27 @@ defmodule DeckexWeb.OptimizationLive do
               step.status == :skipped && "text-ink-faint",
               step.status in [:pending, :running] && "text-sev-warning"
             ]}>
-              {status_label(step.status)}
+              <span class={step.status == :running && "animate-pulse"}>
+                {status_label(step.status)}
+              </span>
+              <span
+                :if={step.status == :running && step.consult}
+                class="text-ink-faint"
+              >
+                · {elapsed_label(step.consult.inserted_at, @now)}
+              </span>
+              <span :if={step.status == :done && step.consult} class="text-ink-faint">
+                · {duration_label(step.consult)}
+              </span>
             </span>
           </div>
+
+          <p
+            :if={step.status == :failed and @optimization.status == :paused}
+            class="mt-2 text-caption text-ink-muted"
+          >
+            A falha pausou a rodada. Retomar tenta esta etapa de novo — as anteriores ficam.
+          </p>
 
           <p
             :if={step.consult && step.consult.response["leitura"]}

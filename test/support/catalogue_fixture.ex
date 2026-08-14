@@ -62,9 +62,14 @@ defmodule Deckex.CatalogueFixture do
     |> Enum.map(&ScryfallMapper.to_attrs/1)
     |> Enum.sort_by(& &1.oracle_id)
     |> Enum.map(fn attrs ->
+      # Concurrent seeds QUEUE on these row locks by design (see moduledoc).
+      # Queueing takes as long as the test holding the lock takes, and when
+      # the machine is genuinely busy — a real consult chewing CPU next to
+      # the suite — that wait can pass Postgrex's default 15s and flake as a
+      # query_canceled. Waiting is correct here; give it room.
       %Card{}
       |> Card.changeset(attrs)
-      |> Repo.insert!(on_conflict: :nothing, conflict_target: :oracle_id)
+      |> Repo.insert!(on_conflict: :nothing, conflict_target: :oracle_id, timeout: 60_000)
     end)
   end
 end

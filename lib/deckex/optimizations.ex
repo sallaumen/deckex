@@ -595,4 +595,6 @@ defmodule Deckex.Optimizations do
   end
 
   defdelegate list_for_deck(deck_id), to: OptimizationQuery
+
+  defdelegate running_for_deck(deck_id), to: OptimizationQuery
 end

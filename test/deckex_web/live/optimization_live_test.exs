@@ -91,7 +91,9 @@ defmodule DeckexWeb.OptimizationLiveTest do
       deck = deck()
       {:ok, _running} = Optimizations.start(deck, %{}, @two_lenses)
 
-      {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}/otimizacoes")
+      {:ok, live, html} = live(conn, ~p"/decks/#{deck.id}/otimizacoes")
+      assert html =~ "agora: Mana"
+
       live |> element("button[phx-click='abrir-lancador']") |> render_click()
 
       live
@@ -117,9 +119,11 @@ defmodule DeckexWeb.OptimizationLiveTest do
       deck = deck()
       {:ok, optimization} = Optimizations.start(deck, %{"keep" => ["Sol Ring"]}, @two_lenses)
 
-      {:ok, _live_early, html_early} = live(conn, ~p"/otimizacoes/#{optimization.id}")
+      {:ok, live_early, html_early} = live(conn, ~p"/otimizacoes/#{optimization.id}")
       assert html_early =~ "Mana"
       assert html_early =~ "consultando…"
+      assert html_early =~ "etapa 1/2"
+      assert page_title(live_early) =~ "1/2 · Otimização"
 
       {:ok, _after} = run_first_stage(optimization, ["Sol Ring"], ["Cultivate"])
 
@@ -197,7 +201,10 @@ defmodule DeckexWeb.OptimizationLiveTest do
 
       {:ok, _live, html} = live(conn, ~p"/decks/#{deck.id}")
 
-      assert html =~ "Otimizar"
+      # With a run alive, the deck page's button becomes the way back to it.
+      assert html =~ "Otimização rodando"
+      assert html =~ ~s(href="/otimizacoes/#{optimization.id}")
+      refute html =~ ">Otimizar<"
       # The pipeline consult exists but never surfaces here.
       refute html =~ "Leitura da etapa."
       assert Consults.list_for_deck(deck) == []
