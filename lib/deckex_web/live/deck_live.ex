@@ -632,7 +632,7 @@ defmodule DeckexWeb.DeckLive do
                 </div>
 
                 <details>
-                  <summary class="cursor-pointer text-caption text-ink-faint hover:text-ink">
+                  <summary class="-my-2 inline-flex min-h-touch cursor-pointer items-center py-2 text-caption text-ink-faint transition-colors hover:text-ink motion-reduce:transition-none">
                     Editar dossiê
                   </summary>
                   <.form
@@ -738,7 +738,7 @@ defmodule DeckexWeb.DeckLive do
                       <tbody>
                         <tr
                           :for={row <- @suggestions[consult.id]}
-                          class="border-b border-hairline-soft align-top last:border-0"
+                          class="border-b border-hairline-soft align-top transition-colors last:border-0 hover:bg-surface-2 motion-reduce:transition-none"
                         >
                           <td class="py-2 pr-2">
                             <div class="flex items-center gap-1.5">
@@ -861,7 +861,7 @@ defmodule DeckexWeb.DeckLive do
                 </div>
 
                 <details class="mt-3">
-                  <summary class="cursor-pointer text-caption text-ink-faint hover:text-ink">
+                  <summary class="-my-2 inline-flex min-h-touch cursor-pointer items-center py-2 text-caption text-ink-faint transition-colors hover:text-ink motion-reduce:transition-none">
                     Ver o prompt
                   </summary>
                   <pre class="mt-2 max-h-64 overflow-auto rounded-md bg-inlay p-3 font-mono text-micro text-ink-muted">{consult.briefing}</pre>

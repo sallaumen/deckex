@@ -315,6 +315,14 @@ de preto" is ink with a B pip beside it, not violet text. This is a design
 preference that happens to also be the accessible answer: B measures 4.5:1 on
 `surface` — right on the floor — while the glyph on its disc measures 5.1:1.
 
+**The Physical-Target Rule.** A touch target is measured in px, from
+`--size-touch`, and never from Tailwind's numeric scale. The root font-size here
+is 13px, so every rem-based utility renders at 0.8125× its nominal value:
+`min-h-11` reads as 44 and paints 35.75. Thirty-eight hit areas shipped that way
+— written as 44, rendered as 36, and invisible to every test, because the class
+was present and correctly spelled. A fingertip does not scale with the type.
+`DeckexWeb.TouchTargetTest` fails if the rem scale comes back.
+
 **The Low-Light Rule.** `color-scheme: dark` is declared on `html, body` so even
 the native chrome — scrollbars, form controls, the caret — stays on the felt.
 There is no light theme, no `prefers-color-scheme` branch, no toggle, and no
@@ -471,6 +479,23 @@ a 10% wash of their own tone; quiet ones sit on `surface` with a hairline. The
 severity reads from a dot and a word — never from a coloured left edge on the
 container, which is the most recognisable tell of generated UI. Text on a wash
 stays `--ink`, so the hue never has to carry contrast.
+
+### Card link — `card_link/1`
+
+A card's name, linking to its Scryfall page. The underline is permanent and
+dotted, never a hover effect: a link discoverable only by hovering is invisible
+to touch, and half of this app is read on a phone at a table. A name the
+catalogue never resolved renders as plain text — an unresolved card has nowhere
+honest to point. The lookup is one batched query per screen
+(`Deckex.Cards.uris_for_names/1`), never one per name.
+
+### Card thumb — `card_thumb/1`
+
+The dense sibling of `card_tile/1`, for a row of several cards where the art is
+what a player recognises before the name registers. Art and name are **one**
+link target, which is both the natural gesture and what clears the touch
+minimum — the name alone was an 11px sliver. Nothing is laid over the art, and
+an optional note (a price) sits outside the link.
 
 ### Card tile — `card_tile/1`
 

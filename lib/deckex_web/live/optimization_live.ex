@@ -742,7 +742,7 @@ defmodule DeckexWeb.OptimizationLive do
           </ul>
 
           <details class="mt-4 border-t border-hairline-soft pt-4">
-            <summary class="cursor-pointer text-caption text-ink-faint hover:text-ink">
+            <summary class="-my-2 inline-flex min-h-touch cursor-pointer items-center py-2 text-caption text-ink-faint transition-colors hover:text-ink motion-reduce:transition-none">
               Lista final para copiar
             </summary>
             <button
