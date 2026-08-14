@@ -103,6 +103,22 @@ for *what* we are building and *why*. This file is *how*.
 - **Classification records its provenance.** Every `card_role` carries `source`
   (`:rule` / `:ai` / `:manual`) and `evidence`. A `:manual` role is never
   overwritten.
+- **An informational note is not a problem.** In the audit, `problems != []`
+  rejects the suggestion (in the pipeline) and excludes it from the simulation
+  (everywhere). The Game Changer note "sobra espaço para 3" masqueraded as a
+  problem and silently rejected every legal GC add — found by the first
+  pipeline regression, 2026-08-14. If the engine only wants to *say* something,
+  it must not say it in the problems list.
+- **The engine states the copy's card count, every stage.** Stages may
+  legitimately go net negative, no lens measures deck size, and models cannot
+  count a 90-line list. The first real run reached 98/100 with nothing anywhere
+  saying so. The briefing now carries the count and the direction; the run page
+  shows `Cartas N/100`; a finished off-100 run warns before the owner saves.
+- **Resolution gets a worker-side retry before any verdict.** The answer-time
+  catalogue fetch is best-effort, and a transient Scryfall failure once got a
+  perfectly real card (Barkchannel Pathway) rejected as "não resolvida". The
+  pipeline's judge calls `Consults.refresh_catalogue/1` again in the worker —
+  the page still never touches the network; the worker was always allowed to.
 
 ## Quality gate
 
