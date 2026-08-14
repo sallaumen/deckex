@@ -166,6 +166,30 @@ defmodule Deckex.Cards do
   # a card is written.
   defp in_lock_order(cards), do: Enum.sort_by(cards, & &1.oracle_id)
 
+  @doc """
+  Re-reads the Commander Format Panel's Game Changers list and applies it to
+  the catalogue.
+
+  Every card fetched from now on carries the flag already — Scryfall puts
+  `game_changer` on the card object. This exists for the two cases that flag
+  cannot cover: cards catalogued before the field was mapped, and the days
+  the Panel revises the list, when a card already in the catalogue changes
+  status without anyone re-fetching it.
+
+  Cards that fall OFF the list are unmarked too. A restriction that outlives
+  its own list is worse than no restriction, because it looks authoritative.
+  """
+  @spec refresh_game_changers() :: {:ok, %{marked: non_neg_integer()}} | {:error, Error.t()}
+  def refresh_game_changers do
+    with {:ok, cards} <- Scryfall.search("is:gamechanger") do
+      oracle_ids = Enum.map(cards, & &1["oracle_id"])
+
+      {marked, _} = CardQuery.set_game_changers(oracle_ids)
+
+      {:ok, %{marked: marked}}
+    end
+  end
+
   @doc "Whether the rules failed to place this card, meaning the AI must see it."
   @spec residue?(Card.t()) :: boolean()
   defdelegate residue?(card), to: Roles

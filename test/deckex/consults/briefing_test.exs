@@ -87,4 +87,46 @@ defmodule Deckex.Consults.BriefingTest do
     {at, _len} = :binary.match(string, marker)
     at
   end
+
+  describe "the bracket in the briefing" do
+    defp with_changers(count) do
+      changers = for i <- 1..count, do: AnalysisFixture.entry(name: "GC#{i}", game_changer: true)
+      snap = AnalysisFixture.snapshot(changers)
+
+      Briefing.build(Analysis.report(snap), snap, :full, [])
+    end
+
+    test "a clean deck is told its floor is bracket 1" do
+      assert build(:full, []) =~ "Measured floor: **Bracket 1**"
+    end
+
+    # The headroom line is the whole point: every consult run against the
+    # reference deck suggested a fourth Game Changer, and nothing said so.
+    test "a deck at the ceiling is warned that one more moves it" do
+      briefing = with_changers(3)
+
+      assert briefing =~ "bracket 3 ceiling of 3 Game Changers"
+      assert briefing =~ "moves it to bracket 4"
+    end
+
+    test "a deck with room is told how much" do
+      assert with_changers(1) =~ "room for 2 more Game Changer"
+    end
+
+    test "a deck already past the ceiling is told restrictions no longer apply" do
+      assert with_changers(4) =~ "Game Changers are unrestricted"
+    end
+  end
+
+  describe "the rules learned from a real answer" do
+    # A model once declined to suggest Underworld Breach believing it banned
+    # in Commander; Scryfall says legal. A decline leaves no row for the audit
+    # to check, so the prompt has to prevent it at the source.
+    test "the model is told not to guess at legality" do
+      briefing = build(:full, [])
+
+      assert briefing =~ "Never guess at legality or bans"
+      assert briefing =~ "suggested and verified"
+    end
+  end
 end

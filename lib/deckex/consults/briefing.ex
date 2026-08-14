@@ -13,6 +13,7 @@ defmodule Deckex.Consults.Briefing do
   bad, it is illegal.
   """
 
+  alias Deckex.Analysis.Bracket
   alias Deckex.Analysis.DeckSnapshot
   alias Deckex.Analysis.Report
 
@@ -28,6 +29,8 @@ defmodule Deckex.Consults.Briefing do
     #{measurements_block(report, lens)}
 
     #{findings_block(findings)}
+
+    #{bracket_block(report)}
 
     #{dossier_block(lens, opts)}
 
@@ -131,6 +134,34 @@ defmodule Deckex.Consults.Briefing do
     """
   end
 
+  # The bracket is the vocabulary players actually use at a table, and the
+  # headroom is the part nobody notices on their own: a deck sitting on three
+  # Game Changers leaves bracket 3 with one more. Every consult run against
+  # the reference deck suggested a fourth before this block existed.
+  defp bracket_block(%Report{bracket: nil}), do: ""
+
+  defp bracket_block(%Report{bracket: bracket}) do
+    """
+    ## Commander Bracket
+
+    Measured floor: **Bracket #{bracket.floor}**. #{Enum.join(bracket.reasons, " ")}
+    #{headroom_line(bracket)}
+    """
+  end
+
+  defp headroom_line(bracket) do
+    case Bracket.game_changer_headroom(bracket) do
+      nil ->
+        "The deck is already at a bracket 4 floor, so Game Changers are unrestricted."
+
+      0 ->
+        "**The deck is at the bracket 3 ceiling of 3 Game Changers.** Any Game Changer you add is the fourth and moves it to bracket 4 — if you suggest one, say so in `notes` and explain why it is worth the move."
+
+      room ->
+        "There is room for #{room} more Game Changer(s) before the deck leaves bracket 3."
+    end
+  end
+
   # The part of the prompt no template can write. The scout itself never sees
   # one — it must read the deck fresh, not be anchored by its own predecessor.
   defp dossier_block(:scout, _opts), do: ""
@@ -181,6 +212,12 @@ defmodule Deckex.Consults.Briefing do
       number are the only exceptions — Commander is singleton.
     - Prefer changes that address a finding over changes that are merely
       upgrades.#{budget_line(opts[:ceilings])}
+    - **Never guess at legality or bans.** The app holds Scryfall's current
+      legality for every card and checks each suggestion against it, so a card
+      you are unsure about should be *suggested and verified*, not silently
+      dropped. If you decline a card because you believe it is banned, say so
+      explicitly in `notes` — a wrong belief that never becomes a suggestion
+      is the one thing the app cannot check for you.
     - **Never state a price.** The app shows the current Scryfall price next to
       every suggestion, so a number from you can only disagree with it. Say
       "cheap" or "expensive" if it matters to the argument; leave the figure out.

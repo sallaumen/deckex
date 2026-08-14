@@ -26,6 +26,30 @@ defmodule Deckex.Cards.CardQuery do
     Repo.get_by(Card, name_normalized: Name.normalize(name))
   end
 
+  @doc """
+  Marks exactly `oracle_ids` as Game Changers and unmarks everything else.
+
+  Two statements in one transaction, because a catalogue that is briefly
+  missing every restriction is a catalogue that could be read mid-refresh and
+  believed.
+  """
+  @spec set_game_changers([String.t()]) :: {non_neg_integer(), nil}
+  def set_game_changers(oracle_ids) when is_list(oracle_ids) do
+    {:ok, result} =
+      Repo.transact(fn ->
+        Repo.update_all(from(c in Card, where: c.game_changer == true),
+          set: [game_changer: false]
+        )
+
+        {:ok,
+         Repo.update_all(from(c in Card, where: c.oracle_id in ^oracle_ids),
+           set: [game_changer: true]
+         )}
+      end)
+
+    result
+  end
+
   @doc "Lists cards by id, in no particular order."
   @spec list_by_ids([String.t()]) :: [Card.t()]
   def list_by_ids([]), do: []

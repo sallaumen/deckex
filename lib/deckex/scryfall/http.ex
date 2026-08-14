@@ -78,6 +78,48 @@ defmodule Deckex.Scryfall.Http do
     }
   end
 
+  @doc """
+  Runs a Scryfall search and returns every page of results.
+
+  Scryfall paginates at 175 cards; the Game Changers list is well under that
+  today, but a query that grows past a page must not silently truncate — a
+  half-read list of restricted cards is worse than no list.
+  """
+  @impl Deckex.Scryfall.Client
+  def search(query) when is_binary(query) do
+    collect_pages("https://api.scryfall.com/cards/search?q=#{URI.encode(query)}", [])
+  end
+
+  defp collect_pages(nil, acc), do: {:ok, acc}
+
+  defp collect_pages(url, acc) do
+    case Req.get(request(url)) do
+      {:ok, %Req.Response{status: 200, body: %{"data" => data} = body}} ->
+        Process.sleep(throttle_ms())
+        collect_pages(body["next_page"], acc ++ data)
+
+      {:ok, %Req.Response{status: status}} ->
+        {:error,
+         Error.new(
+           :scryfall_unavailable,
+           "A Scryfall respondeu #{status} para a busca.",
+           %{status: status}
+         )}
+
+      {:error, reason} ->
+        {:error,
+         Error.new(
+           :scryfall_unavailable,
+           "Não consegui falar com a Scryfall.",
+           %{reason: inspect(reason)}
+         )}
+    end
+  end
+
+  defp request(url) do
+    request() |> Req.merge(url: url)
+  end
+
   defp request do
     [
       url: @endpoint,

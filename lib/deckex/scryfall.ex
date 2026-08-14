@@ -13,4 +13,7 @@ defmodule Deckex.Scryfall do
 
   @impl Deckex.Scryfall.Client
   defdelegate fetch_by_names(names), to: @adapter
+
+  @impl Deckex.Scryfall.Client
+  defdelegate search(query), to: @adapter
 end
