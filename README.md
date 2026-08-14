@@ -8,17 +8,34 @@ O app **não** decide se uma carta é boa. Ele mede o *seu* deck e deixa a parte
 opinião pra IA, que conhece o pool de cartas inteiro. É de propósito: mapear as
 ~30 mil cartas de Magic já foi feito, e feito melhor, em outros lugares.
 
-## Status
+## O que ele faz
 
-Em construção. O que já funciona:
+**Mede o deck.** Curva, base de mana (fontes por cor contra os pips que o deck
+exige, fetchlands resolvidas), interação separada entre counters e remoção real,
+e consistência. Papéis de carta saem do texto do oracle, com evidência: cada
+classificação diz por que foi feita.
 
-- **Catálogo de cartas** — resolve nomes contra a Scryfall e guarda pra sempre.
-  Carta conhecida sai do Postgres; só carta nova custa requisição. Trata cartas
-  de duas faces (MDFC), preço, e rank do EDHREC.
+**Diz em que Bracket você está.** O piso oficial de Commander Brackets, contado
+das regras: Game Changers (lidos da Scryfall, nunca escritos aqui), negação de
+terreno em massa e turno extra. O motor reporta um **piso**, nunca um veredito —
+as duas perguntas que ele não consegue responder (tem combo de duas cartas? em
+que turno o deck fecha?) viram uma pergunta para a IA.
 
-O que vem: classificação de papéis das cartas (ramp, counter, removal…),
-importação de decks, as quatro lentes de diagnóstico, e a interface. Veja
-[`docs/superpowers/plans/`](docs/superpowers/plans/).
+**Escreve um dossiê do deck.** Um "scout" lê a lista uma vez e escreve o plano,
+as sinergias, as linhas de vitória e as fraquezas que número nenhum vê. O dossiê
+entra em toda consulta seguinte, e toda resposta abre com a leitura do próprio
+modelo — instruída a discordar do dossiê em voz alta quando a lista disser outra
+coisa.
+
+**Audita a resposta da IA com aritmética.** Cada sugestão é conferida contra os
+dados reais da carta: identidade de cor, singleton, legalidade em Commander,
+teto de preço e impacto no bracket. Depois aplica as mudanças limpas ao deck em
+memória, re-mede tudo, e mostra o antes→depois — o que resolve, o que persiste,
+o que quebra.
+
+**Não dá nota de 1 a 10.** É recusa deliberada: um power level é um algoritmo
+que ranqueia toda carta de Magic, que é exatamente o que este projeto existe
+para não fazer.
 
 ## Rodando
 
