@@ -14,6 +14,7 @@ defmodule DeckexWeb.OptimizationsLive do
   alias Deckex.Error
   alias Deckex.Events
   alias Deckex.Optimizations
+  alias Deckex.Optimizations.Salt
 
   @impl Phoenix.LiveView
   def mount(%{"id" => deck_id}, _session, socket) do
@@ -28,7 +29,9 @@ defmodule DeckexWeb.OptimizationsLive do
            deck: deck,
            runs: runs,
            contract: Optimizations.default_contract(deck),
-           recipe: Optimizations.recipe(deck),
+           recipe: Optimizations.recipe(deck, :refine),
+           mode: :refine,
+           salt: Salt.preset("sem_freio"),
            launching: false,
            page_title: "Otimizações · #{deck.name}"
          )}
@@ -52,6 +55,21 @@ defmodule DeckexWeb.OptimizationsLive do
     {:noreply, assign(socket, launching: false)}
   end
 
+  def handle_event("modo", %{"modo" => modo}, socket) do
+    mode = String.to_existing_atom(modo)
+
+    {:noreply,
+     assign(socket, mode: mode, recipe: Optimizations.recipe(socket.assigns.deck, mode))}
+  end
+
+  def handle_event("preset-salt", %{"preset" => preset}, socket) do
+    {:noreply, assign(socket, salt: Salt.preset(preset))}
+  end
+
+  def handle_event("salt", %{"tatica" => key, "valor" => value}, socket) do
+    {:noreply, assign(socket, salt: Map.put(socket.assigns.salt, key, value))}
+  end
+
   def handle_event("comecar", %{"contract" => params}, socket) do
     contract = %{
       "bracket_max" => String.to_integer(params["bracket_max"]),
@@ -62,9 +80,22 @@ defmodule DeckexWeb.OptimizationsLive do
       "keep" => lines(params["keep"]),
       "matchups" => lines(params["matchups"]),
       "notes" => String.trim(params["notes"] || ""),
-      "model" => params["model"]
+      "model" => params["model"],
+      "salt" => salt_for(socket)
     }
 
+    # Refused here rather than mid-run: every add the contract contradicts
+    # would be rejected by the bracket guard anyway, one paid consult at a time.
+    case Salt.contradiction(contract) do
+      nil -> launch(socket, Map.put(contract, "mode", socket.assigns.mode))
+      reason -> {:noreply, put_flash(socket, :error, reason)}
+    end
+  end
+
+  defp salt_for(%{assigns: %{mode: :reimagine, salt: salt}}), do: salt
+  defp salt_for(_refine), do: %{}
+
+  defp launch(socket, contract) do
     case Optimizations.start(socket.assigns.deck, contract) do
       {:ok, optimization} ->
         {:noreply, push_navigate(socket, to: ~p"/otimizacoes/#{optimization.id}")}
@@ -88,6 +119,7 @@ defmodule DeckexWeb.OptimizationsLive do
   end
 
   defp status_label(:running), do: "rodando"
+  defp status_label(:awaiting_choice), do: "esperando escolha"
   defp status_label(:paused), do: "pausada"
   defp status_label(:done), do: "concluída"
   defp status_label(:failed), do: "falhou"
@@ -104,6 +136,9 @@ defmodule DeckexWeb.OptimizationsLive do
   defp done_count(run), do: Enum.count(run.steps, &(&1.status in [:done, :skipped]))
 
   defp current_stage(run), do: Enum.find(run.steps, &(&1.status == :running))
+
+  defp mode_label(:reimagine), do: "reimaginar"
+  defp mode_label(_refine), do: "refinar"
 
   @impl Phoenix.LiveView
   def render(assigns) do
@@ -148,14 +183,22 @@ defmodule DeckexWeb.OptimizationsLive do
             class="block rounded-xl border border-hairline-soft bg-surface p-5 transition-colors hover:border-hairline-strong"
           >
             <div class="flex flex-wrap items-center justify-between gap-3">
-              <span class="font-mono text-caption text-ink">
-                {Calendar.strftime(run.inserted_at, "%d/%m %H:%M")}
+              <span class="flex items-center gap-2">
+                <span class="font-mono text-caption text-ink">
+                  {Calendar.strftime(run.inserted_at, "%d/%m %H:%M")}
+                </span>
+                <span class="rounded-md border border-hairline-soft px-2 py-0.5 font-mono text-micro text-ink-faint">
+                  {mode_label(run.mode)}
+                </span>
+                <span :if={run.contract["visao"]} class="text-caption text-ink-secondary">
+                  {run.contract["visao"]["nome"]}
+                </span>
               </span>
               <span class={[
                 "font-mono text-caption",
                 run.status == :done && "text-sev-healthy",
                 run.status in [:failed, :cancelled] && "text-sev-critical",
-                run.status in [:running, :paused] && "text-sev-warning"
+                run.status in [:running, :awaiting_choice, :paused] && "text-sev-warning"
               ]}>
                 {status_label(run.status)}{if run.outcome, do: " · #{run.outcome}"}
               </span>
@@ -197,6 +240,89 @@ defmodule DeckexWeb.OptimizationsLive do
             phx-submit="comecar"
             class="space-y-4 px-6 py-5"
           >
+            <div class="flex gap-2">
+              <button
+                :for={{mode, label} <- [{:refine, "Refinar"}, {:reimagine, "Reimaginar"}]}
+                type="button"
+                phx-click="modo"
+                phx-value-modo={mode}
+                class={[
+                  "min-h-11 flex-1 rounded-md border px-3 py-2 text-caption transition-colors",
+                  @mode == mode && "border-hairline-strong bg-inlay text-ink",
+                  @mode != mode && "border-hairline-soft text-ink-faint hover:text-ink"
+                ]}
+              >
+                {label}
+              </button>
+            </div>
+
+            <p class="text-micro text-ink-muted">
+              {if @mode == :refine,
+                do: "Melhora o deck dentro do plano que ele já tem.",
+                else:
+                  "A IA propõe três direções novas, você escolhe uma, e o pipeline reconstrói o deck em cima dela."}
+            </p>
+
+            <div :if={@mode == :reimagine} class="space-y-2 border-t border-hairline-soft pt-4">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <span class="text-caption font-semibold text-ink-secondary">
+                  O que você não quer na mesa
+                </span>
+                <div class="flex gap-2">
+                  <button
+                    :for={
+                      {preset, label} <- [
+                        {"mesa_tranquila", "mesa tranquila"},
+                        {"sem_freio", "sem freio"}
+                      ]
+                    }
+                    type="button"
+                    phx-click="preset-salt"
+                    phx-value-preset={preset}
+                    class="-my-2 inline-flex min-h-11 items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+                  >
+                    {label}
+                  </button>
+                </div>
+              </div>
+
+              <div
+                :for={tactic <- Salt.tactics()}
+                class="flex flex-wrap items-center justify-between gap-2"
+              >
+                <span class="text-caption text-ink-secondary">{tactic.label}</span>
+                <div class="flex gap-1">
+                  <button
+                    :for={
+                      {value, label} <- [
+                        {"evitar", "evitar"},
+                        {"tanto_faz", "tanto faz"},
+                        {"quero", "quero"}
+                      ]
+                    }
+                    type="button"
+                    phx-click="salt"
+                    phx-value-tatica={tactic.key}
+                    phx-value-valor={value}
+                    class={[
+                      "inline-flex min-h-11 items-center rounded-md border px-2 text-micro transition-colors",
+                      Map.get(@salt, tactic.key, "tanto_faz") == value &&
+                        "border-hairline-strong bg-inlay text-ink",
+                      Map.get(@salt, tactic.key, "tanto_faz") != value &&
+                        "border-hairline-soft text-ink-faint hover:text-ink"
+                    ]}
+                  >
+                    {label}
+                  </button>
+                </div>
+              </div>
+
+              <p class="text-micro text-ink-muted">
+                O motor recusa entradas que violem o que você marcou como evitar. "Quero" é convite —
+                nenhum motor obriga um modelo a ter ideia.
+              </p>
+            </div>
+
             <div class="grid gap-4 sm:grid-cols-3">
               <div>
                 <label

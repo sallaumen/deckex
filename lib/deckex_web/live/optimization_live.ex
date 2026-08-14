@@ -12,6 +12,7 @@ defmodule DeckexWeb.OptimizationLive do
   alias Deckex.Analysis
   alias Deckex.Analysis.Report
   alias Deckex.Cards
+  alias Deckex.Consults.Visions
   alias Deckex.Decks
   alias Deckex.Error
   alias Deckex.Events
@@ -55,12 +56,24 @@ defmodule DeckexWeb.OptimizationLive do
       deck: deck,
       card_count: Optimizations.card_count(Optimizations.current_list(optimization)),
       stage_progress: stage_progress(optimization, deck, baselines),
+      visions: vision_cards(optimization, deck),
       now: DateTime.utc_now(),
       report_original: Analysis.report(original, baselines),
       report_current: Analysis.report(current, baselines),
       page_title: page_title(optimization, deck)
     )
   end
+
+  # Only while the run is waiting: the latest set is the live one. Priced and
+  # commander-validated here so the owner sees both before choosing.
+  defp vision_cards(%{status: :awaiting_choice} = optimization, deck) do
+    case List.last(Optimizations.vision_consults(optimization)) do
+      nil -> []
+      consult -> Visions.for_consult(consult, deck.color_identity)
+    end
+  end
+
+  defp vision_cards(_settled, _deck), do: []
 
   # Where the needle stood after each stage — computed, never stored, so it
   # is always measured against the rules as they are NOW.
@@ -90,6 +103,7 @@ defmodule DeckexWeb.OptimizationLive do
     prefix =
       case status do
         :done -> "Concluída#{if optimization.outcome == "estabilizou", do: " (estabilizou)"}"
+        :awaiting_choice -> "Escolha uma direção"
         :paused -> "Pausada"
         :failed -> "Falhou"
         :cancelled -> "Cancelada"
@@ -147,6 +161,26 @@ defmodule DeckexWeb.OptimizationLive do
      socket
      |> load(optimization)
      |> put_flash(:info, "Cancelada. As etapas feitas ficam legíveis.")}
+  end
+
+  def handle_event("escolher-visao", %{"index" => index}, socket) do
+    case Optimizations.choose_vision(socket.assigns.optimization, String.to_integer(index)) do
+      {:ok, optimization} ->
+        {:noreply, socket |> load(optimization) |> put_flash(:info, "Direção escolhida.")}
+
+      {:error, %Error{} = error} ->
+        {:noreply, put_flash(socket, :error, error.message)}
+    end
+  end
+
+  def handle_event("outras-visoes", _params, socket) do
+    case Optimizations.ask_again(socket.assigns.optimization) do
+      {:ok, optimization} ->
+        {:noreply, socket |> load(optimization) |> put_flash(:info, "Pedindo outras três…")}
+
+      {:error, %Error{} = error} ->
+        {:noreply, put_flash(socket, :error, error.message)}
+    end
   end
 
   def handle_event("feedback", %{"step" => step_id} = params, socket) do
@@ -224,6 +258,7 @@ defmodule DeckexWeb.OptimizationLive do
   defp status_label(:failed), do: "falhou"
 
   defp run_status_label(:running), do: "rodando"
+  defp run_status_label(:awaiting_choice), do: "esperando você escolher"
   defp run_status_label(:paused), do: "pausada"
   defp run_status_label(:done), do: "concluída"
   defp run_status_label(:failed), do: "falhou"
@@ -310,6 +345,9 @@ defmodule DeckexWeb.OptimizationLive do
               {run_status_label(@optimization.status)}{if @optimization.status == :running,
                 do: " · etapa #{stage_counter(@optimization)}"}{if @optimization.outcome,
                 do: " · #{@optimization.outcome}"} · modelo {@optimization.contract["model"]}
+              <span :if={vision = Optimizations.chosen_vision(@optimization)}>
+                · direção: <span class="text-ink">{vision["nome"]}</span>
+              </span>
               <a
                 :if={position = running_position(@optimization)}
                 href={"#etapa-#{position}"}
@@ -393,6 +431,67 @@ defmodule DeckexWeb.OptimizationLive do
           </div>
         </div>
       </header>
+
+      <section :if={@visions != []} class="mb-8">
+        <h2 class="mb-1 text-heading font-semibold text-ink">Escolha uma direção</h2>
+        <p class="mb-4 text-caption text-ink-muted">
+          A rodada está esperando você. Nada mais é gasto até você escolher.
+        </p>
+
+        <ul class="grid gap-4 sm:grid-cols-3">
+          <li
+            :for={{vision, index} <- Enum.with_index(@visions)}
+            class="flex flex-col rounded-xl border border-hairline-soft bg-surface p-5"
+          >
+            <h3 class="text-heading font-semibold text-ink">{vision.nome}</h3>
+            <p class="mt-2 flex-1 text-caption text-ink-secondary">{vision.tese}</p>
+
+            <p class="mt-3 text-caption text-ink-muted">
+              <span class="font-semibold">O que perde:</span> {vision.custo}
+            </p>
+
+            <p :if={vision.comandante_nome} class="mt-3 text-caption">
+              <span class="text-ink-muted">Comandante:</span>
+              <span class="text-ink">{vision.comandante_nome}</span>
+              <span :if={vision.comandante_problem} class="text-sev-critical">
+                — {vision.comandante_problem}
+              </span>
+            </p>
+
+            <ul :if={vision.cartas != []} class="mt-3 space-y-1">
+              <li :for={carta <- vision.cartas} class="text-caption text-ink-secondary">
+                <span class="text-ink">{carta.name}</span>
+                <span class="font-mono text-ink-faint">{Money.brl(carta.price_usd)}</span>
+              </li>
+            </ul>
+
+            <p class="mt-3 font-mono text-caption text-ink">
+              entradas: {Money.brl(vision.total_usd)}
+            </p>
+
+            <.button
+              type="button"
+              phx-click="escolher-visao"
+              phx-value-index={index}
+              phx-disable-with="seguindo…"
+              variant="primary"
+              class="mt-4"
+            >
+              Seguir esta
+            </.button>
+          </li>
+        </ul>
+
+        <button
+          type="button"
+          phx-click="outras-visoes"
+          phx-disable-with="pedindo…"
+          data-confirm="Pedir outras três direções? Isso gasta mais uma consulta."
+          class="-my-2 mt-4 inline-flex min-h-11 items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+        >
+          Pedir outras três (mais uma consulta)
+        </button>
+      </section>
 
       <ol class="space-y-4">
         <li

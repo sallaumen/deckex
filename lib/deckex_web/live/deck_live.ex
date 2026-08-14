@@ -209,9 +209,11 @@ defmodule DeckexWeb.DeckLive do
             navigate={~p"/otimizacoes/#{@running_optimization.id}"}
             variant="primary"
           >
-            {if @running_optimization.status == :paused,
-              do: "Otimização pausada →",
-              else: "Otimização rodando →"}
+            {case @running_optimization.status do
+              :awaiting_choice -> "Otimização esperando você →"
+              :paused -> "Otimização pausada →"
+              _running -> "Otimização rodando →"
+            end}
           </.button>
           <.button
             :if={is_nil(@running_optimization)}

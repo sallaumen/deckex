@@ -195,6 +195,100 @@ defmodule DeckexWeb.OptimizationLiveTest do
     end
   end
 
+  describe "reimaginar" do
+    test "the launcher starts a reimagine run carrying the salt contract", %{conn: conn} do
+      deck = deck()
+      {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}/otimizacoes")
+
+      live |> element("button[phx-click='abrir-lancador']") |> render_click()
+
+      html = live |> element("button[phx-value-modo='reimagine']") |> render_click()
+      assert html =~ "O que você não quer na mesa"
+
+      live
+      |> element("button[phx-value-tatica='stax'][phx-value-valor='evitar']")
+      |> render_click()
+
+      assert {:error, {:live_redirect, _}} =
+               live
+               |> form("#launch-form",
+                 contract: %{
+                   "bracket_max" => "3",
+                   "ceiling_card" => "800",
+                   "ceiling_land" => "200",
+                   "keep" => "",
+                   "matchups" => "",
+                   "notes" => "",
+                   "model" => "sonnet"
+                 }
+               )
+               |> render_submit()
+
+      assert [run] = Optimizations.list_for_deck(deck.id)
+      assert run.mode == :reimagine
+      assert run.contract["salt"]["stax"] == "evitar"
+      assert hd(run.steps).lens == "visao"
+    end
+
+    test "a contract that contradicts itself is refused before it spends", %{conn: conn} do
+      deck = deck()
+      {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}/otimizacoes")
+
+      live |> element("button[phx-click='abrir-lancador']") |> render_click()
+      live |> element("button[phx-value-modo='reimagine']") |> render_click()
+
+      live
+      |> element("button[phx-value-tatica='mass_land_denial'][phx-value-valor='quero']")
+      |> render_click()
+
+      html =
+        live
+        |> form("#launch-form",
+          contract: %{
+            "bracket_max" => "3",
+            "ceiling_card" => "",
+            "ceiling_land" => "",
+            "keep" => "",
+            "matchups" => "",
+            "notes" => "",
+            "model" => "sonnet"
+          }
+        )
+        |> render_submit()
+
+      # Nothing launched, and the modal stayed open so the owner can fix the
+      # contract. The wording of the refusal is pinned in Salt's own test.
+      assert Optimizations.list_for_deck(deck.id) == []
+      assert html =~ "O que você não quer na mesa"
+    end
+
+    test "refining still starts a refine run with no salt", %{conn: conn} do
+      deck = deck()
+      {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}/otimizacoes")
+
+      live |> element("button[phx-click='abrir-lancador']") |> render_click()
+
+      assert {:error, {:live_redirect, _}} =
+               live
+               |> form("#launch-form",
+                 contract: %{
+                   "bracket_max" => "3",
+                   "ceiling_card" => "",
+                   "ceiling_land" => "",
+                   "keep" => "",
+                   "matchups" => "",
+                   "notes" => "",
+                   "model" => "sonnet"
+                 }
+               )
+               |> render_submit()
+
+      assert [run] = Optimizations.list_for_deck(deck.id)
+      assert run.mode == :refine
+      assert run.contract["salt"] == %{}
+    end
+  end
+
   describe "the deck page" do
     test "gains the Otimizar button and hides pipeline consults", %{conn: conn} do
       deck = deck()
