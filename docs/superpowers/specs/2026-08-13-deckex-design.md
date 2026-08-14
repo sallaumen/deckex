@@ -746,3 +746,7 @@ Two defects in deckex surfaced from reading the three answers side by side, and
 both are fixed: the briefing now forbids price claims, and `add_card/3` refuses
 a second copy of a singleton card so a repeated suggestion cannot build an
 illegal decklist one click at a time.
+| Commander Brackets, no power level | Brackets are countable rules (Game Changers, mass land denial, extra turns, early combos); a 1–10 score is a card-ranking algorithm, which §1 says we do not build. See `2026-08-14-brackets-design.md`. |
+| The engine reports a bracket FLOOR | Two of the five criteria need card-pool knowledge. The engine counts what it can and prints the rest as questions for the `:bracket` lens. |
+| Card facts fetched, never hardcoded | `game_changer`, legality and price all arrive on the Scryfall card object. A list of card names in this repo is wrong within months of the Panel's next revision. |
+| The model is told not to guess at legality | Verified 2026-08-14. A decline leaves no row for the audit to check, so the prompt prevents the class at the source. |

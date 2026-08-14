@@ -10,6 +10,7 @@ defmodule Deckex.Analysis.RealDeckTest do
   import Mox
 
   alias Deckex.Analysis
+  alias Deckex.Analysis.Bracket
   alias Deckex.Analysis.Report
   alias Deckex.CatalogueFixture
   alias Deckex.Consults.Briefing
@@ -142,5 +143,32 @@ defmodule Deckex.Analysis.RealDeckTest do
 
     assert MapSet.disjoint?(MapSet.new(audit.introduced, & &1.code), remaining) == false or
              audit.introduced == []
+  end
+
+  # In production this deck sits at exactly the bracket 3 ceiling — Fierce
+  # Guardianship, Mystical Tutor and Rhystic Study. Here it reads two of the
+  # three, because only cards with a committed Scryfall fixture resolve and
+  # Fierce Guardianship has none. What the test pins is the mechanism: the
+  # floor lands on 3 the moment a Game Changer appears, and the headroom
+  # counts down from three.
+  test "the real deck's floor is 3, driven by its Game Changers" do
+    _report = import_and_measure()
+
+    bracket =
+      Deck
+      |> Repo.one!()
+      |> Decks.snapshot()
+      |> Bracket.floor()
+
+    assert bracket.floor == 3
+    assert "Rhystic Study" in bracket.game_changers
+    assert "Mystical Tutor" in bracket.game_changers
+
+    headroom = Bracket.game_changer_headroom(bracket)
+    assert headroom == 3 - length(bracket.game_changers)
+    assert headroom < 3, "um deck sem Game Changer nenhum não exercita o piso"
+
+    assert bracket.mass_land_denial == []
+    assert bracket.extra_turns == []
   end
 end
