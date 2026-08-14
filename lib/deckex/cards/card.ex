@@ -53,6 +53,20 @@ defmodule Deckex.Cards.Card do
   end
 
   @doc """
+  Whether the card's front face is a land.
+
+  Reads the front face only, like `Deckex.Analysis.CardEntry`: a spell whose
+  back is a land is a spell you may also play as a land, and it is priced as
+  the spell it is.
+  """
+  @spec land?(t()) :: boolean()
+  def land?(%__MODULE__{type_line: nil}), do: false
+
+  def land?(%__MODULE__{type_line: type_line}) do
+    type_line |> String.split("//") |> hd() |> String.contains?("Land")
+  end
+
+  @doc """
   Whether this is a basic land, which a deck may hold any number of.
 
   Reads the type line rather than a list of five names: snow-covered basics and

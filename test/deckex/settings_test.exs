@@ -31,7 +31,7 @@ defmodule Deckex.SettingsTest do
       for entry <- Registry.entries() do
         assert is_binary(entry.label)
         assert entry.label != ""
-        assert entry.group in [:ai, :moxfield, :analysis]
+        assert entry.group in [:ai, :budget, :moxfield, :analysis]
       end
     end
   end
@@ -105,7 +105,7 @@ defmodule Deckex.SettingsTest do
     end
   end
 
-  describe "model/0 and budget_usd/0" do
+  describe "model/0 and ceilings/1" do
     test "model is the configured model" do
       {:ok, _value} = Settings.put(:claude_model, "opus")
 
@@ -113,10 +113,10 @@ defmodule Deckex.SettingsTest do
     end
 
     test "a zero budget means no ceiling, not a ceiling of zero" do
-      assert Settings.budget_usd() == nil
+      assert Settings.ceilings(:budget).card == nil
 
-      {:ok, _value} = Settings.put(:consult_budget_usd, 30)
-      assert Settings.budget_usd() == 30
+      {:ok, _value} = Settings.put(:budget_max_brl, 30)
+      assert Settings.ceilings(:budget).card == 30
     end
   end
 end

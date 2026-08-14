@@ -41,6 +41,8 @@ defmodule DeckexWeb.MesaLive do
   def render(assigns) do
     ~H"""
     <div class="mx-auto max-w-[1800px] px-6 py-10 lg:px-10 lg:py-14">
+      <.live_component module={DeckexWeb.SettingsPanel} id="settings-panel" />
+
       <header class="mb-8 flex items-end justify-between gap-4">
         <div>
           <h1 class="text-display font-semibold text-ink">A Mesa</h1>
@@ -50,13 +52,6 @@ defmodule DeckexWeb.MesaLive do
         </div>
 
         <div class="flex items-center gap-4">
-          <.link
-            navigate={~p"/ajustes"}
-            class="-my-2 inline-flex min-h-11 items-center py-2 text-caption text-ink-faint transition-colors hover:text-ink"
-          >
-            Ajustes
-          </.link>
-
           <.button navigate={~p"/importar"} variant="primary">Trazer um deck</.button>
         </div>
       </header>

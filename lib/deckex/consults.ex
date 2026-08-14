@@ -86,7 +86,7 @@ defmodule Deckex.Consults do
   defp start(deck, lens, models, opts) do
     snapshot = Decks.snapshot(deck)
     report = Analysis.report(snapshot, Settings.baselines())
-    briefing = Briefing.build(report, snapshot, lens, briefing_opts(deck, opts))
+    briefing = Briefing.build(report, snapshot, lens, briefing_opts(deck, lens, opts))
     frozen = freeze(report)
 
     Enum.map(models, fn model ->
@@ -99,9 +99,9 @@ defmodule Deckex.Consults do
     end)
   end
 
-  defp briefing_opts(deck, opts) do
+  defp briefing_opts(deck, lens, opts) do
     opts
-    |> Keyword.put_new(:budget_usd, Settings.budget_usd())
+    |> Keyword.put_new(:ceilings, Settings.ceilings(lens))
     |> Keyword.put(:dossier, deck.dossier)
     |> Keyword.put(:dossier_stale, deck.dossier_stale)
   end
@@ -130,15 +130,15 @@ defmodule Deckex.Consults do
   Computed on read, never stored — it always answers "what would happen if
   applied **now**", against the deck as it currently is.
   """
-  @spec audit(DeckSnapshot.t(), [Suggestion.t()]) :: Audit.t()
-  def audit(%DeckSnapshot{} = snapshot, suggestions) do
+  @spec audit(DeckSnapshot.t(), [Suggestion.t()], atom()) :: Audit.t()
+  def audit(%DeckSnapshot{} = snapshot, suggestions, lens \\ :full) do
     roles =
       suggestions
       |> Enum.filter(&(&1.resolved? and &1.action == :add))
       |> Enum.map(& &1.card.id)
       |> Cards.roles_by_card_ids()
 
-    Audit.run(snapshot, suggestions, roles, Settings.baselines())
+    Audit.run(snapshot, suggestions, roles, Settings.baselines(), Settings.ceilings(lens))
   end
 
   @doc "How long a consult may take before it is called a timeout."

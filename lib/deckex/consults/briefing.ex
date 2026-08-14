@@ -90,25 +90,22 @@ defmodule Deckex.Consults.Briefing do
   end
 
   defp task_block(:budget, opts) do
-    ceiling = opts[:budget_usd] || 20
-
     """
-    Improve this deck **as cheaply as possible**. Every card you add must cost
-    roughly US$ #{ceiling} or less.
-
+    Improve this deck **as cheaply as possible**.
+    #{ceiling_lines(opts[:ceilings])}
     Name specific cards to **cut** and to **add**, and say in one sentence each
     what it fixes. A cheap card that addresses a finding beats an expensive one
     that does not.
     """
   end
 
-  defp task_block(:upgrade, _opts) do
+  defp task_block(:upgrade, opts) do
     """
-    Make this deck **as strong as it can be, regardless of price**.
-
+    Make this deck **as strong as it can be**. Power is the goal here; a
+    separate question exists for the cheap version.
+    #{ceiling_lines(opts[:ceilings])}
     Name specific cards to **cut** and to **add**, and say in one sentence each
-    what it fixes. Do not hold back on cost here — a separate question exists
-    for the budget version.
+    what it fixes.
     """
   end
 
@@ -183,7 +180,7 @@ defmodule Deckex.Consults.Briefing do
     - A card may appear once. Basic lands and cards whose own text allows any
       number are the only exceptions — Commander is singleton.
     - Prefer changes that address a finding over changes that are merely
-      upgrades.#{budget_line(opts[:budget_usd])}
+      upgrades.#{budget_line(opts[:ceilings])}
     - **Never state a price.** The app shows the current Scryfall price next to
       every suggestion, so a number from you can only disagree with it. Say
       "cheap" or "expensive" if it matters to the argument; leave the figure out.
@@ -253,9 +250,39 @@ defmodule Deckex.Consults.Briefing do
   defp identity(%Report{color_identity: []}), do: "colourless"
   defp identity(%Report{color_identity: colors}), do: Enum.join(colors, "")
 
+  # Stated in reais because that is what the owner set, and the app checks the
+  # answer against the same number afterwards — a ceiling the model is told in
+  # one currency and audited in another is a ceiling nobody can trust.
+  defp ceiling_lines(nil), do: ""
+  defp ceiling_lines(%{card: nil, land: nil}), do: ""
+
+  defp ceiling_lines(ceilings) do
+    lines =
+      [
+        ceilings.card && "- No card you add may cost more than **R$ #{ceilings.card}**.",
+        ceilings.land && "- No *land* you add may cost more than **R$ #{ceilings.land}**."
+      ]
+      |> Enum.reject(&is_nil/1)
+      |> Enum.join("\n")
+
+    """
+
+    Hard price ceilings — the app checks these against Scryfall afterwards, so
+    a suggestion over the line is simply rejected:
+
+    #{lines}
+
+    If the best answer costs more than the ceiling, say so in `notes` instead
+    of suggesting it.
+    """
+  end
+
   defp budget_line(nil), do: ""
 
-  defp budget_line(budget) do
-    "\n- Keep each added card under about US$ #{budget}; say so if the best answer costs more."
+  defp budget_line(ceilings) when is_map(ceilings) do
+    case ceilings.card do
+      nil -> ""
+      max -> "\n- Keep each added card at or under R$ #{max}."
+    end
   end
 end

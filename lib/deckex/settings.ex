@@ -56,11 +56,28 @@ defmodule Deckex.Settings do
   @spec model() :: String.t()
   def model, do: get(:claude_model)
 
-  @doc "The per-card budget to mention in a briefing, or nil for no ceiling."
-  @spec budget_usd() :: pos_integer() | nil
-  def budget_usd do
-    case get(:consult_budget_usd) do
-      budget when is_integer(budget) and budget > 0 -> budget
+  @doc """
+  The price ceilings a lens must respect, in reais, or `nil` where there is
+  none.
+
+  `:upgrade` is capped too, which sounds like a contradiction — the lens is
+  called "sem olhar preço". It is not: past a certain number a suggestion
+  stops being an upgrade to this deck and becomes a different deck with a
+  bigger budget. Lands get their own, lower ceiling because an expensive land
+  is the easiest way to spend a lot and win nothing.
+  """
+  @spec ceilings(atom()) :: %{card: pos_integer() | nil, land: pos_integer() | nil}
+  def ceilings(:budget), do: %{card: positive(:budget_max_brl), land: positive(:budget_max_brl)}
+
+  def ceilings(:upgrade) do
+    %{card: positive(:upgrade_max_brl), land: positive(:upgrade_land_max_brl)}
+  end
+
+  def ceilings(_lens), do: %{card: nil, land: nil}
+
+  defp positive(key) do
+    case get(key) do
+      value when is_integer(value) and value > 0 -> value
       _no_ceiling -> nil
     end
   end

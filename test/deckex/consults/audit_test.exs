@@ -8,6 +8,7 @@ defmodule Deckex.Consults.AuditTest do
   alias Deckex.Consults.Suggestion
   alias Deckex.Decks
   alias Deckex.Decks.Deck
+  alias Deckex.Settings
 
   # A pasted list with no commander has an empty colour identity — identity
   # comes from the commander alone. These tests model a mono-G commander deck,
@@ -97,6 +98,84 @@ defmodule Deckex.Consults.AuditTest do
       # The illegal add must not move the measured findings at all.
       assert Enum.map(with_illegal.remaining, & &1.code) == Enum.map(clean.remaining, & &1.code)
       assert with_illegal.introduced == clean.introduced
+    end
+  end
+
+  describe "price ceilings" do
+    # Arid Mesa is US$ 29.97; at the default rate of 5.4 that is R$ 161.84.
+    # Rhystic Study is US$ 69.24 — R$ 373.90.
+    setup do
+      CatalogueFixture.seed!(~w(sol_ring forest arid_mesa rhystic_study))
+
+      {:ok, deck} =
+        Decks.import_from_text("1 Sol Ring\n4 Forest", %{name: "Deck Caro", source: :paste})
+
+      snapshot =
+        deck
+        |> Deck.changeset(%{color_identity: ["G", "R", "U"]})
+        |> Repo.update!()
+        |> Decks.snapshot()
+
+      %{snapshot: snapshot}
+    end
+
+    defp priced(action, name) do
+      card = Cards.get_by_name(name)
+
+      %Suggestion{
+        action: action,
+        name: name,
+        reason: "t",
+        card: card,
+        price_usd: card.price_usd,
+        resolved?: true
+      }
+    end
+
+    test "a card over the ceiling is named with both numbers", %{snapshot: snapshot} do
+      {:ok, _v} = Settings.put(:upgrade_max_brl, 100)
+
+      audit = Consults.audit(snapshot, [priced(:add, "Rhystic Study")], :upgrade)
+
+      assert [problem] = audit.problems[{:add, "Rhystic Study"}]
+      assert problem =~ "R$ 373.90 passa do teto de R$ 100"
+    end
+
+    test "a card under the ceiling passes", %{snapshot: snapshot} do
+      audit = Consults.audit(snapshot, [priced(:add, "Rhystic Study")], :upgrade)
+
+      refute Map.has_key?(audit.problems, {:add, "Rhystic Study"})
+    end
+
+    # The whole point of a separate land ceiling: R$ 161 is fine for a spell
+    # under the R$ 800 default and far too much for a land under R$ 200 — at
+    # a lower land ceiling it is refused while the spell ceiling is untouched.
+    test "a land is judged by the land ceiling, not the card one", %{snapshot: snapshot} do
+      {:ok, _v} = Settings.put(:upgrade_land_max_brl, 100)
+
+      audit = Consults.audit(snapshot, [priced(:add, "Arid Mesa")], :upgrade)
+
+      assert [problem] = audit.problems[{:add, "Arid Mesa"}]
+      assert problem =~ "teto de R$ 100"
+    end
+
+    test "lenses without a ceiling do not invent one", %{snapshot: snapshot} do
+      {:ok, _v} = Settings.put(:upgrade_max_brl, 1)
+
+      audit = Consults.audit(snapshot, [priced(:add, "Rhystic Study")], :full)
+
+      assert audit.problems == %{}
+    end
+
+    # Refusing a card because we do not know what it costs would be inventing
+    # a fact about it.
+    test "a card with no known price is not refused", %{snapshot: snapshot} do
+      {:ok, _v} = Settings.put(:upgrade_max_brl, 1)
+      unpriced = %{priced(:add, "Rhystic Study") | price_usd: nil}
+
+      audit = Consults.audit(snapshot, [unpriced], :upgrade)
+
+      assert audit.problems == %{}
     end
   end
 end

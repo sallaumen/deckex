@@ -82,15 +82,20 @@ defmodule Deckex.ConsultModelsTest do
     end
 
     test "budget states a ceiling" do
-      {:ok, _value} = Settings.put(:consult_budget_usd, 15)
+      {:ok, _value} = Settings.put(:budget_max_brl, 15)
 
       assert {:ok, consult} = Consults.request(deck(), :budget)
       assert consult.briefing =~ "15"
     end
 
-    test "upgrade says price is no object" do
+    # "Sem olhar preço" still has a ceiling — past a number a suggestion is a
+    # different deck, not an upgrade to this one.
+    test "upgrade chases power but states its ceilings" do
       assert {:ok, consult} = Consults.request(deck(), :upgrade)
-      assert consult.briefing =~ "regardless of price"
+
+      assert consult.briefing =~ "as strong as it can be"
+      assert consult.briefing =~ "R$ 800"
+      assert consult.briefing =~ "R$ 200"
     end
 
     # :finding rides the "Pedir diagnóstico" buttons and :scout the dossier

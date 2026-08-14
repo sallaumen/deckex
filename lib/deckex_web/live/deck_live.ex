@@ -138,7 +138,7 @@ defmodule DeckexWeb.DeckLive do
     assign(socket,
       consults: consults,
       suggestions: suggestions,
-      audits: audits(socket.assigns.snapshot, suggestions),
+      audits: audits(socket.assigns.snapshot, consults, suggestions),
       scout_running?: running?(consults, :scout),
       consult_running?: running?(consults, :any)
     )
@@ -153,10 +153,15 @@ defmodule DeckexWeb.DeckLive do
   # One audit per answered consult, recomputed against the deck as it is NOW —
   # that is the point: after you apply a cut, an old consult's audit honestly
   # reports that card as no longer in the list.
-  defp audits(snapshot, suggestions) do
+  # Audited against the lens that was asked, because the price ceiling is part
+  # of the question: R$ 400 is a refusal under "gastando pouco" and fine under
+  # "sem olhar preço".
+  defp audits(snapshot, consults, suggestions) do
+    lenses = Map.new(consults, &{&1.id, &1.lens})
+
     suggestions
     |> Enum.reject(fn {_id, rows} -> rows == [] end)
-    |> Map.new(fn {id, rows} -> {id, Consults.audit(snapshot, rows)} end)
+    |> Map.new(fn {id, rows} -> {id, Consults.audit(snapshot, rows, lenses[id])} end)
   end
 
   defp problems_for(nil, _action, _name), do: []
@@ -178,6 +183,8 @@ defmodule DeckexWeb.DeckLive do
   def render(assigns) do
     ~H"""
     <div class="mx-auto max-w-[1800px] px-6 py-10 lg:px-10 lg:py-14">
+      <.live_component module={DeckexWeb.SettingsPanel} id="settings-panel" />
+
       <.link
         navigate={~p"/"}
         class="-my-2 inline-flex min-h-11 items-center py-2 text-caption text-ink-faint transition-colors hover:text-ink"

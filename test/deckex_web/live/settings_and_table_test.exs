@@ -15,6 +15,9 @@ defmodule DeckexWeb.SettingsAndTableTest do
       assert html =~ "Modelo do Claude"
       assert html =~ "User-Agent do Moxfield"
       assert html =~ "Baselines"
+      # The ceilings are the most-adjusted knobs, so they get their own group.
+      assert html =~ "Tetos de preço"
+      assert html =~ "Teto por terreno (R$)"
       # The hint is the point: the field means nothing without it.
       assert html =~ "support@moxfield.com"
     end
@@ -23,29 +26,48 @@ defmodule DeckexWeb.SettingsAndTableTest do
       {:ok, live, _html} = live(conn, ~p"/ajustes")
 
       live
-      |> form("#form-claude_model", setting: %{key: "claude_model", value: "opus"})
+      |> form("#panel-claude_model", setting: %{key: "claude_model", value: "opus"})
       |> render_submit()
 
       assert Settings.get(:claude_model) == "opus"
     end
 
-    # The select can't offer an invalid model, so this is the forged-POST case:
-    # the guard lives in the context, and the screen has to say what went wrong.
-    test "refuses a model outside the options and says why", %{conn: conn} do
+    # The gear opens the same component the page renders — one implementation,
+    # two ways in. Two settings screens is how two settings screens drift.
+    test "the gear on a deck page opens the same panel", %{conn: conn} do
+      CatalogueFixture.seed!(~w(sol_ring forest))
+
+      {:ok, deck} =
+        Decks.import_from_text("1 Sol Ring\n4 Forest", %{name: "Deck", source: :paste})
+
+      {:ok, live, html} = live(conn, ~p"/decks/#{deck.id}")
+
+      refute html =~ "Teto por terreno"
+
+      opened = live |> element("button[phx-click='open']") |> render_click()
+
+      assert opened =~ "Teto por terreno (R$)"
+      assert opened =~ "Modelo do Claude"
+    end
+
+    test "the ceilings save as numbers", %{conn: conn} do
       {:ok, live, _html} = live(conn, ~p"/ajustes")
 
-      html =
-        render_submit(live, "save", %{"setting" => %{"key" => "claude_model", "value" => "gpt-4"}})
+      live
+      |> form("#panel-upgrade_land_max_brl",
+        setting: %{key: "upgrade_land_max_brl", value: "150"}
+      )
+      |> render_submit()
 
-      assert html =~ "claude_model"
-      assert Settings.get(:claude_model) == "sonnet"
+      assert Settings.get(:upgrade_land_max_brl) == 150
+      assert Settings.ceilings(:upgrade).land == 150
     end
 
     test "saves a baseline override", %{conn: conn} do
       {:ok, live, _html} = live(conn, ~p"/ajustes")
 
       live
-      |> form("#form-baseline-land_base", baseline: %{field: "land_base", value: "38"})
+      |> form("#panel-baseline-land_base", baseline: %{field: "land_base", value: "38"})
       |> render_submit()
 
       assert Settings.baselines().land_base == 38

@@ -16,7 +16,7 @@ defmodule Deckex.Settings.Registry do
           label: String.t(),
           hint: String.t() | nil,
           options: [term()] | nil,
-          group: :ai | :moxfield | :analysis
+          group: :ai | :budget | :moxfield | :analysis
         }
 
   @entries [
@@ -29,14 +29,34 @@ defmodule Deckex.Settings.Registry do
       options: ["fable", "sonnet", "opus", "haiku"],
       group: :ai
     },
+    # Every ceiling is in reais, because that is the currency the owner thinks
+    # in. Scryfall quotes USD; `Deckex.Money` converts once, at the edge.
     %{
-      key: :consult_budget_usd,
+      key: :budget_max_brl,
       type: :integer,
       default: 0,
-      label: "Teto por carta (US$)",
-      hint: "Zero significa sem teto. Vai no prompt como orientação, não como regra dura.",
+      label: "Teto por carta — gastando pouco (R$)",
+      hint: "Vale na análise \"Melhorar gastando pouco\". Zero significa sem teto.",
       options: nil,
-      group: :ai
+      group: :budget
+    },
+    %{
+      key: :upgrade_max_brl,
+      type: :integer,
+      default: 800,
+      label: "Teto por carta — sem olhar preço (R$)",
+      hint: "\"Sem olhar preço\" ainda tem limite: acima disso não é upgrade, é outro deck.",
+      options: nil,
+      group: :budget
+    },
+    %{
+      key: :upgrade_land_max_brl,
+      type: :integer,
+      default: 200,
+      label: "Teto por terreno (R$)",
+      hint: "Terreno caro é o jeito mais fácil de estourar o orçamento sem ganhar jogo.",
+      options: nil,
+      group: :budget
     },
     %{
       key: :usd_to_brl,

@@ -70,6 +70,8 @@ defmodule DeckexWeb.ImportLive do
   def render(assigns) do
     ~H"""
     <div class="mx-auto max-w-[1400px] px-6 py-10 lg:px-10 lg:py-14">
+      <.live_component module={DeckexWeb.SettingsPanel} id="settings-panel" />
+
       <.link
         navigate={~p"/"}
         class="-my-2 inline-flex min-h-11 items-center py-2 text-caption text-ink-faint transition-colors hover:text-ink"

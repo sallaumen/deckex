@@ -23,6 +23,7 @@ defmodule Deckex.Consults.Audit do
   alias Deckex.Cards.Card
   alias Deckex.Cards.Name
   alias Deckex.Consults.Suggestion
+  alias Deckex.Money
 
   @type problem_key :: {:cut | :add, String.t()}
   @type t :: %__MODULE__{
@@ -39,13 +40,25 @@ defmodule Deckex.Consults.Audit do
   the classifier stored — the added entries need them, or the simulated report
   would count every add as a blank card.
   """
-  @spec run(DeckSnapshot.t(), [Suggestion.t()], %{String.t() => list()}, Baselines.t()) :: t()
-  def run(%DeckSnapshot{} = snapshot, suggestions, roles, %Baselines{} = baselines) do
+  @spec run(
+          DeckSnapshot.t(),
+          [Suggestion.t()],
+          %{String.t() => list()},
+          Baselines.t(),
+          %{card: pos_integer() | nil, land: pos_integer() | nil}
+        ) :: t()
+  def run(
+        %DeckSnapshot{} = snapshot,
+        suggestions,
+        roles,
+        %Baselines{} = baselines,
+        ceilings \\ %{card: nil, land: nil}
+      ) do
     in_main = MapSet.new(snapshot.main, &Name.normalize(&1.card.name))
 
     problems =
       suggestions
-      |> Enum.map(&{key(&1), problems(&1, snapshot, in_main)})
+      |> Enum.map(&{key(&1), problems(&1, snapshot, in_main, ceilings)})
       |> Enum.reject(fn {_key, list} -> list == [] end)
       |> Map.new()
 
@@ -70,9 +83,9 @@ defmodule Deckex.Consults.Audit do
 
   # An unresolved suggestion has no card data to check; the table already
   # marks it and the simulation cannot use it.
-  defp problems(%Suggestion{resolved?: false}, _snapshot, _in_main), do: []
+  defp problems(%Suggestion{resolved?: false}, _snapshot, _in_main, _ceilings), do: []
 
-  defp problems(%Suggestion{action: :cut} = suggestion, _snapshot, in_main) do
+  defp problems(%Suggestion{action: :cut} = suggestion, _snapshot, in_main, _ceilings) do
     if MapSet.member?(in_main, Name.normalize(suggestion.name)) do
       []
     else
@@ -80,15 +93,32 @@ defmodule Deckex.Consults.Audit do
     end
   end
 
-  defp problems(%Suggestion{action: :add, card: card} = suggestion, snapshot, in_main) do
+  defp problems(%Suggestion{action: :add, card: card} = suggestion, snapshot, in_main, ceilings) do
     Enum.reject(
       [
         identity_problem(card, snapshot.color_identity),
         singleton_problem(card, suggestion, in_main),
-        legality_problem(card)
+        legality_problem(card),
+        ceiling_problem(card, suggestion.price_usd, ceilings)
       ],
       &is_nil/1
     )
+  end
+
+  # The ceiling the owner set, checked against the price Scryfall reports —
+  # not against the price the model believes. A land gets the lower ceiling
+  # because an expensive land is the easiest way to spend a lot and win
+  # nothing. An unpriced card passes: refusing a card because we do not know
+  # what it costs would be inventing a fact.
+  defp ceiling_problem(_card, nil, _ceilings), do: nil
+
+  defp ceiling_problem(card, price_usd, ceilings) do
+    ceiling = if Card.land?(card), do: ceilings[:land], else: ceilings[:card]
+    brl = Money.to_brl(price_usd)
+
+    if ceiling && brl && Decimal.gt?(brl, Decimal.new(ceiling)) do
+      "R$ #{Decimal.round(brl, 2)} passa do teto de R$ #{ceiling}"
+    end
   end
 
   defp identity_problem(card, deck_identity) do
