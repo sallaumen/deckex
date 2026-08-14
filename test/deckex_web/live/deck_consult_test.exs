@@ -84,4 +84,64 @@ defmodule DeckexWeb.DeckConsultTest do
 
     assert html =~ "Ver o prompt"
   end
+
+  test "a consult's leitura renders above the diagnosis", %{conn: conn, deck: deck} do
+    {:ok, consult} = Consults.request(deck, :full)
+
+    stub(Deckex.Scryfall.Mock, :fetch_by_names, fn names ->
+      {:ok, %{found: [], not_found: names}}
+    end)
+
+    expect(Deckex.AI.Mock, :complete, fn _prompt, _schema, _opts ->
+      {:ok,
+       %{
+         "leitura" => "Leio um deck de spellslinger com fecho fraco.",
+         "diagnosis" => "Falta fecho.",
+         "cuts" => [],
+         "adds" => []
+       }}
+    end)
+
+    {:ok, _done} = Consults.run(consult)
+
+    {:ok, _live, html} = live(conn, ~p"/decks/#{deck.id}")
+
+    assert html =~ "Leio um deck de spellslinger com fecho fraco."
+  end
+
+  test "an old answer without leitura still renders", %{conn: conn, deck: deck} do
+    {:ok, consult} = Consults.request(deck, :full)
+
+    {:ok, _old} =
+      consult
+      |> Ecto.Changeset.change(%{
+        status: :done,
+        response: %{"diagnosis" => "Sem leitura, era outra época.", "cuts" => [], "adds" => []}
+      })
+      |> Deckex.Repo.update()
+
+    {:ok, _live, html} = live(conn, ~p"/decks/#{deck.id}")
+
+    assert html =~ "Sem leitura, era outra época."
+  end
+
+  test "a finished scout renders as a consult without crashing", %{conn: conn, deck: deck} do
+    {:ok, consult} = Consults.request(deck, :scout)
+
+    expect(Deckex.AI.Mock, :complete, fn _prompt, _schema, _opts ->
+      {:ok,
+       %{
+         "plano" => "Ramp e cartas.",
+         "sinergias" => "Sol Ring com tudo.",
+         "linhas_de_vitoria" => "Valor.",
+         "fraquezas" => "Nenhuma visível."
+       }}
+    end)
+
+    {:ok, _done} = Consults.run(consult)
+
+    {:ok, _live, html} = live(conn, ~p"/decks/#{deck.id}")
+
+    assert html =~ "scout"
+  end
 end

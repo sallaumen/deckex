@@ -43,6 +43,7 @@ defmodule DeckexWeb.DesignTokensTest do
     text-center text-left text-right text-justify text-nowrap
     font-semibold font-bold font-medium font-normal font-mono font-sans
     border-0 border-2 border-t border-b border-l border-r border-x border-y
+    border-l-2
     border-collapse border-separate divide-y divide-x
     rounded-full rounded-none rounded-t-xs
   )

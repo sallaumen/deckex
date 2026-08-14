@@ -486,7 +486,16 @@ defmodule DeckexWeb.DeckLive do
                 <p :if={consult.error} class="text-caption text-ink-secondary">{consult.error}</p>
 
                 <div :if={consult.response} class="space-y-3">
-                  <p class="text-caption text-ink">{consult.response["diagnosis"]}</p>
+                  <p
+                    :if={consult.response["leitura"]}
+                    class="border-l-2 border-hairline-strong pl-3 text-caption italic text-ink-muted"
+                  >
+                    {consult.response["leitura"]}
+                  </p>
+
+                  <p :if={consult.response["diagnosis"]} class="text-caption text-ink">
+                    {consult.response["diagnosis"]}
+                  </p>
 
                   <div :if={@suggestions[consult.id] not in [nil, []]} class="overflow-x-auto">
                     <table class="w-full text-caption">
