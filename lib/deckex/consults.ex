@@ -8,6 +8,8 @@ defmodule Deckex.Consults do
   a consult that cannot be trusted or reproduced.
   """
 
+  require Logger
+
   alias Deckex.AI
   alias Deckex.Analysis
   alias Deckex.Analysis.DeckSnapshot
@@ -222,12 +224,28 @@ defmodule Deckex.Consults do
   # card missing from the catalogue would render without a price forever.
   # A Scryfall outage is not a reason to lose an answer that already cost money.
   defp catalogue(%Consult{} = consult) do
-    case consult |> Suggestions.names() |> Cards.resolve_names() do
-      {:ok, %{cards: cards}} -> Enum.each(cards, &Cards.classify_card/1)
-      {:error, %Error{}} -> :ok
-    end
+    refresh_catalogue(consult)
 
     consult
+  end
+
+  @doc """
+  Fetches every card the consult's answer names into the catalogue, and
+  classifies the new arrivals. Best-effort: a Scryfall failure is logged and
+  tolerated — the pipeline's judge retries it before any verdict, so a
+  transient failure here must not fail the consult.
+  """
+  @spec refresh_catalogue(Consult.t()) :: :ok
+  def refresh_catalogue(%Consult{} = consult) do
+    case consult |> Suggestions.names() |> Cards.resolve_names() do
+      {:ok, %{cards: cards}} ->
+        Enum.each(cards, &Cards.classify_card/1)
+
+      {:error, %Error{} = error} ->
+        Logger.warning("catalogue refresh failed for consult #{consult.id}: #{error.message}")
+    end
+
+    :ok
   end
 
   defp fail(consult, %Error{} = error) do

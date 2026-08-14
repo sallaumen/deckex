@@ -206,7 +206,8 @@ defmodule Deckex.Optimizations do
         optimization: %{
           contract: optimization.contract,
           changelog: changelog(optimization, step),
-          stage_kind: step.kind
+          stage_kind: step.kind,
+          card_count: card_count(step.list_before)
         }
       )
 
@@ -269,6 +270,13 @@ defmodule Deckex.Optimizations do
   # ── the judgment ──────────────────────────────────────────────────────────
 
   defp judge(consult, step, optimization, deck) do
+    # The audit reads only the local catalogue, and the fetch at answer time
+    # is best-effort: the first real run had a transient Scryfall failure
+    # there and rejected a perfectly real card as "não resolvida". This is a
+    # worker, not a page render — resolution gets one more honest attempt
+    # before the verdict.
+    Consults.refresh_catalogue(consult)
+
     snapshot = snapshot_for(step.list_before, optimization.commanders, deck)
     suggestions = Suggestions.for_consult(consult)
 
@@ -592,6 +600,12 @@ defmodule Deckex.Optimizations do
       nil -> {:error, Deckex.Error.new(:optimization_not_found, "Não achei essa otimização.")}
       optimization -> {:ok, optimization}
     end
+  end
+
+  @doc "How many cards a sandbox list holds — quantities summed, not rows."
+  @spec card_count([map()]) :: non_neg_integer()
+  def card_count(list) when is_list(list) do
+    list |> Enum.map(&(&1["quantity"] || 0)) |> Enum.sum()
   end
 
   defdelegate list_for_deck(deck_id), to: OptimizationQuery

@@ -53,6 +53,7 @@ defmodule DeckexWeb.OptimizationLive do
     assign(socket,
       optimization: optimization,
       deck: deck,
+      card_count: Optimizations.card_count(Optimizations.current_list(optimization)),
       now: DateTime.utc_now(),
       report_original: Analysis.report(original, baselines),
       report_current: Analysis.report(current, baselines),
@@ -316,7 +317,7 @@ defmodule DeckexWeb.OptimizationLive do
           </div>
         </div>
 
-        <div class="mt-6 grid grid-cols-2 gap-4 rounded-xl border border-hairline-soft bg-surface p-5 sm:grid-cols-4">
+        <div class="mt-6 grid grid-cols-2 gap-4 rounded-xl border border-hairline-soft bg-surface p-5 sm:grid-cols-5">
           <div>
             <p class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">Críticos</p>
             <p class="font-mono text-numeral-sm text-ink">
@@ -338,6 +339,16 @@ defmodule DeckexWeb.OptimizationLive do
           <div>
             <p class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">Mudanças</p>
             <p class="font-mono text-numeral-sm text-ink">{changed_count(@optimization)}</p>
+          </div>
+          <div>
+            <p class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">Cartas</p>
+            <p class={[
+              "font-mono text-numeral-sm",
+              @card_count == 100 && "text-ink",
+              @card_count != 100 && "text-sev-warning"
+            ]}>
+              {@card_count}<span class="text-caption text-ink-faint">/100</span>
+            </p>
           </div>
         </div>
       </header>
@@ -507,6 +518,11 @@ defmodule DeckexWeb.OptimizationLive do
         </h2>
 
         <div class="rounded-xl border border-hairline-soft bg-surface p-6">
+          <p :if={@card_count != 100} class="mb-4 text-caption text-sev-warning">
+            A lista final tem {@card_count} cartas — um deck de Commander precisa de 100.
+            Complete a diferença antes de levar este deck para a mesa.
+          </p>
+
           <p :if={consolidated_diff(@optimization) == []} class="text-body text-ink-secondary">
             Nada — o deck já estava onde o pipeline queria levar.
           </p>

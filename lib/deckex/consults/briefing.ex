@@ -275,7 +275,9 @@ defmodule Deckex.Consults.Briefing do
   # welcome once, with engagement; the flip-flop guard makes twice impossible.
   defp optimization_block(nil), do: ""
 
-  defp optimization_block(%{contract: contract, changelog: changelog, stage_kind: stage_kind}) do
+  defp optimization_block(
+         %{contract: contract, changelog: changelog, stage_kind: stage_kind} = optimization
+       ) do
     """
     ## Otimização em andamento
 
@@ -284,13 +286,29 @@ defmodule Deckex.Consults.Briefing do
 
     - Maximum bracket: **#{contract["bracket_max"]}** — an add that moves the deck past it will be rejected by the engine.
     - Price ceilings: R$ #{contract["ceilings"]["card"]} per card, R$ #{contract["ceilings"]["land"]} per land.
-    #{keep_line(contract["keep"])}#{notes_line(contract["notes"])}
+    #{keep_line(contract["keep"])}#{notes_line(contract["notes"])}#{count_line(optimization[:card_count])}
     #{changelog_lines(changelog)}
     You may revert an earlier stage's change, but engage its stated reason.
     Each card may enter and leave this optimization once — the engine enforces
     it, so do not propose re-flipping a card listed above as already reverted.
     #{stage_kind_line(stage_kind)}
     """
+  end
+
+  # Models do not count 90-line lists reliably, and earlier stages may have
+  # legitimately gone net negative — so the engine states the number and the
+  # direction, every stage, until the copy closes at exactly 100.
+  defp count_line(nil), do: ""
+
+  defp count_line(count) do
+    direction =
+      case count do
+        100 -> "Keep adds and cuts balanced to stay there."
+        n when n < 100 -> "It is #{100 - n} short — propose more adds than cuts to close the gap."
+        n -> "It is #{n - 100} over — propose more cuts than adds to close the gap."
+      end
+
+    "- The copy has **#{count} cards**; the finished deck must have exactly 100. #{direction}\n"
   end
 
   defp keep_line([]), do: ""

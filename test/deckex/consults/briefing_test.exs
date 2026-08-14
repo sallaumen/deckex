@@ -152,8 +152,22 @@ defmodule Deckex.Consults.BriefingTest do
           ]
         }
       ],
-      stage_kind: :checkpoint
+      stage_kind: :checkpoint,
+      card_count: 98
     }
+
+    test "the copy's card count lands with its direction" do
+      briefing = build(:full, optimization: @optimization)
+
+      assert briefing =~ "The copy has **98 cards**"
+      assert briefing =~ "It is 2 short"
+
+      balanced = build(:full, optimization: %{@optimization | card_count: 100})
+      assert balanced =~ "Keep adds and cuts balanced"
+
+      over = build(:full, optimization: %{@optimization | card_count: 101})
+      assert over =~ "It is 1 over"
+    end
 
     test "the contract, the changelog and the flip rule all land" do
       briefing = build(:full, optimization: @optimization)
