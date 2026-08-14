@@ -17,7 +17,8 @@ defmodule Deckex.Cards.Card do
   @fields ~w(oracle_id scryfall_id name name_normalized mana_cost cmc type_line
              oracle_text colors color_identity produced_mana keywords edhrec_rank
              rarity layout card_faces image_normal_url image_art_crop_url
-             commander_legal price_usd prices_updated_at scryfall_uri fetched_at)a
+             commander_legal game_changer price_usd prices_updated_at scryfall_uri
+             fetched_at)a
 
   @required ~w(oracle_id scryfall_id name name_normalized cmc type_line layout
                fetched_at)a
@@ -44,6 +45,11 @@ defmodule Deckex.Cards.Card do
     field :image_normal_url, :string
     field :image_art_crop_url, :string
     field :commander_legal, :boolean, default: false
+
+    # The Commander Format Panel's Game Changers list, as Scryfall reports it.
+    # Never a list we keep: it is revised a few times a year, and every card
+    # object already carries the flag.
+    field :game_changer, :boolean, default: false
     field :price_usd, :decimal
     field :prices_updated_at, :utc_datetime
     field :scryfall_uri, :string

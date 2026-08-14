@@ -6,6 +6,7 @@ defmodule Deckex.Analysis.Report do
   freezes a copy for reproducibility, which is a different thing.
   """
 
+  alias Deckex.Analysis.Bracket
   alias Deckex.Analysis.Finding
 
   @type t :: %__MODULE__{
@@ -16,6 +17,7 @@ defmodule Deckex.Analysis.Report do
           mana: map(),
           interaction: map(),
           consistency: map(),
+          bracket: Bracket.t(),
           findings: [Finding.t()]
         }
 
@@ -28,6 +30,7 @@ defmodule Deckex.Analysis.Report do
     :mana,
     :interaction,
     :consistency,
+    :bracket,
     :findings
   ]
   defstruct [
@@ -38,6 +41,7 @@ defmodule Deckex.Analysis.Report do
     :mana,
     :interaction,
     :consistency,
+    :bracket,
     :findings
   ]
 

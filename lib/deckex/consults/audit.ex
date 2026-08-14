@@ -15,6 +15,7 @@ defmodule Deckex.Consults.Audit do
 
   alias Deckex.Analysis
   alias Deckex.Analysis.Baselines
+  alias Deckex.Analysis.Bracket
   alias Deckex.Analysis.CardEntry
   alias Deckex.Analysis.DeckSnapshot
   alias Deckex.Analysis.Finding
@@ -99,7 +100,8 @@ defmodule Deckex.Consults.Audit do
         identity_problem(card, snapshot.color_identity),
         singleton_problem(card, suggestion, in_main),
         legality_problem(card),
-        ceiling_problem(card, suggestion.price_usd, ceilings)
+        ceiling_problem(card, suggestion.price_usd, ceilings),
+        bracket_problem(card, snapshot)
       ],
       &is_nil/1
     )
@@ -146,6 +148,23 @@ defmodule Deckex.Consults.Audit do
 
   defp legality_problem(%Card{commander_legal: false}), do: "não é legal em Commander"
   defp legality_problem(_card), do: nil
+
+  # A Game Changer is legal everywhere — what it changes is which table the
+  # deck belongs at. A deck sitting on three of them is one suggestion away
+  # from leaving bracket 3, and nothing else in the app would have said so:
+  # every model consulted about the reference deck suggested Cyclonic Rift,
+  # which is exactly that fourth card.
+  defp bracket_problem(%Card{game_changer: true}, snapshot) do
+    bracket = Bracket.floor(snapshot)
+
+    case Bracket.game_changer_headroom(bracket) do
+      nil -> "é Game Changer (o deck já está no piso do Bracket 4)"
+      0 -> "é Game Changer — seria o 4º e tira o deck do Bracket 3"
+      room -> "é Game Changer — sobra espaço para #{room} no Bracket 3"
+    end
+  end
+
+  defp bracket_problem(_card, _snapshot), do: nil
 
   defp change(%Suggestion{action: :cut, name: name}, _roles), do: {:cut, Name.normalize(name)}
 

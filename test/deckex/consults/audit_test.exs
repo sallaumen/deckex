@@ -132,19 +132,25 @@ defmodule Deckex.Consults.AuditTest do
       }
     end
 
+    # Rhystic Study is also a Game Changer, so it collects a bracket note too;
+    # these assertions look for the ceiling verdict among the problems rather
+    # than assuming it is the only one.
+    defp ceiling_verdict(audit, name) do
+      audit.problems |> Map.get({:add, name}, []) |> Enum.find(&(&1 =~ "teto"))
+    end
+
     test "a card over the ceiling is named with both numbers", %{snapshot: snapshot} do
       {:ok, _v} = Settings.put(:upgrade_max_brl, 100)
 
       audit = Consults.audit(snapshot, [priced(:add, "Rhystic Study")], :upgrade)
 
-      assert [problem] = audit.problems[{:add, "Rhystic Study"}]
-      assert problem =~ "R$ 373.90 passa do teto de R$ 100"
+      assert ceiling_verdict(audit, "Rhystic Study") =~ "R$ 373.90 passa do teto de R$ 100"
     end
 
     test "a card under the ceiling passes", %{snapshot: snapshot} do
       audit = Consults.audit(snapshot, [priced(:add, "Rhystic Study")], :upgrade)
 
-      refute Map.has_key?(audit.problems, {:add, "Rhystic Study"})
+      refute ceiling_verdict(audit, "Rhystic Study")
     end
 
     # The whole point of a separate land ceiling: R$ 161 is fine for a spell
@@ -164,7 +170,7 @@ defmodule Deckex.Consults.AuditTest do
 
       audit = Consults.audit(snapshot, [priced(:add, "Rhystic Study")], :full)
 
-      assert audit.problems == %{}
+      refute ceiling_verdict(audit, "Rhystic Study")
     end
 
     # Refusing a card because we do not know what it costs would be inventing
@@ -175,7 +181,7 @@ defmodule Deckex.Consults.AuditTest do
 
       audit = Consults.audit(snapshot, [unpriced], :upgrade)
 
-      assert audit.problems == %{}
+      refute ceiling_verdict(audit, "Rhystic Study")
     end
   end
 end

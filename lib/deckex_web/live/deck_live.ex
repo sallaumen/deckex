@@ -11,6 +11,7 @@ defmodule DeckexWeb.DeckLive do
   use DeckexWeb, :live_view
 
   alias Deckex.Analysis
+  alias Deckex.Analysis.Bracket
   alias Deckex.Consults
   alias Deckex.Consults.Suggestions
   alias Deckex.Decks
@@ -200,7 +201,24 @@ defmodule DeckexWeb.DeckLive do
             <.mana_cost cost={commander.card.mana_cost} size={14} />
           </p>
         </div>
-        <.color_identity colors={@deck.color_identity} full size={20} />
+        <div class="flex items-center gap-4">
+          <div class="text-right">
+            <p class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+              Bracket (piso)
+            </p>
+            <p class="text-numeral font-semibold leading-none text-ink">
+              {@report.bracket.floor}
+              <span class="text-body font-normal text-ink-secondary">
+                {Bracket.name(@report.bracket.floor)}
+              </span>
+            </p>
+            <p class="text-micro text-ink-muted">
+              {Bracket.turn_expectation(@report.bracket.floor)}
+            </p>
+          </div>
+
+          <.color_identity colors={@deck.color_identity} full size={20} />
+        </div>
       </header>
 
       <div class="grid gap-10 xl:grid-cols-[minmax(340px,26rem)_1fr] xl:items-start">
@@ -452,6 +470,62 @@ defmodule DeckexWeb.DeckLive do
               </section>
             </div>
           </div>
+          <section>
+            <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+              Commander Brackets
+            </h2>
+
+            <div class="rounded-xl border border-hairline-soft bg-surface p-6">
+              <p class="text-body text-ink-secondary">
+                Pelo que dá para provar da lista, este deck é no mínimo <strong class="text-ink">
+                  Bracket {@report.bracket.floor} — {Bracket.name(@report.bracket.floor)}
+                </strong>. O bracket espera {Bracket.turn_expectation(
+                  @report.bracket.floor
+                )}.
+              </p>
+
+              <ul class="mt-3 space-y-1">
+                <li :for={reason <- @report.bracket.reasons} class="text-caption text-ink-muted">
+                  {reason}
+                </li>
+              </ul>
+
+              <div :if={@report.bracket.game_changers != []} class="mt-4">
+                <h3 class="mb-2 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+                  Game Changers no deck ({length(@report.bracket.game_changers)}/3)
+                </h3>
+                <div class="flex flex-wrap gap-1.5">
+                  <span
+                    :for={entry <- @report.bracket.game_changers}
+                    class="rounded-md bg-inlay px-2 py-1 text-caption text-ink"
+                  >
+                    {entry.card.name}
+                  </span>
+                </div>
+                <p
+                  :if={Bracket.game_changer_headroom(@report.bracket) == 0}
+                  class="mt-2 text-caption text-sev-warning"
+                >
+                  Você está no teto: mais um Game Changer tira o deck do Bracket 3.
+                </p>
+              </div>
+
+              <div class="mt-4 border-t border-hairline-soft pt-4">
+                <h3 class="mb-2 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+                  O motor não consegue responder
+                </h3>
+                <ul class="space-y-1">
+                  <li
+                    :for={question <- @report.bracket.open_questions}
+                    class="text-caption text-ink-muted"
+                  >
+                    {question}
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </section>
+
           <section>
             <div class="mb-3 flex items-center gap-3">
               <h2 class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">

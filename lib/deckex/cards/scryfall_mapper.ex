@@ -42,6 +42,7 @@ defmodule Deckex.Cards.ScryfallMapper do
       image_normal_url: images["normal"],
       image_art_crop_url: images["art_crop"],
       commander_legal: get_in(card, ["legalities", "commander"]) == "legal",
+      game_changer: card["game_changer"] == true,
       price_usd: to_decimal(get_in(card, ["prices", "usd"])),
       prices_updated_at: now,
       scryfall_uri: card["scryfall_uri"],

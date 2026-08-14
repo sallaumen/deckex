@@ -9,6 +9,7 @@ defmodule Deckex.Analysis do
   """
 
   alias Deckex.Analysis.Baselines
+  alias Deckex.Analysis.Bracket
   alias Deckex.Analysis.Consistency
   alias Deckex.Analysis.Curve
   alias Deckex.Analysis.DeckSnapshot
@@ -28,6 +29,7 @@ defmodule Deckex.Analysis do
       mana: Mana.measure(snapshot, baselines),
       interaction: Interaction.measure(snapshot),
       consistency: Consistency.measure(snapshot),
+      bracket: Bracket.floor(snapshot),
       findings: findings(snapshot, baselines)
     }
   end

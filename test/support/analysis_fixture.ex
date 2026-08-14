@@ -24,7 +24,8 @@ defmodule Deckex.AnalysisFixture do
       type_line: Keyword.get(attrs, :type_line, "Artifact"),
       oracle_text: Keyword.get(attrs, :oracle_text, ""),
       color_identity: Keyword.get(attrs, :color_identity, []),
-      produced_mana: Keyword.get(attrs, :produced_mana, [])
+      produced_mana: Keyword.get(attrs, :produced_mana, []),
+      game_changer: Keyword.get(attrs, :game_changer, false)
     }
 
     CardEntry.new(card, Keyword.get(attrs, :quantity, 1), Keyword.get(attrs, :roles, []))
