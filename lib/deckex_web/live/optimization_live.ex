@@ -411,6 +411,13 @@ defmodule DeckexWeb.OptimizationLive do
             {step.consult.response["leitura"]}
           </p>
 
+          <p
+            :if={step.status == :done and step.applied == [] and step.rejected == []}
+            class="mt-3 text-caption text-ink-muted"
+          >
+            Nenhuma mudança — o modelo olhou e não propôs nada.
+          </p>
+
           <div :if={step.applied != []} class="mt-3">
             <h3 class="mb-1 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
               Aplicadas

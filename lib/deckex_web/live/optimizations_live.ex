@@ -12,16 +12,21 @@ defmodule DeckexWeb.OptimizationsLive do
   alias Deckex.Consults
   alias Deckex.Decks
   alias Deckex.Error
+  alias Deckex.Events
   alias Deckex.Optimizations
 
   @impl Phoenix.LiveView
   def mount(%{"id" => deck_id}, _session, socket) do
     case Decks.fetch_deck(deck_id) do
       {:ok, deck} ->
+        runs = Optimizations.list_for_deck(deck.id)
+
+        if connected?(socket), do: subscribe_to_live_runs(runs)
+
         {:ok,
          assign(socket,
            deck: deck,
-           runs: Optimizations.list_for_deck(deck.id),
+           runs: runs,
            contract: Optimizations.default_contract(deck),
            recipe: Optimizations.recipe(deck),
            launching: false,
@@ -31,6 +36,11 @@ defmodule DeckexWeb.OptimizationsLive do
       {:error, %Error{} = error} ->
         {:ok, socket |> put_flash(:error, error.message) |> push_navigate(to: ~p"/")}
     end
+  end
+
+  @impl Phoenix.LiveView
+  def handle_info({:optimization_updated, _id}, socket) do
+    {:noreply, assign(socket, runs: Optimizations.list_for_deck(socket.assigns.deck.id))}
   end
 
   @impl Phoenix.LiveView
@@ -82,6 +92,14 @@ defmodule DeckexWeb.OptimizationsLive do
   defp status_label(:done), do: "concluída"
   defp status_label(:failed), do: "falhou"
   defp status_label(:cancelled), do: "cancelada"
+
+  # Mount-only, the duplicate-subscription law. Runs born after this mount
+  # are the owner's own launches — those navigate away anyway.
+  defp subscribe_to_live_runs(runs) do
+    runs
+    |> Enum.filter(&(&1.status in [:running, :paused]))
+    |> Enum.each(&Events.subscribe_optimization(&1.id))
+  end
 
   defp done_count(run), do: Enum.count(run.steps, &(&1.status in [:done, :skipped]))
 
