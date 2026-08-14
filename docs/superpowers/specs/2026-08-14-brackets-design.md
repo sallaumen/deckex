@@ -143,3 +143,34 @@ guessing.
 What the model got right is worth recording too: it correctly knew Mana
 Crypt, Jeweled Lotus and Dockside Extortionist are banned in Commander as of
 2024, and reasoned about the deck without inventing prices.
+
+---
+
+## 7. The bracket lens, validated — 2026-08-14
+
+Ran `:bracket` on the reference deck (opus, 290s). The answer was **Bracket 3**,
+which matches the measured floor, with reasoning worth keeping:
+
+- *Not bracket 2*: "o piso já é 3 por aritmética […] e matar no turno 6–7 está
+  muito acima do ritmo de turno 9+ que o 2 espera."
+- *Not bracket 4*: it walked the bracket-3 self-restrictions one at a time —
+  exactly three Game Changers, no mass land denial, no extra turns, no pair
+  that wins before turn 6.
+- *combo*: correctly refused to call Stormsplitter + Bria a two-card combo.
+  "Com as duas em jogo e zero mana sobrando você não mata ninguém" — it needs
+  a third thing, so it is not a two-card win.
+- *para_descer*: no single change lowers this deck, and it explained why —
+  three Game Changers would all have to go, and the speed comes from
+  structure rather than from them.
+
+**And it named the wrong card.** It listed the three Game Changers as Rhystic
+Study, **Mystic Remora** and Fierce Guardianship. Mystic Remora is in the deck
+but is **not** on the Panel's list; the third Game Changer is Mystical Tutor.
+Scryfall confirms: `Mystic Remora game_changer: false`, `Mystical Tutor
+game_changer: true`.
+
+The conclusion was right and one of its three supporting facts was wrong.
+That is the entire argument for this design in one answer: **the engine
+counts, the model reasons**, and the screen shows the engine's list rather
+than the model's prose. A tool that had asked the model to do the counting
+would have printed a confident, wrong roster of restricted cards.
