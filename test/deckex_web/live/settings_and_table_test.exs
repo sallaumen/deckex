@@ -127,6 +127,21 @@ defmodule DeckexWeb.SettingsAndTableTest do
       refute "Sol Ring" in Enum.map(Decks.list_deck_cards(deck), & &1.card.name)
     end
 
+    # This deck has no commander, so its colour identity is empty — adding the
+    # blue Counterspell is illegal, and the engine must say so on the row.
+    test "the engine's verdict renders on an illegal suggestion", %{conn: conn, deck: deck} do
+      {:ok, _live, html} = live(conn, ~p"/decks/#{deck.id}")
+
+      assert html =~ "motor:"
+      assert html =~ "fora da identidade de cor (U)"
+    end
+
+    test "the measured before→after renders under the table", %{conn: conn, deck: deck} do
+      {:ok, _live, html} = live(conn, ~p"/decks/#{deck.id}")
+
+      assert html =~ "Conferido pelo motor"
+    end
+
     test "the table exports as CSV", %{conn: conn, deck: deck, consult: consult} do
       {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}")
 

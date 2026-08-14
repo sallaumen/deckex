@@ -125,14 +125,28 @@ defmodule DeckexWeb.DeckLive do
 
   defp refresh_consults(socket) do
     consults = Consults.list_for_deck(socket.assigns.deck)
+    suggestions = Map.new(consults, &{&1.id, Suggestions.for_consult(&1)})
 
     assign(socket,
       consults: consults,
-      suggestions: Map.new(consults, &{&1.id, Suggestions.for_consult(&1)}),
+      suggestions: suggestions,
+      audits: audits(socket.assigns.snapshot, suggestions),
       scout_running?:
         Enum.any?(consults, &(&1.lens == :scout and &1.status in [:pending, :running]))
     )
   end
+
+  # One audit per answered consult, recomputed against the deck as it is NOW —
+  # that is the point: after you apply a cut, an old consult's audit honestly
+  # reports that card as no longer in the list.
+  defp audits(snapshot, suggestions) do
+    suggestions
+    |> Enum.reject(fn {_id, rows} -> rows == [] end)
+    |> Map.new(fn {id, rows} -> {id, Consults.audit(snapshot, rows)} end)
+  end
+
+  defp problems_for(nil, _action, _name), do: []
+  defp problems_for(audit, action, name), do: Map.get(audit.problems, {action, name}, [])
 
   defp dossier_label("plano"), do: "Plano"
   defp dossier_label("sinergias"), do: "Sinergias"
@@ -536,6 +550,16 @@ defmodule DeckexWeb.DeckLive do
                             <p :if={not row.resolved?} class="mt-0.5 text-micro text-sev-warning">
                               não achei essa carta na Scryfall
                             </p>
+
+                            <p
+                              :for={
+                                problem <-
+                                  problems_for(@audits[consult.id], row.action, row.name)
+                              }
+                              class="mt-0.5 text-micro text-sev-critical"
+                            >
+                              motor: {problem}
+                            </p>
                           </td>
 
                           <td class="py-2 pr-2 text-right font-mono text-micro whitespace-nowrap">
@@ -557,6 +581,45 @@ defmodule DeckexWeb.DeckLive do
                         </tr>
                       </tbody>
                     </table>
+
+                    <div :if={@audits[consult.id]} class="mt-3 rounded-md bg-inlay p-3">
+                      <h3 class="mb-2 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+                        Conferido pelo motor — se você aplicar tudo agora
+                      </h3>
+
+                      <div class="space-y-1">
+                        <p
+                          :for={finding <- @audits[consult.id].resolved}
+                          class="text-micro text-sev-healthy"
+                        >
+                          ✓ resolve <span class="font-mono">{finding.code}</span> — {finding.title}
+                        </p>
+
+                        <p
+                          :for={finding <- @audits[consult.id].introduced}
+                          class="text-micro text-sev-critical"
+                        >
+                          ! cria <span class="font-mono">{finding.code}</span> — {finding.title}
+                        </p>
+
+                        <p
+                          :for={finding <- @audits[consult.id].remaining}
+                          class="text-micro text-ink-faint"
+                        >
+                          · persiste <span class="font-mono">{finding.code}</span>
+                        </p>
+
+                        <p
+                          :if={
+                            @audits[consult.id].resolved == [] and
+                              @audits[consult.id].introduced == []
+                          }
+                          class="text-micro text-ink-muted"
+                        >
+                          nenhum achado muda — as trocas são laterais pela régua do motor
+                        </p>
+                      </div>
+                    </div>
 
                     <div class="mt-2 flex items-center justify-between gap-3">
                       <span class="font-mono text-micro text-ink-faint">
