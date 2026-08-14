@@ -70,6 +70,10 @@ defmodule DeckexWeb.ImportLive do
   def render(assigns) do
     ~H"""
     <div class="mx-auto max-w-[1400px] px-6 py-10 lg:px-10 lg:py-14">
+      <%!-- Inside the LiveView's own tree, not the root layout: the layout is
+            static after mount, so a flash put during an event would never
+            reach the screen from there. --%>
+      <DeckexWeb.Layouts.flash_group flash={@flash} />
       <.live_component module={DeckexWeb.SettingsPanel} id="settings-panel" />
 
       <.link

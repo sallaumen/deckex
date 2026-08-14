@@ -256,10 +256,11 @@ defmodule DeckexWeb.OptimizationLiveTest do
         )
         |> render_submit()
 
-      # Nothing launched, and the modal stayed open so the owner can fix the
-      # contract. The wording of the refusal is pinned in Salt's own test.
+      # Nothing launched, the modal stayed open so the owner can fix it, and
+      # the reason actually reached the screen.
       assert Optimizations.list_for_deck(deck.id) == []
       assert html =~ "O que você não quer na mesa"
+      assert html =~ "Bracket 4"
     end
 
     test "refining still starts a refine run with no salt", %{conn: conn} do

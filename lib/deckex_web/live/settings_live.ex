@@ -18,6 +18,10 @@ defmodule DeckexWeb.SettingsLive do
   def render(assigns) do
     ~H"""
     <div class="mx-auto max-w-[1100px] px-6 py-10 lg:px-10 lg:py-14">
+      <%!-- Inside the LiveView's own tree, not the root layout: the layout is
+            static after mount, so a flash put during an event would never
+            reach the screen from there. --%>
+      <DeckexWeb.Layouts.flash_group flash={@flash} />
       <.link
         navigate={~p"/"}
         class="-my-2 inline-flex min-h-11 items-center py-2 text-caption text-ink-faint transition-colors hover:text-ink"
