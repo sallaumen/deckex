@@ -110,3 +110,36 @@ from the committed fixtures.
 | Floor, not a verdict | Two of the five criteria need card-pool knowledge. Stating a bracket we cannot prove would be the same overreach as inventing a price. |
 | Game Changers from Scryfall's field | The list is official and changes; it arrives free with the fetch we already do. A hardcoded list is wrong within months. |
 | Combos left to the model | Same law as the rest of the engine: we measure shape, the model knows the card pool. |
+
+---
+
+## 6. Validation — 2026-08-14
+
+Ran a real `:upgrade` consult (opus, 509s) on the reference deck after the
+price-ceiling and UI work, then checked every claim against Scryfall.
+
+**The deck sits at exactly 3 of 3 Game Changers** — Fierce Guardianship,
+Mystical Tutor, Rhystic Study. Zero headroom.
+
+**Every consult ever run against it suggested a fourth.** The earlier
+comparison had all three models converge on Cyclonic Rift; this upgrade
+consult suggested three Game Changers at once — Jeska's Will, Mana Vault and
+Cyclonic Rift. Applying it would have taken the deck from Bracket 3 to a
+solid Bracket 4 without a single screen in the app saying so. That is the
+hole this feature closes, and it was found by looking rather than by
+guessing.
+
+**Two defects the validation surfaced, one fixed and one not:**
+
+1. *Blind to bracket impact* — fixed by this feature. The audit now names a
+   suggested Game Changer against the deck's remaining headroom.
+2. *A factual error in prose* — the model declined to suggest Underworld
+   Breach because "as fontes que consultei a listam como banida em
+   Commander". Scryfall says `commander: legal`, and it is on the Game
+   Changers list. The audit cannot catch this class: it verifies what was
+   *suggested*, and this was a **decline**. A wrong reason for not suggesting
+   a card leaves no row to check. Worth knowing when reading `notes`.
+
+What the model got right is worth recording too: it correctly knew Mana
+Crypt, Jeweled Lotus and Dockside Extortionist are banned in Commander as of
+2024, and reasoned about the deck without inventing prices.
