@@ -16,6 +16,7 @@ defmodule Deckex.Cards.Roles do
   alias Deckex.Cards.Roles.Bracket
   alias Deckex.Cards.Roles.Interaction
   alias Deckex.Cards.Roles.Mana
+  alias Deckex.Cards.Roles.Mill
   alias Deckex.Cards.Roles.Value
 
   @confidence_rank %{high: 3, medium: 2, low: 1}
@@ -25,7 +26,7 @@ defmodule Deckex.Cards.Roles do
   """
   @spec classify(Card.t()) :: [RoleMatch.t()]
   def classify(%Card{} = card) do
-    [Mana, Interaction, Value, Bracket]
+    [Mana, Interaction, Value, Bracket, Mill]
     |> Enum.flat_map(& &1.classify(card))
     |> best_per_kind()
   end

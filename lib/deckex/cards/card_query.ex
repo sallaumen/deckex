@@ -58,6 +58,15 @@ defmodule Deckex.Cards.CardQuery do
     Repo.all(from c in Card, where: c.id in ^ids)
   end
 
+  @doc """
+  The whole catalogue in `oracle_id` order — the order every card write takes
+  its locks in, so a reclassification pass cannot deadlock against an import.
+  """
+  @spec list_all_by_oracle_id() :: [Card.t()]
+  def list_all_by_oracle_id do
+    Repo.all(from c in Card, order_by: [asc: c.oracle_id])
+  end
+
   @doc "Lists the persisted roles for a card, ordered by kind."
   @spec list_roles(Card.t()) :: [CardRole.t()]
   def list_roles(%Card{id: card_id}) do

@@ -122,6 +122,22 @@ defmodule Deckex.Cards do
   end
 
   @doc """
+  Reclassifies the whole catalogue against today's rules, returning how many
+  cards were touched.
+
+  Adding a role to the vocabulary makes every previously-stored card stale: it
+  was classified when the rule did not exist, so a guard reading that role
+  silently misses them — a rule that looks enforced and is not. Run this once
+  when a rule ships.
+  """
+  @spec reclassify_all!() :: non_neg_integer()
+  def reclassify_all! do
+    CardQuery.list_all_by_oracle_id()
+    |> Enum.map(&classify_card/1)
+    |> length()
+  end
+
+  @doc """
   Classifies every card in `cards`: rules first for free, then one AI call for
   whatever the rules could not place. Returns how many cards each path handled.
 
