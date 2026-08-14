@@ -146,16 +146,27 @@ defmodule Deckex.Consults do
   # get out of the column — no structs, no atoms.
   defp freeze(report), do: report |> Jason.encode!() |> Jason.decode!()
 
+  # Persist first, broadcast LAST. The "done" event is a promise that
+  # everything the answer implies — the dossier on the deck, the suggested
+  # cards in the catalogue — is already there when a subscriber re-reads.
+  # Broadcasting inside the status update let the deck page re-read the deck
+  # before the scout's dossier landed, and no later event ever corrected it.
   defp succeed(consult, response, started) do
     done =
-      update!(consult, %{
+      consult
+      |> Consult.changeset(%{
         status: :done,
         response: response,
         duration_ms: System.monotonic_time(:millisecond) - started,
         error: nil
       })
+      |> Repo.update!()
 
-    done |> deliver_dossier() |> catalogue()
+    done = done |> deliver_dossier() |> catalogue()
+
+    Events.broadcast_consult(done)
+
+    done
   end
 
   # A scout's answer IS the dossier. Writing it here — in the background job
