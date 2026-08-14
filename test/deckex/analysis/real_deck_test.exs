@@ -12,6 +12,7 @@ defmodule Deckex.Analysis.RealDeckTest do
   alias Deckex.Analysis
   alias Deckex.Analysis.Report
   alias Deckex.CatalogueFixture
+  alias Deckex.Consults.Briefing
   alias Deckex.Decks
 
   setup :verify_on_exit!
@@ -65,5 +66,29 @@ defmodule Deckex.Analysis.RealDeckTest do
     # against a real deck rather than a hand-built fixture.
     assert report.interaction.answers ==
              report.interaction.spot_removal + report.interaction.board_wipes
+  end
+
+  test "a briefing for the real deck carries the dossier between findings and decklist" do
+    report = import_and_measure()
+
+    dossier = %{
+      "plano" => "Spellslinger Temur: Iroh recompra instants e sorceries.",
+      "sinergias" => "Iroh dá flashback às Lessons não-Lesson por {1}.",
+      "linhas_de_vitoria" => "Storm Kiln Artist e cópias.",
+      "fraquezas" => "Um Bojuka Bog desliga metade do plano."
+    }
+
+    deck = Repo.one!(Deckex.Decks.Deck)
+    snapshot = Decks.snapshot(deck)
+
+    briefing = Briefing.build(report, snapshot, :full, dossier: dossier)
+
+    {dossier_at, _} = :binary.match(briefing, "## Leitura estratégica")
+    {findings_at, _} = :binary.match(briefing, "## Findings")
+    {decklist_at, _} = :binary.match(briefing, "## The full decklist")
+
+    assert findings_at < dossier_at
+    assert dossier_at < decklist_at
+    assert briefing =~ "Bojuka Bog"
   end
 end
