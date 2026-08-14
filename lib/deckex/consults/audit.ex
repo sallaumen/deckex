@@ -222,13 +222,17 @@ defmodule Deckex.Consults.Audit do
   # from leaving bracket 3, and nothing else in the app would have said so:
   # every model consulted about the reference deck suggested Cyclonic Rift,
   # which is exactly that fourth card.
+  # Only the ceiling case is a problem: a Game Changer with headroom is a
+  # legal, ordinary add, and at a bracket 4 floor they are unrestricted. A
+  # "problem" excludes the suggestion from the simulation, so informational
+  # notes must not masquerade as one — that mistake silently kept legitimate
+  # adds out of the measured before→after.
   defp bracket_problem(%Card{game_changer: true}, snapshot) do
     bracket = Bracket.floor(snapshot)
 
     case Bracket.game_changer_headroom(bracket) do
-      nil -> "é Game Changer (o deck já está no piso do Bracket 4)"
       0 -> "é Game Changer — seria o 4º e tira o deck do Bracket 3"
-      room -> "é Game Changer — sobra espaço para #{room} no Bracket 3"
+      _room_or_floor4 -> nil
     end
   end
 

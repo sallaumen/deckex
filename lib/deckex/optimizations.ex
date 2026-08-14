@@ -378,11 +378,19 @@ defmodule Deckex.Optimizations do
   end
 
   defp stable_since_last_checkpoint?(optimization, upcoming) do
-    segment =
+    prior =
       optimization.steps
       |> Enum.filter(&(&1.position < upcoming.position and &1.status in [:done, :skipped]))
       |> Enum.reverse()
-      |> Enum.take_while(&(&1.kind != :checkpoint or &1.applied == []))
+
+    # The segment ends at the previous checkpoint — inclusive — and never
+    # reaches past it: what a lens did BEFORE that checkpoint was already that
+    # checkpoint's business, not this one's.
+    segment =
+      case Enum.split_while(prior, &(&1.kind != :checkpoint)) do
+        {lenses, [checkpoint | _older]} -> [checkpoint | lenses]
+        {lenses, []} -> lenses
+      end
 
     segment != [] and Enum.all?(segment, &(&1.applied == []))
   end
