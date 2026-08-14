@@ -11,6 +11,40 @@ defmodule Deckex.Consults.Schemas do
   """
 
   @spec for_lens(atom()) :: map()
+  def for_lens(:bracket) do
+    %{
+      "type" => "object",
+      "properties" => %{
+        "bracket" => %{
+          "type" => "integer",
+          "minimum" => 1,
+          "maximum" => 5,
+          "description" =>
+            "The bracket this deck actually belongs in. It may not be lower than the measured floor the briefing states."
+        },
+        "combo" => %{
+          "type" => "string",
+          "description" =>
+            "pt-BR: any two-card combo that wins on the spot, naming both cards and the earliest turn it assembles. Say \"nenhum que eu veja\" if there is none."
+        },
+        "speed" => %{
+          "type" => "string",
+          "description" => "pt-BR: on which turn this deck realistically closes a game, and why."
+        },
+        "justificativa" => %{
+          "type" => "string",
+          "description" => "pt-BR: why this bracket and not the one above or below."
+        },
+        "para_descer" => %{
+          "type" => "string",
+          "description" =>
+            "pt-BR: the single change that would move this deck down a bracket, or why none would."
+        }
+      },
+      "required" => ["bracket", "combo", "speed", "justificativa"]
+    }
+  end
+
   def for_lens(:scout) do
     %{
       "type" => "object",

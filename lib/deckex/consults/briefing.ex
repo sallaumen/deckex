@@ -112,6 +112,28 @@ defmodule Deckex.Consults.Briefing do
     """
   end
 
+  defp task_block(:bracket, _opts) do
+    """
+    Say which Commander Bracket this deck belongs in, and answer the two
+    questions the measurements above cannot.
+
+    The **floor** stated in the bracket section is arithmetic — Game Changers
+    counted, mass land denial and extra turns detected. You may place the deck
+    at that bracket or higher, never lower.
+
+    What is left to you:
+
+    - `combo`: is there a two-card combo that wins on the spot? Name both
+      cards and the earliest turn it assembles. Bracket 3 tolerates one only
+      if it cannot come together before turn 6.
+    - `speed`: on which turn does this deck realistically close a game?
+      Brackets expect at least 9 / 8 / 6 / 4 turns, or any turn for cEDH.
+
+    Suggest no cuts and no adds. This question is about where the deck sits,
+    not about changing it.
+    """
+  end
+
   defp task_block(:scout, _opts) do
     """
     Read this deck and write its strategic dossier — nothing else.

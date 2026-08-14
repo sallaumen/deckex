@@ -79,7 +79,8 @@ defmodule Deckex.Consults do
       {:speed_curve, "Só velocidade e curva"},
       {:mana_ramp, "Só mana e aceleração"},
       {:interaction, "Só interação"},
-      {:consistency, "Só consistência"}
+      {:consistency, "Só consistência"},
+      {:bracket, "Em que bracket esse deck está?"}
     ]
   end
 

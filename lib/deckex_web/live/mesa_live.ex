@@ -9,6 +9,7 @@ defmodule DeckexWeb.MesaLive do
   use DeckexWeb, :live_view
 
   alias Deckex.Analysis
+  alias Deckex.Analysis.Bracket
   alias Deckex.Analysis.Report
   alias Deckex.Decks
 
@@ -31,6 +32,7 @@ defmodule DeckexWeb.MesaLive do
         deck: deck,
         commander: List.first(snapshot.commanders),
         critical: Report.critical_count(report),
+        bracket: report.bracket,
         findings: length(report.findings),
         cards: Enum.sum(Enum.map(snapshot.main, & &1.quantity))
       }
@@ -92,7 +94,16 @@ defmodule DeckexWeb.MesaLive do
                 {row.commander.card.name}
               </p>
 
-              <div class="flex items-center gap-3 pt-1 text-caption text-ink-faint">
+              <div class="flex items-center gap-2 pt-1">
+                <span class="rounded-md bg-inlay px-2 py-0.5 font-mono text-micro text-ink-secondary">
+                  B{row.bracket.floor}+
+                </span>
+                <span class="truncate text-caption text-ink-faint">
+                  {Bracket.name(row.bracket.floor)}
+                </span>
+              </div>
+
+              <div class="flex items-center gap-3 text-caption text-ink-faint">
                 <span class="font-mono">{row.cards} cartas</span>
                 <span aria-hidden="true">·</span>
                 <span class={[

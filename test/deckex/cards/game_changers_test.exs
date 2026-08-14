@@ -3,7 +3,14 @@ defmodule Deckex.Cards.GameChangersTest do
   The Game Changers list is the Commander Format Panel's, revised a few times
   a year. deckex asks for it; it never writes it down.
   """
-  use Deckex.DataCase, async: true
+  # async: false, on principle rather than on proof. Refreshing the list is a
+  # table-wide write on `cards` — it unmarks every marked row before marking
+  # the new ones — and a table-wide UPDATE cannot take its locks in
+  # `oracle_id` order the way every other card write in this app does (see
+  # AGENTS.md's deadlock law). One intermittent failure appeared here before
+  # this line; 25 consecutive green runs after it, and it never reproduced, so
+  # the causation is unproven and the precaution is kept anyway.
+  use Deckex.DataCase, async: false
 
   import Mox
 

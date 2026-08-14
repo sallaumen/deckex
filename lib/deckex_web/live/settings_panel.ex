@@ -16,6 +16,7 @@ defmodule DeckexWeb.SettingsPanel do
   use DeckexWeb, :live_component
 
   alias Deckex.Analysis.Baselines
+  alias Deckex.Cards
   alias Deckex.Settings
   alias Deckex.Settings.Registry
 
@@ -28,17 +29,36 @@ defmodule DeckexWeb.SettingsPanel do
 
   @impl Phoenix.LiveComponent
   def update(assigns, socket) do
-    {:ok, socket |> assign(assigns) |> assign_new(:open, fn -> false end) |> load()}
+    {:ok,
+     socket
+     |> assign(assigns)
+     |> assign_new(:open, fn -> false end)
+     |> assign_new(:refreshed, fn -> nil end)
+     |> load()}
   end
 
   defp load(socket) do
-    assign(socket, values: Settings.all(), baselines: Settings.baselines(), error: nil)
+    assign(socket,
+      values: Settings.all(),
+      baselines: Settings.baselines(),
+      error: nil
+    )
   end
 
   @impl Phoenix.LiveComponent
   def handle_event("open", _params, socket), do: {:noreply, assign(socket, open: true)}
 
   def handle_event("close", _params, socket), do: {:noreply, assign(socket, open: false)}
+
+  # The Panel revises the Game Changers list a few times a year. Re-reading it
+  # is a click rather than a schedule: this is a single-user app that is not
+  # always running, and a stale restriction is visible on the deck page anyway.
+  def handle_event("refresh-game-changers", _params, socket) do
+    case Cards.refresh_game_changers() do
+      {:ok, %{marked: marked}} -> {:noreply, assign(socket, error: nil, refreshed: marked)}
+      {:error, error} -> {:noreply, assign(socket, error: error.message)}
+    end
+  end
 
   def handle_event("save", %{"setting" => %{"key" => key, "value" => value}}, socket) do
     {:noreply, save(socket, String.to_existing_atom(key), cast(key, value))}
@@ -187,6 +207,24 @@ defmodule DeckexWeb.SettingsPanel do
 
                 <.button type="submit">Salvar</.button>
               </.form>
+            </section>
+
+            <section class="space-y-2 border-t border-hairline-soft pt-4">
+              <h3 class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+                Game Changers
+              </h3>
+              <p class="text-micro text-ink-muted">
+                A lista oficial muda algumas vezes por ano. O deckex a lê da Scryfall —
+                nunca a guarda escrita.
+              </p>
+              <div class="flex items-center gap-3">
+                <.button type="button" phx-click="refresh-game-changers" phx-target={@myself}>
+                  Reler a lista
+                </.button>
+                <span :if={@refreshed} class="font-mono text-micro text-ink-faint">
+                  {@refreshed} carta(s) do catálogo estão na lista
+                </span>
+              </div>
             </section>
 
             <details class="border-t border-hairline-soft pt-4">

@@ -496,10 +496,10 @@ defmodule DeckexWeb.DeckLive do
                 </h3>
                 <div class="flex flex-wrap gap-1.5">
                   <span
-                    :for={entry <- @report.bracket.game_changers}
+                    :for={name <- @report.bracket.game_changers}
                     class="rounded-md bg-inlay px-2 py-1 text-caption text-ink"
                   >
-                    {entry.card.name}
+                    {name}
                   </span>
                 </div>
                 <p
@@ -661,6 +661,30 @@ defmodule DeckexWeb.DeckLive do
                   <p :if={consult.response["diagnosis"]} class="text-caption text-ink">
                     {consult.response["diagnosis"]}
                   </p>
+
+                  <div :if={consult.response["bracket"]} class="space-y-2">
+                    <p class="text-body text-ink">
+                      <span class="font-mono text-numeral-sm font-semibold">
+                        Bracket {consult.response["bracket"]}
+                      </span>
+                      <span class="text-ink-secondary">
+                        {Bracket.name(consult.response["bracket"])}
+                      </span>
+                    </p>
+                    <p class="text-caption text-ink-muted">
+                      {consult.response["justificativa"]}
+                    </p>
+                    <p class="text-caption text-ink-secondary">
+                      <span class="text-ink-faint">Combo:</span> {consult.response["combo"]}
+                    </p>
+                    <p class="text-caption text-ink-secondary">
+                      <span class="text-ink-faint">Velocidade:</span> {consult.response["speed"]}
+                    </p>
+                    <p :if={consult.response["para_descer"]} class="text-caption text-ink-muted">
+                      <span class="text-ink-faint">Para descer um bracket:</span>
+                      {consult.response["para_descer"]}
+                    </p>
+                  </div>
 
                   <div :if={@suggestions[consult.id] not in [nil, []]} class="overflow-x-auto">
                     <table class="w-full text-caption">

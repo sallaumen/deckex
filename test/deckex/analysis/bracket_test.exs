@@ -17,7 +17,7 @@ defmodule Deckex.Analysis.BracketTest do
       bracket = Bracket.floor(snap([changer("Rhystic Study")]))
 
       assert bracket.floor == 3
-      assert Enum.map(bracket.game_changers, & &1.card.name) == ["Rhystic Study"]
+      assert bracket.game_changers == ["Rhystic Study"]
     end
 
     test "three Game Changers is still bracket 3, at its ceiling" do

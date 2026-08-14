@@ -23,7 +23,8 @@ defmodule Deckex.Consults.Consult do
     :matchup,
     :budget,
     :upgrade,
-    :scout
+    :scout,
+    :bracket
   ]
 
   @type t :: %__MODULE__{}

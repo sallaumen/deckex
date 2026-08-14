@@ -28,9 +28,9 @@ defmodule Deckex.Analysis.Bracket do
 
   @type t :: %__MODULE__{
           floor: 1 | 3 | 4,
-          game_changers: [CardEntry.t()],
-          mass_land_denial: [CardEntry.t()],
-          extra_turns: [CardEntry.t()],
+          game_changers: [String.t()],
+          mass_land_denial: [String.t()],
+          extra_turns: [String.t()],
           reasons: [String.t()],
           open_questions: [String.t()]
         }
@@ -52,11 +52,13 @@ defmodule Deckex.Analysis.Bracket do
     denial = Enum.filter(considered, &CardEntry.has_role?(&1, :mass_land_denial))
     turns = Enum.filter(considered, &CardEntry.has_role?(&1, :extra_turn))
 
+    # Names, not entries: the bracket travels inside a consult's frozen report
+    # as JSON, and a name is all anyone reads off it anyway.
     %__MODULE__{
       floor: floor_for(length(changers), denial, turns),
-      game_changers: changers,
-      mass_land_denial: denial,
-      extra_turns: turns,
+      game_changers: DeckSnapshot.names(changers),
+      mass_land_denial: DeckSnapshot.names(denial),
+      extra_turns: DeckSnapshot.names(turns),
       reasons: reasons(changers, denial, turns),
       open_questions: open_questions()
     }
@@ -118,7 +120,7 @@ defmodule Deckex.Analysis.Bracket do
   defp list_reason([], _label), do: nil
 
   defp list_reason(entries, label) do
-    "#{length(entries)} carta(s) de #{label}: #{DeckSnapshot.names(entries) |> Enum.join(", ")}."
+    "#{length(entries)} carta(s) de #{label}: #{Enum.join(DeckSnapshot.names(entries), ", ")}."
   end
 
   # The engine cannot answer these from a decklist. They are printed as

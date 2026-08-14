@@ -71,6 +71,25 @@ for *what* we are building and *why*. This file is *how*.
   the `@theme` block of `assets/css/app.css`. `DeckexWeb.DesignTokensTest`
   enforces it — if a class is a structural Tailwind utility with no token behind
   it, add it to that test's `@builtins` deliberately.
+- **Card facts are fetched, never written down here.** The Game Changers list
+  is the Commander Format Panel's and is revised a few times a year; Scryfall
+  carries `game_changer` on every card object, so it arrives with the fetch we
+  already do. The same goes for legality and price. A list of card names
+  hardcoded in this repository is wrong within months, and wrong in the
+  direction that looks authoritative.
+- **The engine reports a bracket FLOOR, never a bracket.** Two of the five
+  bracket criteria — whether a two-card combo exists, and whether the deck
+  closes before the expected turn — need knowledge of the card pool. The
+  engine states what it can count and prints the rest as questions. Naming a
+  bracket we cannot prove is the same overreach as inventing a price.
+- **No 1–10 power level, ever.** It is a card-ranking algorithm with a decimal
+  point, and not building one is why this project exists. Brackets are
+  different: they are countable rules.
+- **The model never guesses at legality.** Verified 2026-08-14: a model
+  declined to suggest Underworld Breach believing it banned in Commander;
+  Scryfall says legal. A *decline* leaves no row for the audit to check, so
+  the briefing tells the model to suggest uncertain cards and let the app
+  verify them. The audit can only check what was suggested.
 - **The model never states a price.** Card prices come from the catalogue, which
   gets them from Scryfall. A model's price memory is stale on a good day and
   invented on a bad one — verified 2026-08-13, when `fable` quoted a Cyclonic
