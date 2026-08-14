@@ -212,6 +212,10 @@ defmodule DeckexWeb.OptimizationLive do
 
   defp criticals(report), do: Report.critical_count(report)
 
+  defp running_position(optimization) do
+    Enum.find_value(optimization.steps, &(&1.status == :running and &1.position))
+  end
+
   defp changes_cost(optimization) do
     names =
       optimization.steps
@@ -276,6 +280,13 @@ defmodule DeckexWeb.OptimizationLive do
               {run_status_label(@optimization.status)}{if @optimization.status == :running,
                 do: " · etapa #{stage_counter(@optimization)}"}{if @optimization.outcome,
                 do: " · #{@optimization.outcome}"} · modelo {@optimization.contract["model"]}
+              <a
+                :if={position = running_position(@optimization)}
+                href={"#etapa-#{position}"}
+                class="text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+              >
+                ir à etapa rodando ↓
+              </a>
             </p>
           </div>
 
@@ -356,7 +367,8 @@ defmodule DeckexWeb.OptimizationLive do
       <ol class="space-y-4">
         <li
           :for={step <- @optimization.steps}
-          class="rounded-xl border border-hairline-soft bg-surface p-5"
+          id={"etapa-#{step.position}"}
+          class="scroll-mt-6 rounded-xl border border-hairline-soft bg-surface p-5"
         >
           <div class="flex flex-wrap items-center justify-between gap-3">
             <h2 class="text-heading font-semibold text-ink">

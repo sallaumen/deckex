@@ -187,7 +187,7 @@ defmodule Deckex.Consults.Audit do
     brl = Money.to_brl(price_usd)
 
     if ceiling && brl && Decimal.gt?(brl, Decimal.new(ceiling)) do
-      "R$ #{Decimal.round(brl, 2)} passa do teto de R$ #{ceiling}"
+      "#{Money.brl(price_usd)} passa do teto de R$ #{ceiling}"
     end
   end
 

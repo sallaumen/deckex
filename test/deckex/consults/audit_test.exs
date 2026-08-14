@@ -144,7 +144,7 @@ defmodule Deckex.Consults.AuditTest do
 
       audit = Consults.audit(snapshot, [priced(:add, "Rhystic Study")], :upgrade)
 
-      assert ceiling_verdict(audit, "Rhystic Study") =~ "R$ 373.90 passa do teto de R$ 100"
+      assert ceiling_verdict(audit, "Rhystic Study") =~ "R$ 373,90 passa do teto de R$ 100"
     end
 
     test "a card under the ceiling passes", %{snapshot: snapshot} do
