@@ -19,6 +19,7 @@ defmodule Deckex.Optimizations do
   alias Deckex.Consults.Audit
   alias Deckex.Consults.ConsultQuery
   alias Deckex.Consults.Suggestions
+  alias Deckex.Consults.Visions
   alias Deckex.Decks
   alias Deckex.Decks.Deck
   alias Deckex.Decks.DeckQuery
@@ -245,10 +246,40 @@ defmodule Deckex.Optimizations do
     list = fork_list(optimization, step)
     suffix = if step, do: " — otimizado, etapa #{step.position}", else: " — otimizado"
 
-    Decks.import_from_text(list_to_text(list, optimization.commanders), %{
+    Decks.import_from_text(list_to_text(list, current_commanders(optimization)), %{
       name: "#{deck.name}#{suffix}",
       source: :paste
     })
+  end
+
+  @doc """
+  The sandbox's commanders as they stand now.
+
+  `optimization.commanders` stays frozen as the original — the before/after
+  diff is measured against it — so a vision's commander swap lives in the
+  contract and is derived here. One source of truth, never two stored copies
+  that can drift.
+
+  A commander the engine refused is not applied: the refusal was already
+  printed on the vision card, and a refused swap quietly taking effect would
+  be worse than the swap being impossible.
+  """
+  @spec current_commanders(Optimization.t()) :: [String.t()]
+  def current_commanders(%Optimization{} = optimization) do
+    with vision when is_map(vision) <- chosen_vision(optimization),
+         name when is_binary(name) and name != "" <- vision["comandante"],
+         card when not is_nil(card) <- Cards.get_by_name(name),
+         nil <- Visions.commander_problem(card, identity_of(optimization)) do
+      [card.name]
+    else
+      _keep_the_original -> optimization.commanders
+    end
+  end
+
+  defp identity_of(%Optimization{} = optimization) do
+    {:ok, deck} = Decks.fetch_deck(optimization.deck_id)
+
+    deck.color_identity
   end
 
   @doc "The run's most recent sandbox state."
@@ -272,7 +303,7 @@ defmodule Deckex.Optimizations do
     {:ok, optimization} = fetch(step.optimization_id)
     {:ok, deck} = Decks.fetch_deck(optimization.deck_id)
     step = ensure_list_before(step, optimization)
-    snapshot = snapshot_for(step.list_before, optimization.commanders, deck)
+    snapshot = snapshot_for(step.list_before, current_commanders(optimization), deck)
 
     {:ok, consult} =
       Consults.request(deck, String.to_existing_atom(step.lens),
@@ -365,7 +396,7 @@ defmodule Deckex.Optimizations do
     # before the verdict.
     Consults.refresh_catalogue(consult)
 
-    snapshot = snapshot_for(step.list_before, optimization.commanders, deck)
+    snapshot = snapshot_for(step.list_before, current_commanders(optimization), deck)
     suggestions = Suggestions.for_consult(consult)
 
     roles =
@@ -387,7 +418,7 @@ defmodule Deckex.Optimizations do
         Settings.baselines(),
         ceilings,
         history: history(optimization, step),
-        keep: (optimization.contract["keep"] || []) ++ optimization.commanders,
+        keep: (optimization.contract["keep"] || []) ++ current_commanders(optimization),
         bracket_max: optimization.contract["bracket_max"],
         avoid: Salt.avoided(optimization.contract["salt"])
       )

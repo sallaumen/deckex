@@ -46,7 +46,7 @@ defmodule DeckexWeb.OptimizationLive do
     current =
       Optimizations.snapshot_for(
         Optimizations.current_list(optimization),
-        optimization.commanders,
+        Optimizations.current_commanders(optimization),
         deck
       )
 
@@ -69,7 +69,10 @@ defmodule DeckexWeb.OptimizationLive do
     |> Enum.filter(&(&1.status == :done))
     |> Map.new(fn step ->
       list = Optimizations.list_after(step)
-      snapshot = Optimizations.snapshot_for(list, optimization.commanders, deck)
+
+      snapshot =
+        Optimizations.snapshot_for(list, Optimizations.current_commanders(optimization), deck)
+
       report = Analysis.report(snapshot, baselines)
 
       {step.id,
@@ -644,7 +647,7 @@ defmodule DeckexWeb.OptimizationLive do
               readonly
               rows="12"
               class="mt-2 w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 font-mono text-caption text-ink"
-            >{Optimizations.list_to_text(Optimizations.current_list(@optimization), @optimization.commanders)}</textarea>
+            >{Optimizations.list_to_text(Optimizations.current_list(@optimization), Optimizations.current_commanders(@optimization))}</textarea>
           </details>
         </div>
       </section>

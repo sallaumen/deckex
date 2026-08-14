@@ -110,6 +110,36 @@ defmodule Deckex.Optimizations.ReimagineTest do
     assert error.message =~ "Não achei essa direção"
   end
 
+  test "a chosen direction's legal commander becomes the sandbox's commander" do
+    {_deck, optimization} = deck_with_run()
+
+    visoes =
+      List.update_at(@visoes, 0, &Map.put(&1, "comandante", "Baral, Chief of Compliance"))
+
+    {:ok, waiting} = answer_visions(optimization, visoes)
+
+    # Before the choice, the sandbox still has the deck's own commanders.
+    assert Optimizations.current_commanders(waiting) == waiting.commanders
+
+    {:ok, chosen} = Optimizations.choose_vision(waiting, 0)
+
+    assert Optimizations.current_commanders(chosen) == ["Baral, Chief of Compliance"]
+    # The frozen original is untouched — the diff is measured against it.
+    assert chosen.commanders != Optimizations.current_commanders(chosen)
+  end
+
+  test "a commander the engine refused never reaches the sandbox" do
+    {_deck, optimization} = deck_with_run()
+
+    # Sol Ring is not a legendary creature; the vision is still choosable.
+    visoes = List.update_at(@visoes, 0, &Map.put(&1, "comandante", "Sol Ring"))
+    {:ok, waiting} = answer_visions(optimization, visoes)
+
+    {:ok, chosen} = Optimizations.choose_vision(waiting, 0)
+
+    assert Optimizations.current_commanders(chosen) == chosen.commanders
+  end
+
   test "asking again spends another consult and keeps the declined set" do
     {_deck, optimization} = deck_with_run()
     {:ok, waiting} = answer_visions(optimization, @visoes)
