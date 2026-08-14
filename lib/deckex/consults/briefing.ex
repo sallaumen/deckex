@@ -29,29 +29,15 @@ defmodule Deckex.Consults.Briefing do
 
     #{findings_block(findings)}
 
+    #{dossier_block(lens, opts)}
+
     #{decklist_block(snapshot)}
 
     ## What to do
 
     #{task_block(lens, opts)}
 
-    Rules you must respect:
-
-    - Every card you add must be inside the deck's colour identity
-      (#{identity(report)}). A card outside it is illegal, not merely bad.
-    - Only suggest cutting cards that are actually in the list above.
-    - A card may appear once. Basic lands and cards whose own text allows any
-      number are the only exceptions — Commander is singleton.
-    - Prefer changes that address a finding over changes that are merely
-      upgrades.#{budget_line(opts[:budget_usd])}
-    - **Never state a price.** The app shows the current Scryfall price next to
-      every suggestion, so a number from you can only disagree with it. Say
-      "cheap" or "expensive" if it matters to the argument; leave the figure out.
-    - Search the web for current Commander staples where it helps. The
-      measurements above are facts about this deck; the card pool is what you
-      know and can look up.
-
-    Answer in **Portuguese (pt-BR)**, but never translate a card name.
+    #{rules_block(lens, report, opts)}
     """
   end
 
@@ -126,12 +112,91 @@ defmodule Deckex.Consults.Briefing do
     """
   end
 
+  defp task_block(:scout, _opts) do
+    """
+    Read this deck and write its strategic dossier — nothing else.
+
+    - `plano`: what the deck is trying to do and how the commander enables it.
+    - `sinergias`: the interactions that give this deck its identity, naming cards.
+    - `linhas_de_vitoria`: how the deck actually closes a game.
+    - `fraquezas`: ONLY what the measurements above do not show — dependencies
+      and failure modes no number can see.
+
+    Do not propose any change. Do not name cards to cut or to add. You are the
+    scout, not the consultant.
+    """
+  end
+
   defp task_block(_lens, _opts) do
     """
     Work the findings above. For each one, name specific cards to **cut** from
     the list and specific cards to **add**, and say why in one sentence each.
     """
   end
+
+  # The part of the prompt no template can write. The scout itself never sees
+  # one — it must read the deck fresh, not be anchored by its own predecessor.
+  defp dossier_block(:scout, _opts), do: ""
+  defp dossier_block(_lens, opts), do: dossier_lines(opts[:dossier], opts[:dossier_stale])
+
+  defp dossier_lines(nil, _stale), do: ""
+
+  defp dossier_lines(dossier, stale) do
+    """
+    ## Leitura estratégica (dossiê do deck)
+
+    - Plano: #{dossier["plano"]}
+    - Sinergias: #{dossier["sinergias"]}
+    - Linhas de vitória: #{dossier["linhas_de_vitoria"]}
+    - Fraquezas que os números não veem: #{dossier["fraquezas"]}
+    #{stale_line(stale)}
+    This dossier is the owner's current understanding of the deck. Trust it as
+    context — and when the list itself says otherwise, contradict it explicitly
+    in `leitura`.
+    """
+  end
+
+  defp stale_line(true) do
+    "\nCaution: the deck has changed since this dossier was written — weigh it accordingly.\n"
+  end
+
+  defp stale_line(_fresh), do: ""
+
+  # The scout only reads, so most of the consulting rules are noise to it.
+  defp rules_block(:scout, _report, _opts) do
+    """
+    Search the web where it helps you understand a card's role in this deck.
+
+    Answer in **Portuguese (pt-BR)**, but never translate a card name.
+    """
+  end
+
+  defp rules_block(_lens, report, opts) do
+    """
+    Rules you must respect:
+
+    - Write `leitura` first: your own reading of the deck's plan#{dossier_clause(opts[:dossier])},
+      before choosing a single cut.
+    - Every card you add must be inside the deck's colour identity
+      (#{identity(report)}). A card outside it is illegal, not merely bad.
+    - Only suggest cutting cards that are actually in the list above.
+    - A card may appear once. Basic lands and cards whose own text allows any
+      number are the only exceptions — Commander is singleton.
+    - Prefer changes that address a finding over changes that are merely
+      upgrades.#{budget_line(opts[:budget_usd])}
+    - **Never state a price.** The app shows the current Scryfall price next to
+      every suggestion, so a number from you can only disagree with it. Say
+      "cheap" or "expensive" if it matters to the argument; leave the figure out.
+    - Search the web for current Commander staples where it helps. The
+      measurements above are facts about this deck; the card pool is what you
+      know and can look up.
+
+    Answer in **Portuguese (pt-BR)**, but never translate a card name.
+    """
+  end
+
+  defp dossier_clause(nil), do: ""
+  defp dossier_clause(_dossier), do: ", confronted with the dossier above"
 
   defp section(key, measured) do
     lines =
