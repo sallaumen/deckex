@@ -1,7 +1,7 @@
 # deckex — Design Spec
 
 **Date:** 2026-08-13
-**Status:** Approved (design), pending implementation plan
+**Status:** Shipped through Plano 9; Plano 10 (Otimizador) in design
 
 ---
 

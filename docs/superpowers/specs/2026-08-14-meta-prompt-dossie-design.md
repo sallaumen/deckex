@@ -1,7 +1,7 @@
 # deckex — Meta-prompt: strategic dossier + self-critique — Design Spec
 
 **Date:** 2026-08-14
-**Status:** Approved (design), pending implementation plan
+**Status:** Shipped and validated (see the Validation section)
 **Extends:** `2026-08-13-deckex-design.md` (the consult pipeline, §§ import/analysis/consults)
 
 ---

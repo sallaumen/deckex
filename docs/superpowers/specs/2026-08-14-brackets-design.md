@@ -1,7 +1,7 @@
 # deckex — Commander Brackets — Design Spec
 
 **Date:** 2026-08-14
-**Status:** Proposed
+**Status:** Shipped and validated (see §§6-7)
 **Extends:** `2026-08-13-deckex-design.md`
 
 ---
