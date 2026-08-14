@@ -120,6 +120,26 @@ for *what* we are building and *why*. This file is *how*.
   pipeline's judge calls `Consults.refresh_catalogue/1` again in the worker —
   the page still never touches the network; the worker was always allowed to.
 
+- **A new role makes the stored catalogue stale.** Cards already catalogued
+  were classified before the rule existed, so a guard reading that role
+  silently misses them — a rule that looks enforced and is not. Ship a rule
+  together with a run of `Deckex.Cards.reclassify_all!/0`, which walks the
+  catalogue in `oracle_id` order like every other card write.
+- **Self-mill is not mill.** Milling yourself is a graveyard build-around;
+  milling an opponent is a tactic aimed at a person, and only the second is
+  something an owner asks to avoid. Templating separates them for free —
+  targeted mill names its victim, self-mill omits the subject.
+- **A commander swap must preserve the colour identity exactly.** Not a subset:
+  a narrower commander makes every card outside its identity illegal at once, a
+  cascade of cuts made for a reason that has nothing to do with the deck being
+  better. `Deckex.Consults.Visions.commander_problem/2` is the only place that
+  decides this.
+- **Taste is enforced in one direction only.** The salt contract can refuse an
+  add carrying a tactic the owner avoids, exactly like a price ceiling. It
+  cannot make a model *want* something: `quero` is an invitation in the
+  briefing, and treating it as a rule would be the same overreach as inventing
+  a price.
+
 ## Quality gate
 
 `mix lint` must be green **before** every commit — not after:
