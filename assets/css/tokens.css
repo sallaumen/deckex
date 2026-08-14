@@ -88,6 +88,12 @@
 
   /* Read at table distance, not cockpit distance: the art carries the page, so
    * the interface band starts at 11px and the workhorse is 13px. */
+  /* A touch target is a physical size — a fingertip does not scale with the
+   * type. The root here is 13px, so every rem-based utility lands at 0.8125×
+   * its nominal value: `min-h-11` reads as 44px and renders 35.75px. Anything
+   * a finger has to hit is measured in px, from here. */
+  --size-touch: 44px;
+
   --type-micro: 10px;
   --type-label: 11px;
   --type-caption: 12px;

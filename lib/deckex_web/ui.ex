@@ -335,6 +335,83 @@ defmodule DeckexWeb.UI do
   end
 
   @doc """
+  A card at a glance: its art, its name, and a way to go read it.
+
+  The dense sibling of `card_tile/1`. Where a tile is the subject of its own
+  block, a thumb belongs in a row of several — a proposed direction's key
+  cards, a finding's implicated cards — where the art is what a player
+  recognises long before the name registers.
+
+  Nothing is ever laid over the art, per the design rule; the name sits under
+  it and carries the Scryfall link.
+
+  ## Examples
+
+      <.card_thumb name="Craterhoof Behemoth" art={card.image_art_crop_url} uri={card.scryfall_uri} />
+  """
+  attr :name, :string, required: true
+  attr :art, :string, default: nil
+  attr :uri, :string, default: nil
+  attr :note, :string, default: nil, doc: "a short line under the name, e.g. a price"
+  attr :class, :any, default: nil
+
+  def card_thumb(assigns) do
+    ~H"""
+    <figure class={["w-[104px] shrink-0", @class]}>
+      <.thumb_frame name={@name} uri={@uri}>
+        <div class="aspect-art w-full overflow-hidden rounded-sm border border-hairline bg-inlay">
+          <img
+            :if={@art}
+            src={@art}
+            alt=""
+            loading="lazy"
+            width="104"
+            height="76"
+            class="size-full object-cover"
+          />
+          <div
+            :if={is_nil(@art)}
+            class="flex size-full items-center justify-center px-1 text-center text-micro text-ink-faint"
+          >
+            {@name}
+          </div>
+        </div>
+        <figcaption class="mt-1 text-micro leading-tight text-ink-secondary">
+          {@name}
+        </figcaption>
+      </.thumb_frame>
+      <p :if={@note} class="font-mono text-micro leading-tight text-ink-faint">{@note}</p>
+    </figure>
+    """
+  end
+
+  # The art and the name are one target, not two: a 104x100 tile clears the
+  # touch minimum comfortably, where the name alone was an 11px sliver.
+  attr :name, :string, required: true
+  attr :uri, :string, default: nil
+  slot :inner_block, required: true
+
+  defp thumb_frame(%{uri: nil} = assigns) do
+    ~H"""
+    <div>{render_slot(@inner_block)}</div>
+    """
+  end
+
+  defp thumb_frame(assigns) do
+    ~H"""
+    <a
+      href={@uri}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={"Ver #{@name} na Scryfall"}
+      class="block rounded-sm transition-opacity hover:opacity-85 motion-reduce:transition-none"
+    >
+      {render_slot(@inner_block)}
+    </a>
+    """
+  end
+
+  @doc """
   A card, led by its art.
 
   The art is never covered: the caption sits in its own strip below the crop,

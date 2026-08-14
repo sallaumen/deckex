@@ -132,10 +132,10 @@ defmodule DeckexWeb.CoreComponents do
   slot :inner_block, required: true
 
   def button(%{rest: rest} = assigns) do
-    # min-h-11 is 44px: the floor for a touch target. A button that only looks
+    # min-h-touch is 44px: the floor for a touch target. A button that only looks
     # tappable on a mouse is a button that misses on a phone.
     base =
-      "inline-flex min-h-11 items-center justify-center gap-1.5 rounded-md px-3 py-2 " <>
+      "inline-flex min-h-touch items-center justify-center gap-1.5 rounded-md px-3 py-2 " <>
         "text-body font-semibold transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
 
     variants = %{

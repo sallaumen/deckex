@@ -106,7 +106,7 @@ defmodule DeckexWeb.SettingsPanel do
         phx-target={@myself}
         aria-label="Abrir ajustes"
         title="Ajustes"
-        class="fixed right-4 top-4 z-40 inline-flex size-11 items-center justify-center rounded-full border border-hairline-soft bg-surface text-ink-faint shadow-contact transition-colors hover:text-ink"
+        class="fixed right-4 top-4 z-40 inline-flex size-touch items-center justify-center rounded-full border border-hairline-soft bg-surface text-ink-faint shadow-contact transition-colors hover:text-ink"
       >
         <.icon name="hero-cog-6-tooth" class="size-5" />
       </button>
@@ -141,7 +141,7 @@ defmodule DeckexWeb.SettingsPanel do
               phx-click="close"
               phx-target={@myself}
               aria-label="Fechar ajustes"
-              class="inline-flex size-11 items-center justify-center rounded-md text-ink-faint transition-colors hover:text-ink"
+              class="inline-flex size-touch items-center justify-center rounded-md text-ink-faint transition-colors hover:text-ink"
             >
               <.icon name="hero-x-mark" class="size-5" />
             </button>
@@ -181,7 +181,7 @@ defmodule DeckexWeb.SettingsPanel do
                     :if={entry.options}
                     id={"panel-field-#{entry.key}"}
                     name="setting[value]"
-                    class="min-h-11 w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-body text-ink"
+                    class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-body text-ink"
                   >
                     <option
                       :for={option <- entry.options}
@@ -199,7 +199,7 @@ defmodule DeckexWeb.SettingsPanel do
                     inputmode={if entry.type in [:integer, :number], do: "decimal"}
                     name="setting[value]"
                     value={@values[entry.key]}
-                    class="min-h-11 w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 font-mono text-body-lg text-ink"
+                    class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 font-mono text-body-lg text-ink"
                   />
 
                   <p :if={entry.hint} class="mt-1 text-micro text-ink-muted">{entry.hint}</p>
@@ -261,7 +261,7 @@ defmodule DeckexWeb.SettingsPanel do
                       inputmode="decimal"
                       name="baseline[value]"
                       value={value}
-                      class="min-h-11 w-full rounded-md border border-hairline-soft bg-inlay px-2 py-2 font-mono text-caption text-ink"
+                      class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-2 py-2 font-mono text-caption text-ink"
                     />
                   </div>
 

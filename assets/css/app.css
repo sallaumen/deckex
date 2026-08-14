@@ -83,6 +83,8 @@
   --text-numeral-sm: var(--type-numeral-sm);
   --text-numeral: var(--type-numeral);
 
+  --spacing-touch: var(--size-touch);
+
   --radius-xs: var(--corner-xs);
   --radius-sm: var(--corner-sm);
   --radius-md: var(--corner-md);
@@ -140,4 +142,16 @@ html, body {
    histogram's counts and a stat tile's numerals never jitter. */
 .font-mono, [class*="font-mono"] {
   font-variant-numeric: tabular-nums;
+}
+
+/* ── The iOS zoom rule ─────────────────────────────────────────────────────
+ * Safari zooms the viewport when a focused field's text is under 16px, which
+ * throws the reader out of the layout mid-form. The type scale stays dense
+ * where there is a pointer; on a touch-sized screen the fields alone go up. */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }

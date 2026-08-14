@@ -152,7 +152,7 @@ defmodule DeckexWeb.OptimizationsLive do
 
       <.link
         navigate={~p"/decks/#{@deck.id}"}
-        class="-my-2 inline-flex min-h-11 items-center py-2 text-caption text-ink-faint transition-colors hover:text-ink"
+        class="-my-2 inline-flex min-h-touch items-center py-2 text-caption text-ink-faint transition-colors hover:text-ink"
       >
         ← {@deck.name}
       </.link>
@@ -251,7 +251,7 @@ defmodule DeckexWeb.OptimizationsLive do
                 phx-click="modo"
                 phx-value-modo={mode}
                 class={[
-                  "min-h-11 flex-1 rounded-md border px-3 py-2 text-caption transition-colors",
+                  "min-h-touch flex-1 rounded-md border px-3 py-2 text-caption transition-colors",
                   @mode == mode && "border-hairline-strong bg-inlay text-ink",
                   @mode != mode && "border-hairline-soft text-ink-faint hover:text-ink"
                 ]}
@@ -283,7 +283,7 @@ defmodule DeckexWeb.OptimizationsLive do
                     type="button"
                     phx-click="preset-salt"
                     phx-value-preset={preset}
-                    class="-my-2 inline-flex min-h-11 items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+                    class="-my-2 inline-flex min-h-touch items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
                   >
                     {label}
                   </button>
@@ -309,7 +309,7 @@ defmodule DeckexWeb.OptimizationsLive do
                     phx-value-tatica={tactic.key}
                     phx-value-valor={value}
                     class={[
-                      "inline-flex min-h-11 items-center rounded-md border px-2 text-micro transition-colors",
+                      "inline-flex min-h-touch items-center rounded-md border px-2 text-micro transition-colors",
                       Map.get(@salt, tactic.key, "tanto_faz") == value &&
                         "border-hairline-strong bg-inlay text-ink",
                       Map.get(@salt, tactic.key, "tanto_faz") != value &&
@@ -338,7 +338,7 @@ defmodule DeckexWeb.OptimizationsLive do
                 <select
                   id="launch-bracket"
                   name="contract[bracket_max]"
-                  class="min-h-11 w-full rounded-md border border-hairline-soft bg-inlay px-2 py-2 text-caption text-ink"
+                  class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-2 py-2 text-caption text-ink"
                 >
                   <option
                     :for={bracket <- [1, 2, 3, 4]}
@@ -364,7 +364,7 @@ defmodule DeckexWeb.OptimizationsLive do
                   inputmode="numeric"
                   name="contract[ceiling_card]"
                   value={@contract["ceilings"]["card"]}
-                  class="min-h-11 w-full rounded-md border border-hairline-soft bg-inlay px-2 py-2 font-mono text-caption text-ink"
+                  class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-2 py-2 font-mono text-caption text-ink"
                 />
               </div>
 
@@ -381,7 +381,7 @@ defmodule DeckexWeb.OptimizationsLive do
                   inputmode="numeric"
                   name="contract[ceiling_land]"
                   value={@contract["ceilings"]["land"]}
-                  class="min-h-11 w-full rounded-md border border-hairline-soft bg-inlay px-2 py-2 font-mono text-caption text-ink"
+                  class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-2 py-2 font-mono text-caption text-ink"
                 />
               </div>
             </div>
@@ -433,7 +433,7 @@ defmodule DeckexWeb.OptimizationsLive do
                   type="text"
                   name="contract[notes]"
                   placeholder="ex.: mantenha o tema de lontras"
-                  class="min-h-11 w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-caption text-ink placeholder:text-ink-faint"
+                  class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-caption text-ink placeholder:text-ink-faint"
                 />
               </div>
 
@@ -447,7 +447,7 @@ defmodule DeckexWeb.OptimizationsLive do
                 <select
                   id="launch-model"
                   name="contract[model]"
-                  class="min-h-11 w-full rounded-md border border-hairline-soft bg-inlay px-2 py-2 font-mono text-caption text-ink"
+                  class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-2 py-2 font-mono text-caption text-ink"
                 >
                   <option
                     :for={model <- Consults.models()}
@@ -464,7 +464,7 @@ defmodule DeckexWeb.OptimizationsLive do
               <button
                 type="button"
                 phx-click="fechar-lancador"
-                class="-my-2 inline-flex min-h-11 items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+                class="-my-2 inline-flex min-h-touch items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
               >
                 Cancelar
               </button>

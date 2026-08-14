@@ -281,6 +281,13 @@ defmodule DeckexWeb.OptimizationLive do
 
   defp criticals(report), do: Report.critical_count(report)
 
+  # Direction, not magnitude: the owner wants to know whether the needle moved
+  # the right way. Unchanged is neutral — The Quiet-Health Rule says a deck
+  # that is fine should not glow.
+  defp delta_tone(before, now) when now < before, do: :healthy
+  defp delta_tone(before, now) when now > before, do: :critical
+  defp delta_tone(_same, _now), do: :neutral
+
   # Only adds carry a price tag: a cut costs nothing, and an unpriced card
   # shows nothing rather than a guess (the price law).
   defp add_price(%{"action" => "add", "card" => name}) do
@@ -351,7 +358,7 @@ defmodule DeckexWeb.OptimizationLive do
 
       <.link
         navigate={~p"/decks/#{@deck.id}/otimizacoes"}
-        class="-my-2 inline-flex min-h-11 items-center py-2 text-caption text-ink-faint transition-colors hover:text-ink"
+        class="-my-2 inline-flex min-h-touch items-center py-2 text-caption text-ink-faint transition-colors hover:text-ink"
       >
         ← Otimizações de {@deck.name}
       </.link>
@@ -415,39 +422,26 @@ defmodule DeckexWeb.OptimizationLive do
           </div>
         </div>
 
-        <div class="mt-6 grid grid-cols-2 gap-4 rounded-xl border border-hairline-soft bg-surface p-5 sm:grid-cols-5">
-          <div>
-            <p class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">Críticos</p>
-            <p class="font-mono text-numeral-sm text-ink">
-              {criticals(@report_original)} → {criticals(@report_current)}
-            </p>
-          </div>
-          <div>
-            <p class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
-              Bracket (piso)
-            </p>
-            <p class="font-mono text-numeral-sm text-ink">
-              {@report_original.bracket.floor} → {@report_current.bracket.floor}
-            </p>
-          </div>
-          <div>
-            <p class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">Entradas</p>
-            <p class="font-mono text-numeral-sm text-ink">{Money.brl(changes_cost(@optimization))}</p>
-          </div>
-          <div>
-            <p class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">Mudanças</p>
-            <p class="font-mono text-numeral-sm text-ink">{changed_count(@optimization)}</p>
-          </div>
-          <div>
-            <p class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">Cartas</p>
-            <p class={[
-              "font-mono text-numeral-sm",
-              @card_count == 100 && "text-ink",
-              @card_count != 100 && "text-sev-warning"
-            ]}>
-              {@card_count}<span class="text-caption text-ink-faint">/100</span>
-            </p>
-          </div>
+        <div class="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <.stat
+            label="Críticos"
+            value={Integer.to_string(criticals(@report_current))}
+            target={"eram #{criticals(@report_original)}"}
+            tone={delta_tone(criticals(@report_original), criticals(@report_current))}
+          />
+          <.stat
+            label="Bracket (piso)"
+            value={Integer.to_string(@report_current.bracket.floor)}
+            target={"era #{@report_original.bracket.floor}"}
+          />
+          <.stat label="Entradas" value={Money.brl(changes_cost(@optimization))} />
+          <.stat label="Mudanças" value={Integer.to_string(changed_count(@optimization))} />
+          <.stat
+            label="Cartas"
+            value={Integer.to_string(@card_count)}
+            target="alvo 100"
+            tone={if @card_count == 100, do: :healthy, else: :warning}
+          />
         </div>
       </header>
 
@@ -460,14 +454,36 @@ defmodule DeckexWeb.OptimizationLive do
         <ul class="grid gap-4 sm:grid-cols-3">
           <li
             :for={{vision, index} <- Enum.with_index(@visions)}
-            class="flex flex-col rounded-xl border border-hairline-soft bg-surface p-5"
+            class="flex min-w-0 flex-col rounded-xl border border-hairline-soft bg-surface p-5"
           >
-            <h3 class="text-heading font-semibold text-ink">{vision.nome}</h3>
-            <p class="mt-2 flex-1 text-caption text-ink-secondary">{vision.tese}</p>
+            <div class="flex items-start justify-between gap-2">
+              <h3 class="text-heading font-semibold leading-tight text-ink">{vision.nome}</h3>
+              <span
+                :if={vision.eixo != ""}
+                class="shrink-0 rounded-sm bg-chip px-2 py-0.5 font-mono text-micro text-ink-secondary"
+              >
+                {vision.eixo}
+              </span>
+            </div>
 
-            <p class="mt-3 text-caption text-ink-muted">
-              <span class="font-semibold">O que perde:</span> {vision.custo}
+            <p class="mt-3 font-mono text-numeral-sm leading-none text-ink">
+              {Money.brl(vision.total_usd)}
+              <span class="font-sans text-caption text-ink-faint">em entradas</span>
             </p>
+
+            <p class="mt-3 flex-1 text-caption leading-relaxed text-ink-secondary">{vision.tese}</p>
+
+            <div :if={vision.cartas != []} class="-mx-1 mt-4 min-w-0 overflow-x-auto px-1 pb-1">
+              <div class="flex gap-2">
+                <.card_thumb
+                  :for={carta <- vision.cartas}
+                  name={carta.name}
+                  art={carta.card && carta.card.image_art_crop_url}
+                  uri={carta.card && carta.card.scryfall_uri}
+                  note={carta.price_usd && Money.brl(carta.price_usd)}
+                />
+              </div>
+            </div>
 
             <p :if={vision.comandante_nome} class="mt-3 text-caption">
               <span class="text-ink-muted">Comandante:</span>
@@ -476,25 +492,17 @@ defmodule DeckexWeb.OptimizationLive do
                 uri={vision.comandante && vision.comandante.scryfall_uri}
                 class="text-ink"
               />
-              <span :if={vision.comandante_problem} class="text-sev-critical">
-                — {vision.comandante_problem}
+              <span :if={vision.comandante_problem} class="block text-sev-critical">
+                {vision.comandante_problem}
               </span>
             </p>
 
-            <ul :if={vision.cartas != []} class="mt-3 space-y-1">
-              <li :for={carta <- vision.cartas} class="text-caption text-ink-secondary">
-                <.card_link
-                  name={carta.name}
-                  uri={carta.card && carta.card.scryfall_uri}
-                  class="text-ink"
-                />
-                <span class="font-mono text-ink-faint">{Money.brl(carta.price_usd)}</span>
-              </li>
-            </ul>
-
-            <p class="mt-3 font-mono text-caption text-ink">
-              entradas: {Money.brl(vision.total_usd)}
-            </p>
+            <details class="mt-3">
+              <summary class="-my-2 inline-flex min-h-touch cursor-pointer items-center py-2 text-caption text-ink-faint transition-colors hover:text-ink motion-reduce:transition-none">
+                O que o deck perde
+              </summary>
+              <p class="mt-1 text-caption leading-relaxed text-ink-muted">{vision.custo}</p>
+            </details>
 
             <.button
               type="button"
@@ -514,7 +522,7 @@ defmodule DeckexWeb.OptimizationLive do
           phx-click="outras-visoes"
           phx-disable-with="pedindo…"
           data-confirm="Pedir outras três direções? Isso gasta mais uma consulta."
-          class="-my-2 mt-4 inline-flex min-h-11 items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+          class="-my-2 mt-4 inline-flex min-h-touch items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
         >
           Pedir outras três (mais uma consulta)
         </button>
@@ -625,7 +633,7 @@ defmodule DeckexWeb.OptimizationLive do
               phx-value-rating="up"
               aria-label="Etapa boa"
               class={[
-                "inline-flex size-11 items-center justify-center rounded-md transition-colors",
+                "inline-flex size-touch items-center justify-center rounded-md transition-colors",
                 step.feedback["rating"] == "up" && "bg-inlay text-sev-healthy",
                 step.feedback["rating"] != "up" && "text-ink-faint hover:text-ink"
               ]}
@@ -639,7 +647,7 @@ defmodule DeckexWeb.OptimizationLive do
               phx-value-rating="down"
               aria-label="Etapa ruim"
               class={[
-                "inline-flex size-11 items-center justify-center rounded-md transition-colors",
+                "inline-flex size-touch items-center justify-center rounded-md transition-colors",
                 step.feedback["rating"] == "down" && "bg-inlay text-sev-critical",
                 step.feedback["rating"] != "down" && "text-ink-faint hover:text-ink"
               ]}
@@ -653,7 +661,7 @@ defmodule DeckexWeb.OptimizationLive do
               phx-value-favorite="toggle"
               aria-label="Favoritar etapa"
               class={[
-                "inline-flex size-11 items-center justify-center rounded-md transition-colors",
+                "inline-flex size-touch items-center justify-center rounded-md transition-colors",
                 step.feedback["favorite"] == true && "bg-inlay text-sev-warning",
                 step.feedback["favorite"] != true && "text-ink-faint hover:text-ink"
               ]}
@@ -676,11 +684,11 @@ defmodule DeckexWeb.OptimizationLive do
                 name="feedback[note]"
                 value={step.feedback["note"]}
                 placeholder="anotar algo sobre esta etapa…"
-                class="min-h-11 w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-caption text-ink placeholder:text-ink-faint"
+                class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-caption text-ink placeholder:text-ink-faint"
               />
               <button
                 type="submit"
-                class="-my-2 inline-flex min-h-11 items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+                class="-my-2 inline-flex min-h-touch items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
               >
                 guardar
               </button>
@@ -692,7 +700,7 @@ defmodule DeckexWeb.OptimizationLive do
               phx-value-step={step.id}
               phx-disable-with="criando…"
               data-confirm="Criar um deck novo com a lista desta etapa?"
-              class="-my-2 inline-flex min-h-11 items-center whitespace-nowrap px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+              class="-my-2 inline-flex min-h-touch items-center whitespace-nowrap px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
             >
               Criar deck deste ponto
             </button>
@@ -742,7 +750,7 @@ defmodule DeckexWeb.OptimizationLive do
               type="button"
               phx-hook=".CopyList"
               data-target="lista-final"
-              class="-my-2 mt-1 inline-flex min-h-11 items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+              class="-my-2 mt-1 inline-flex min-h-touch items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
             >
               copiar tudo
             </button>

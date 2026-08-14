@@ -24,7 +24,7 @@ defmodule DeckexWeb.SettingsLive do
       <DeckexWeb.Layouts.flash_group flash={@flash} />
       <.link
         navigate={~p"/"}
-        class="-my-2 inline-flex min-h-11 items-center py-2 text-caption text-ink-faint transition-colors hover:text-ink"
+        class="-my-2 inline-flex min-h-touch items-center py-2 text-caption text-ink-faint transition-colors hover:text-ink"
       >
         ← A Mesa
       </.link>
