@@ -614,14 +614,27 @@ defmodule DeckexWeb.OptimizationLive do
               copiar tudo
             </button>
             <script :type={Phoenix.LiveView.ColocatedHook} name=".CopyList">
+              // The clipboard API can refuse (permissions, embedded browsers).
+              // Refusal must not be silence: fall back to selecting the text
+              // so one keystroke finishes the job, and say so on the button.
               export default {
                 mounted() {
                   this.el.addEventListener("click", () => {
                     const target = document.getElementById(this.el.dataset.target)
-                    navigator.clipboard.writeText(target.value).then(() => {
-                      this.el.textContent = "copiado ✓"
-                      setTimeout(() => { this.el.textContent = "copiar tudo" }, 2000)
-                    })
+
+                    const flash = (text) => {
+                      this.el.textContent = text
+                      setTimeout(() => { this.el.textContent = "copiar tudo" }, 2500)
+                    }
+
+                    navigator.clipboard.writeText(target.value).then(
+                      () => flash("copiado ✓"),
+                      () => {
+                        target.focus()
+                        target.select()
+                        flash("selecionei — copia com Ctrl/⌘+C")
+                      }
+                    )
                   })
                 }
               }
