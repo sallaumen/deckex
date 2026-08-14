@@ -57,11 +57,26 @@ defmodule DeckexWeb.OptimizationLive do
       card_count: Optimizations.card_count(Optimizations.current_list(optimization)),
       stage_progress: stage_progress(optimization, deck, baselines),
       visions: vision_cards(optimization, deck),
+      card_uris: Cards.uris_for_names(named_cards(optimization)),
       now: DateTime.utc_now(),
       report_original: Analysis.report(original, baselines),
       report_current: Analysis.report(current, baselines),
       page_title: page_title(optimization, deck)
     )
+  end
+
+  # Every card name this page can render, in one query: the changes each stage
+  # applied or had refused, plus the current list. A cut card is gone from the
+  # list but still named on the timeline, so the list alone is not enough.
+  defp named_cards(optimization) do
+    from_steps =
+      optimization.steps
+      |> Enum.flat_map(&((&1.applied || []) ++ (&1.rejected || [])))
+      |> Enum.map(& &1["card"])
+
+    from_list = Enum.map(Optimizations.current_list(optimization), & &1["name"])
+
+    (from_steps ++ from_list) |> Enum.reject(&is_nil/1) |> Enum.uniq()
   end
 
   # Only while the run is waiting: the latest set is the live one. Priced and
@@ -456,7 +471,11 @@ defmodule DeckexWeb.OptimizationLive do
 
             <p :if={vision.comandante_nome} class="mt-3 text-caption">
               <span class="text-ink-muted">Comandante:</span>
-              <span class="text-ink">{vision.comandante_nome}</span>
+              <.card_link
+                name={vision.comandante_nome}
+                uri={vision.comandante && vision.comandante.scryfall_uri}
+                class="text-ink"
+              />
               <span :if={vision.comandante_problem} class="text-sev-critical">
                 — {vision.comandante_problem}
               </span>
@@ -464,7 +483,11 @@ defmodule DeckexWeb.OptimizationLive do
 
             <ul :if={vision.cartas != []} class="mt-3 space-y-1">
               <li :for={carta <- vision.cartas} class="text-caption text-ink-secondary">
-                <span class="text-ink">{carta.name}</span>
+                <.card_link
+                  name={carta.name}
+                  uri={carta.card && carta.card.scryfall_uri}
+                  class="text-ink"
+                />
                 <span class="font-mono text-ink-faint">{Money.brl(carta.price_usd)}</span>
               </li>
             </ul>
@@ -567,7 +590,7 @@ defmodule DeckexWeb.OptimizationLive do
                 ]}>
                   {if change["action"] == "add", do: "+", else: "−"}
                 </span>
-                <span class="text-ink">{change["card"]}</span>
+                <.card_link name={change["card"]} uri={@card_uris[change["card"]]} class="text-ink" />
                 <span class="text-ink-muted">— {change["reason"]}</span>
               </li>
             </ul>
@@ -579,7 +602,11 @@ defmodule DeckexWeb.OptimizationLive do
             </h3>
             <ul class="space-y-1">
               <li :for={change <- step.rejected} class="text-caption">
-                <span class="text-ink-secondary">{change["card"]}</span>
+                <.card_link
+                  name={change["card"]}
+                  uri={@card_uris[change["card"]]}
+                  class="text-ink-secondary"
+                />
                 <span class="text-sev-critical">
                   — {Enum.join(change["problems"] || [], "; ")}
                 </span>
@@ -700,7 +727,7 @@ defmodule DeckexWeb.OptimizationLive do
               ]}>
                 {if change["action"] == "add", do: "+", else: "−"}
               </span>
-              <span class="text-ink">{change["card"]}</span>
+              <.card_link name={change["card"]} uri={@card_uris[change["card"]]} class="text-ink" />
               <span :if={price = add_price(change)} class="font-mono text-ink-faint">{price}</span>
               <span class="text-ink-muted">— {change["reason"]}</span>
             </li>

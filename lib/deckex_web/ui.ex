@@ -232,6 +232,8 @@ defmodule DeckexWeb.UI do
   attr :severity, :atom, values: [:critical, :warning, :healthy, :info], required: true
   attr :title, :string, required: true, doc: "pt-BR"
   attr :code, :string, default: nil, doc: ~S(the finding code, e.g. `"mana.color_starved"`)
+  attr :links, :map, default: %{}, doc: "card name => Scryfall URI, for the chips"
+
   attr :cards, :list, default: [], doc: "implicated card names — never translated"
   attr :class, :any, default: nil
   slot :detail, doc: "the pt-BR explanation"
@@ -266,9 +268,9 @@ defmodule DeckexWeb.UI do
       <ul :if={@cards != []} class="mt-3 flex flex-wrap gap-1.5 pl-[18px]">
         <li
           :for={name <- @cards}
-          class="rounded-sm bg-chip px-2 py-0.5 text-caption text-ink-secondary"
+          class="rounded-sm bg-chip px-2 py-0.5 text-caption text-ink-secondary transition-colors hover:text-ink motion-reduce:transition-none"
         >
-          {name}
+          <.card_link name={name} uri={@links[name]} />
         </li>
       </ul>
 
@@ -283,6 +285,54 @@ defmodule DeckexWeb.UI do
 
   defp finding_surface(severity) when severity in [:critical, :warning], do: "tint"
   defp finding_surface(_severity), do: "border border-hairline bg-surface"
+
+  @doc """
+  A card's name, linking to its Scryfall page when we know it.
+
+  Card names are the app's densest information and were, until now, dead text:
+  the one question a player asks constantly — *what does this card actually do?*
+  — had no answer on the screen. Every name the catalogue knows becomes a way
+  to go read the card.
+
+  The underline is **permanent**, not a hover effect. A link discoverable only
+  by hovering is invisible to touch and to anyone scanning, and half this app
+  is read on a phone at a table.
+
+  A name the catalogue never resolved renders as plain text: an unresolved card
+  has nowhere honest to point.
+
+  ## Examples
+
+      <.card_link name="Sol Ring" uri={@card.scryfall_uri} />
+      <.card_link name={change["card"]} uri={@card_uris[change["card"]]} />
+  """
+  attr :name, :string, required: true, doc: "the Scryfall card name — never translated"
+  attr :uri, :string, default: nil, doc: "the card's Scryfall page, or nil when unknown"
+  attr :class, :any, default: nil
+
+  def card_link(%{uri: nil} = assigns) do
+    ~H"""
+    <span class={@class}>{@name}</span>
+    """
+  end
+
+  def card_link(assigns) do
+    ~H"""
+    <a
+      href={@uri}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={"Ver #{@name} na Scryfall"}
+      class={[
+        "underline decoration-hairline-strong decoration-dotted underline-offset-[3px]",
+        "transition-colors hover:decoration-ink motion-reduce:transition-none",
+        @class
+      ]}
+    >
+      {@name}
+    </a>
+    """
+  end
 
   @doc """
   A card, led by its art.

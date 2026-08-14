@@ -46,6 +46,7 @@ defmodule DeckexWeb.DeckLive do
       snapshot: snapshot,
       report: Analysis.report(snapshot, Settings.baselines()),
       model: Settings.model(),
+      card_uris: card_uris(snapshot),
       running_optimization: Optimizations.running_for_deck(deck.id),
       page_title: deck.name
     )
@@ -134,6 +135,15 @@ defmodule DeckexWeb.DeckLive do
     put_flash(socket, :error, error.message)
   end
 
+  # One map for the whole screen, built from the snapshot already in memory —
+  # every card the page can name is in it, and no extra query is needed.
+  defp card_uris(snapshot) do
+    (snapshot.main ++ snapshot.commanders)
+    |> Enum.map(& &1.card)
+    |> Enum.reject(&is_nil(&1.scryfall_uri))
+    |> Map.new(&{&1.name, &1.scryfall_uri})
+  end
+
   defp refresh_consults(socket) do
     consults = Consults.list_for_deck(socket.assigns.deck)
     suggestions = Map.new(consults, &{&1.id, Suggestions.for_consult(&1)})
@@ -203,7 +213,11 @@ defmodule DeckexWeb.DeckLive do
         <div>
           <h1 class="text-display font-semibold text-ink">{@deck.name}</h1>
           <p :for={commander <- @snapshot.commanders} class="mt-1 flex items-center gap-2">
-            <span class="text-body text-ink-secondary">{commander.card.name}</span>
+            <.card_link
+              name={commander.card.name}
+              uri={commander.card.scryfall_uri}
+              class="text-body text-ink-secondary"
+            />
             <.mana_cost cost={commander.card.mana_cost} size={14} />
           </p>
         </div>
@@ -360,6 +374,7 @@ defmodule DeckexWeb.DeckLive do
               title={finding.title}
               code={finding.code}
               cards={finding.card_names}
+              links={@card_uris}
             >
               <:detail>{finding.detail}</:detail>
               <:actions>
@@ -734,7 +749,11 @@ defmodule DeckexWeb.DeckLive do
                               ]}>
                                 {if row.action == :cut, do: "−", else: "+"}
                               </span>
-                              <span class="text-ink">{row.name}</span>
+                              <.card_link
+                                name={row.name}
+                                uri={row.card && row.card.scryfall_uri}
+                                class="text-ink"
+                              />
                               <.mana_cost :if={row.card} cost={row.card.mana_cost} size={12} />
                             </div>
 

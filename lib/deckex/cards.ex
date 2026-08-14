@@ -122,6 +122,34 @@ defmodule Deckex.Cards do
   end
 
   @doc """
+  Maps each of `names` to its Scryfall page, for the names it knows.
+
+  One query for a whole screen: a page that shows fifty card names must not
+  make fifty round trips. Names the catalogue has never seen are simply absent
+  from the map, and the UI renders them as plain text — an unresolved card has
+  nowhere honest to link to.
+  """
+  @spec uris_for_names([String.t()]) :: %{String.t() => String.t()}
+  def uris_for_names([]), do: %{}
+
+  def uris_for_names(names) when is_list(names) do
+    by_normalized =
+      names
+      |> Enum.map(&Name.normalize/1)
+      |> CardQuery.list_by_normalized_names()
+      |> Map.new(&{&1.name_normalized, &1.scryfall_uri})
+
+    names
+    |> Enum.uniq()
+    |> Enum.reduce(%{}, fn name, acc ->
+      case Map.get(by_normalized, Name.normalize(name)) do
+        nil -> acc
+        uri -> Map.put(acc, name, uri)
+      end
+    end)
+  end
+
+  @doc """
   Reclassifies the whole catalogue against today's rules, returning how many
   cards were touched.
 
