@@ -156,6 +156,52 @@ defmodule Deckex.Consults.BriefingTest do
       card_count: 98
     }
 
+    test "the reconstruction stage is told it has more room than the others" do
+      briefing = build(:full, optimization: %{@optimization | stage_kind: :reconstruction})
+
+      assert briefing =~ "reconstruction"
+      assert briefing =~ "more room here than any other stage"
+    end
+
+    test "the salt contract states what is a rule and what is a wish" do
+      salted =
+        put_in(@optimization.contract["salt"], %{"stax" => "evitar", "counter" => "quero"})
+
+      briefing = build(:full, optimization: salted)
+
+      assert briefing =~ "Do NOT propose: stax / prisão"
+      assert briefing =~ "actively wants more of: counters"
+    end
+
+    test "with a direction chosen, the briefing names it as the target" do
+      with_vision =
+        put_in(@optimization.contract["visao"], %{
+          "nome" => "Mais rápido",
+          "tese" => "Fecha antes.",
+          "custo" => "Fica frágil."
+        })
+
+      briefing = build(:full, optimization: with_vision)
+
+      assert briefing =~ "A direção escolhida: Mais rápido"
+      assert briefing =~ "context, not the goal"
+    end
+
+    test "alinhamento measures against the vision when there is one, the dossier otherwise" do
+      with_vision =
+        put_in(@optimization.contract["visao"], %{
+          "nome" => "Mais rápido",
+          "tese" => "t",
+          "custo" => "c"
+        })
+
+      assert build(:alinhamento, optimization: with_vision) =~
+               "**Mais rápido** — is the reference"
+
+      assert build(:alinhamento, optimization: @optimization) =~
+               "dossier above is the **fixed reference**"
+    end
+
     test "the copy's card count lands with its direction" do
       briefing = build(:full, optimization: @optimization)
 

@@ -62,7 +62,22 @@ defmodule Deckex.Optimizations do
   at all.
   """
   @spec recipe(Deck.t()) :: [map()]
-  def recipe(%Deck{} = deck) do
+  def recipe(%Deck{} = deck), do: recipe(deck, :refine)
+
+  @doc """
+  The stages, as data.
+
+  `:refine` opens with a scout only when the dossier is missing or stale.
+  `:reimagine` opens with the visions and never scouts: a reimagining does not
+  need the deck's current purpose written down first, and the dossier — when
+  there is one — is passed as context regardless.
+
+  Stages 3-10 of the reimagine recipe are the refine recipe verbatim, and that
+  is the point: once the direction is chosen and the big swap is done, making
+  the new deck good is the work the Otimizador already does well.
+  """
+  @spec recipe(Deck.t(), :refine | :reimagine) :: [map()]
+  def recipe(%Deck{} = deck, :refine) do
     scout =
       if deck.dossier == nil or deck.dossier_stale do
         [%{"kind" => "lens", "lens" => "scout", "label" => "Dossiê"}]
@@ -70,17 +85,27 @@ defmodule Deckex.Optimizations do
         []
       end
 
-    scout ++
-      [
-        %{"kind" => "lens", "lens" => "mana_ramp", "label" => "Mana"},
-        %{"kind" => "lens", "lens" => "speed_curve", "label" => "Early game"},
-        %{"kind" => "lens", "lens" => "interaction", "label" => "Interação"},
-        %{"kind" => "lens", "lens" => "consistency", "label" => "Consistência"},
-        %{"kind" => "checkpoint", "lens" => "full", "label" => "Estabilização 1"},
-        %{"kind" => "validation", "lens" => "matchup", "label" => "Matchups"},
-        %{"kind" => "validation", "lens" => "alinhamento", "label" => "Propósito"},
-        %{"kind" => "checkpoint", "lens" => "full", "label" => "Estabilização 2"}
-      ]
+    scout ++ tuning_stages()
+  end
+
+  def recipe(%Deck{} = _deck, :reimagine) do
+    [
+      %{"kind" => "lens", "lens" => "visao", "label" => "Visões"},
+      %{"kind" => "reconstruction", "lens" => "full", "label" => "Reconstrução"}
+    ] ++ tuning_stages()
+  end
+
+  defp tuning_stages do
+    [
+      %{"kind" => "lens", "lens" => "mana_ramp", "label" => "Mana"},
+      %{"kind" => "lens", "lens" => "speed_curve", "label" => "Early game"},
+      %{"kind" => "lens", "lens" => "interaction", "label" => "Interação"},
+      %{"kind" => "lens", "lens" => "consistency", "label" => "Consistência"},
+      %{"kind" => "checkpoint", "lens" => "full", "label" => "Estabilização 1"},
+      %{"kind" => "validation", "lens" => "matchup", "label" => "Matchups"},
+      %{"kind" => "validation", "lens" => "alinhamento", "label" => "Propósito"},
+      %{"kind" => "checkpoint", "lens" => "full", "label" => "Estabilização 2"}
+    ]
   end
 
   @doc """
@@ -101,7 +126,8 @@ defmodule Deckex.Optimizations do
        )}
     else
       %{list: list, commanders: commanders} = list_from_deck(deck)
-      recipe = recipe_override || recipe(deck)
+      {mode, contract_attrs} = Map.pop(contract_attrs, "mode", :refine)
+      recipe = recipe_override || recipe(deck, mode)
       contract = Map.merge(default_contract(deck), contract_attrs)
 
       {:ok, optimization} =
@@ -110,6 +136,7 @@ defmodule Deckex.Optimizations do
             %Optimization{}
             |> Optimization.changeset(%{
               deck_id: deck.id,
+              mode: mode,
               status: :running,
               contract: contract,
               recipe: recipe,

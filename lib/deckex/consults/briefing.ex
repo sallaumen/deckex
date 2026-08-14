@@ -137,13 +137,11 @@ defmodule Deckex.Consults.Briefing do
     """
   end
 
-  defp task_block(:alinhamento, _opts) do
+  defp task_block(:alinhamento, opts) do
     """
-    The dossier above is the **fixed reference**: it was written before any of
-    this optimization's changes. Compare the current list against it.
+    #{alignment_target(get_in(opts, [:optimization, :contract]) || %{})}
 
-    Does this deck still do what its dossier says it does? Propose changes
-    ONLY where the optimization drifted from the stated purpose — a card that
+    Propose changes ONLY where the optimization drifted from it — a card that
     serves the plan poorly, a line of victory that got weakened, an identity
     the changes diluted. If nothing drifted, say so and propose nothing.
     """
@@ -193,6 +191,22 @@ defmodule Deckex.Consults.Briefing do
     """
     Work the findings above. For each one, name specific cards to **cut** from
     the list and specific cards to **add**, and say why in one sentence each.
+    """
+  end
+
+  defp alignment_target(%{"visao" => vision}) when is_map(vision) do
+    """
+    The chosen direction — **#{vision["nome"]}** — is the reference. Compare
+    the current list against it: does this deck now do what that direction
+    promised? The old dossier is not the target; abandoning it was the point.
+    """
+  end
+
+  defp alignment_target(_no_vision) do
+    """
+    The dossier above is the **fixed reference**: it was written before any of
+    this optimization's changes. Compare the current list against it. Does
+    this deck still do what its dossier says it does?
     """
   end
 
@@ -317,7 +331,25 @@ defmodule Deckex.Consults.Briefing do
     You may revert an earlier stage's change, but engage its stated reason.
     Each card may enter and leave this optimization once — the engine enforces
     it, so do not propose re-flipping a card listed above as already reverted.
-    #{stage_kind_line(stage_kind)}
+    #{vision_line(contract["visao"])}#{stage_kind_line(stage_kind)}
+    """
+  end
+
+  # Once a direction is chosen it is the target, and the deck's old dossier —
+  # which may still be injected above — becomes context rather than the goal.
+  defp vision_line(nil), do: ""
+
+  defp vision_line(vision) do
+    """
+
+    ### A direção escolhida: #{vision["nome"]}
+
+    #{vision["tese"]}
+
+    The owner accepted this cost: #{vision["custo"]}
+
+    This is the target now. The deck's dossier, if one appears above, is **what
+    the deck was** — context, not the goal.
     """
   end
 
@@ -391,6 +423,10 @@ defmodule Deckex.Consults.Briefing do
 
   defp stage_kind_line(:checkpoint) do
     "\nThis is a **stabilization checkpoint**: look at the whole picture. Reverting earlier changes that did not earn their place is exactly your job."
+  end
+
+  defp stage_kind_line(:reconstruction) do
+    "\nThis is the **reconstruction**: the stage that turns the chosen direction into a deck. You have more room here than any other stage — cut what does not serve the direction and add what does. The ceilings, the colour identity, the salt contract and the flip-flop rule all still hold."
   end
 
   defp stage_kind_line(:validation) do

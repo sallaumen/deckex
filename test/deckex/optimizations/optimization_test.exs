@@ -43,6 +43,30 @@ defmodule Deckex.Optimizations.OptimizationTest do
     refute OptimizationQuery.running_for_deck(optimization.deck_id)
   end
 
+  describe "the reimagine recipe" do
+    test "opens with the visions and closes with two checkpoints" do
+      recipe = Deckex.Optimizations.recipe(insert(:deck), :reimagine)
+
+      assert hd(recipe)["lens"] == "visao"
+      assert Enum.at(recipe, 1)["kind"] == "reconstruction"
+      assert List.last(recipe)["kind"] == "checkpoint"
+      assert length(recipe) == 10
+    end
+
+    test "it never scouts — a reimagining does not need the old purpose written down" do
+      deck = insert(:deck, dossier: nil, dossier_stale: true)
+
+      refute Enum.any?(Deckex.Optimizations.recipe(deck, :reimagine), &(&1["lens"] == "scout"))
+    end
+
+    test "refine is unchanged" do
+      deck = insert(:deck, dossier: %{"plano" => "x"}, dossier_stale: false)
+
+      assert length(Deckex.Optimizations.recipe(deck, :refine)) == 8
+      assert Deckex.Optimizations.recipe(deck) == Deckex.Optimizations.recipe(deck, :refine)
+    end
+  end
+
   describe "the mode" do
     test "defaults to refine" do
       assert insert(:optimization).mode == :refine
