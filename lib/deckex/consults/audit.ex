@@ -92,7 +92,8 @@ defmodule Deckex.Consults.Audit do
       flips:
         opts |> Keyword.get(:history, []) |> Enum.frequencies_by(&Name.normalize(&1["card"])),
       keep: opts |> Keyword.get(:keep, []) |> MapSet.new(&Name.normalize/1),
-      bracket_max: Keyword.get(opts, :bracket_max)
+      bracket_max: Keyword.get(opts, :bracket_max),
+      avoid: Keyword.get(opts, :avoid, %{})
     }
   end
 
@@ -132,6 +133,17 @@ defmodule Deckex.Consults.Audit do
 
   defp contract_bracket_problem(_card, _roles, _pipeline, _snapshot), do: nil
 
+  # Taste, not power. The owner said they do not want this kind of card at
+  # their table, and inside a pipeline nobody is there to click "no". Only
+  # `evitar` reaches here — wanting a tactic is an invitation in the briefing,
+  # because no engine can force a model to have an idea.
+  defp salt_problem(entry_roles, %{avoid: avoid}) do
+    case Enum.find(avoid, fn {role, _label} -> role in entry_roles end) do
+      {_role, label} -> "você marcou evitar #{label} nesta rodada"
+      nil -> nil
+    end
+  end
+
   # An unresolved suggestion has no card data to check; the table already
   # marks it and the simulation cannot use it.
   defp problems(%Suggestion{resolved?: false}, _snapshot, _in_main, _ceilings, _pipe), do: []
@@ -169,6 +181,7 @@ defmodule Deckex.Consults.Audit do
         ceiling_problem(card, suggestion.price_usd, ceilings),
         bracket_problem(card, snapshot),
         contract_bracket_problem(card, entry_roles, pipeline, snapshot),
+        salt_problem(entry_roles, pipeline),
         flip_flop_problem(pipeline, suggestion.name)
       ],
       &is_nil/1

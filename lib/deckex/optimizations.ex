@@ -26,6 +26,7 @@ defmodule Deckex.Optimizations do
   alias Deckex.Optimizations.Optimization
   alias Deckex.Optimizations.OptimizationQuery
   alias Deckex.Optimizations.OptimizationStep
+  alias Deckex.Optimizations.Salt
   alias Deckex.Repo
   alias Deckex.Settings
 
@@ -300,7 +301,8 @@ defmodule Deckex.Optimizations do
         ceilings,
         history: history(optimization, step),
         keep: (optimization.contract["keep"] || []) ++ optimization.commanders,
-        bracket_max: optimization.contract["bracket_max"]
+        bracket_max: optimization.contract["bracket_max"],
+        avoid: Salt.avoided(optimization.contract["salt"])
       )
 
     split(suggestions, audit)

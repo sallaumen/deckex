@@ -184,4 +184,46 @@ defmodule Deckex.Consults.AuditTest do
       refute ceiling_verdict(audit, "Rhystic Study")
     end
   end
+
+  describe "the salt contract" do
+    # Identity widened to UG on the struct, not in the database: the point of
+    # these tests is the salt guard, and an identity refusal would mask it.
+    defp temur_snapshot, do: %{snapshot() | color_identity: ["G", "U"]}
+
+    # The snapshot is built FIRST because building it is what seeds the
+    # catalogue; a suggestion built before that resolves to no card at all.
+    defp audit_with(name, opts) do
+      snapshot = temur_snapshot()
+      suggestion = sugg(:add, name)
+      {:ok, _roles} = Cards.classify_card(suggestion.card)
+
+      Audit.run(
+        snapshot,
+        [suggestion],
+        Cards.roles_by_card_ids([suggestion.card.id]),
+        Settings.baselines(),
+        %{card: nil, land: nil},
+        opts
+      )
+    end
+
+    test "an add carrying a tactic the owner avoids is refused, with the reason" do
+      audit = audit_with("Counterspell", avoid: %{counter: "counters"})
+
+      assert [problem] = audit.problems[{:add, "Counterspell"}]
+      assert problem =~ "evitar counters"
+    end
+
+    test "the same add passes when the owner did not avoid it" do
+      audit = audit_with("Counterspell", avoid: %{})
+
+      refute audit.problems[{:add, "Counterspell"}]
+    end
+
+    test "avoiding a tactic the card does not carry refuses nothing" do
+      audit = audit_with("Counterspell", avoid: %{mill: "mill"})
+
+      refute audit.problems[{:add, "Counterspell"}]
+    end
+  end
 end

@@ -16,6 +16,7 @@ defmodule Deckex.Consults.Briefing do
   alias Deckex.Analysis.Bracket
   alias Deckex.Analysis.DeckSnapshot
   alias Deckex.Analysis.Report
+  alias Deckex.Optimizations.Salt
 
   @spec build(Report.t(), DeckSnapshot.t(), atom(), keyword()) :: String.t()
   def build(%Report{} = report, %DeckSnapshot{} = snapshot, lens, opts \\ []) do
@@ -286,7 +287,7 @@ defmodule Deckex.Consults.Briefing do
 
     - Maximum bracket: **#{contract["bracket_max"]}** — an add that moves the deck past it will be rejected by the engine.
     - Price ceilings: R$ #{contract["ceilings"]["card"]} per card, R$ #{contract["ceilings"]["land"]} per land.
-    #{keep_line(contract["keep"])}#{notes_line(contract["notes"])}#{count_line(optimization[:card_count])}
+    #{salt_line(contract["salt"])}#{keep_line(contract["keep"])}#{notes_line(contract["notes"])}#{count_line(optimization[:card_count])}
     #{changelog_lines(changelog)}
     You may revert an earlier stage's change, but engage its stated reason.
     Each card may enter and leave this optimization once — the engine enforces
@@ -309,6 +310,24 @@ defmodule Deckex.Consults.Briefing do
       end
 
     "- The copy has **#{count} cards**; the finished deck must have exactly 100. #{direction}\n"
+  end
+
+  # Only the avoided half is a rule; the wanted half is an invitation, and the
+  # briefing says which is which so the model does not read a preference as a
+  # constraint or a constraint as a preference.
+  defp salt_line(nil), do: ""
+
+  defp salt_line(salt) do
+    avoided = salt |> Salt.avoided() |> Map.values()
+    wanted = Salt.wanted(salt)
+
+    [
+      avoided != [] &&
+        "- Do NOT propose: #{Enum.join(avoided, ", ")}. The engine rejects these adds.\n",
+      wanted != [] && "- The owner actively wants more of: #{Enum.join(wanted, ", ")}.\n"
+    ]
+    |> Enum.filter(& &1)
+    |> Enum.join()
   end
 
   defp keep_line([]), do: ""
