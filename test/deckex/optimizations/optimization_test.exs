@@ -42,4 +42,20 @@ defmodule Deckex.Optimizations.OptimizationTest do
     Repo.update!(Ecto.Changeset.change(optimization, status: :done))
     refute OptimizationQuery.running_for_deck(optimization.deck_id)
   end
+
+  describe "the mode" do
+    test "defaults to refine" do
+      assert insert(:optimization).mode == :refine
+    end
+
+    test "accepts reimagine" do
+      assert insert(:optimization, mode: :reimagine).mode == :reimagine
+    end
+
+    test "a run awaiting the owner's choice still blocks a second run" do
+      optimization = insert(:optimization, status: :awaiting_choice)
+
+      assert OptimizationQuery.running_for_deck(optimization.deck_id)
+    end
+  end
 end

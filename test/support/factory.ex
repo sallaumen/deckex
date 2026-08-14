@@ -65,6 +65,7 @@ defmodule Deckex.Factory do
   def optimization_factory do
     %Optimization{
       deck: build(:deck),
+      mode: :refine,
       status: :running,
       contract: %{
         "bracket_max" => 3,

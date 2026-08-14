@@ -17,13 +17,17 @@ defmodule Deckex.Optimizations.Optimization do
   alias Deckex.Decks.Deck
   alias Deckex.Optimizations.OptimizationStep
 
-  @fields ~w(deck_id status outcome contract recipe list_original commanders finished_at)a
-  @required ~w(deck_id status contract recipe list_original commanders)a
+  @fields ~w(deck_id mode status outcome contract recipe list_original commanders finished_at)a
+  @required ~w(deck_id mode status contract recipe list_original commanders)a
 
   @type t :: %__MODULE__{}
 
   schema "optimizations" do
-    field :status, Ecto.Enum, values: [:running, :paused, :done, :failed, :cancelled]
+    field :mode, Ecto.Enum, values: [:refine, :reimagine], default: :refine
+
+    field :status, Ecto.Enum,
+      values: [:running, :awaiting_choice, :paused, :done, :failed, :cancelled]
+
     field :outcome, :string
     field :contract, :map
     field :recipe, {:array, :map}

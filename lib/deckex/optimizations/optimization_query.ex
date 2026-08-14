@@ -38,7 +38,7 @@ defmodule Deckex.Optimizations.OptimizationQuery do
   def running_for_deck(deck_id) do
     Repo.one(
       from o in Optimization,
-        where: o.deck_id == ^deck_id and o.status in [:running, :paused],
+        where: o.deck_id == ^deck_id and o.status in [:running, :awaiting_choice, :paused],
         limit: 1
     )
   end
