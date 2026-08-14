@@ -78,7 +78,7 @@ defmodule Deckex.ConsultsTest do
 
       expect(Deckex.AI.Mock, :complete, fn prompt, schema, opts ->
         assert prompt =~ "Commander"
-        assert schema["required"] == ["diagnosis", "cuts", "adds"]
+        assert schema["required"] == ["leitura", "diagnosis", "cuts", "adds"]
         # The whole point: the model may look things up.
         assert opts[:allowed_tools] == ["WebSearch"]
 

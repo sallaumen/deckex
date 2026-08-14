@@ -22,7 +22,8 @@ defmodule Deckex.Consults.Consult do
     :finding,
     :matchup,
     :budget,
-    :upgrade
+    :upgrade,
+    :scout
   ]
 
   @type t :: %__MODULE__{}
