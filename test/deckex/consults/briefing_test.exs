@@ -129,4 +129,69 @@ defmodule Deckex.Consults.BriefingTest do
       assert briefing =~ "suggested and verified"
     end
   end
+
+  describe "the optimization block" do
+    @optimization %{
+      contract: %{
+        "bracket_max" => 3,
+        "ceilings" => %{"card" => 800, "land" => 200},
+        "keep" => ["Sol Ring"],
+        "notes" => "mantenha o tema de lontras"
+      },
+      changelog: [
+        %{
+          label: "Mana",
+          applied: [%{"action" => "add", "card" => "Cultivate", "reason" => "fecha o gap de G"}],
+          rejected: [
+            %{
+              "action" => "add",
+              "card" => "Cyclonic Rift",
+              "reason" => "varredura",
+              "problems" => ["é Game Changer — seria o 4º"]
+            }
+          ]
+        }
+      ],
+      stage_kind: :checkpoint
+    }
+
+    test "the contract, the changelog and the flip rule all land" do
+      briefing = build(:full, optimization: @optimization)
+
+      assert briefing =~ "## Otimização em andamento"
+      assert briefing =~ "Maximum bracket: **3**"
+      assert briefing =~ "Protected cards (never cut): Sol Ring"
+      assert briefing =~ "mantenha o tema de lontras"
+      assert briefing =~ "add Cultivate: fecha o gap de G"
+      assert briefing =~ "REJECTED add Cyclonic Rift"
+      assert briefing =~ "enter and leave this optimization once"
+    end
+
+    test "a checkpoint is invited to revert; a validation is told to test" do
+      checkpoint = build(:full, optimization: @optimization)
+      assert checkpoint =~ "stabilization checkpoint"
+
+      validation = build(:full, optimization: %{@optimization | stage_kind: :validation})
+      assert validation =~ "find what the tuning missed"
+    end
+
+    test "outside a pipeline there is no block at all" do
+      refute build(:full, []) =~ "Otimização em andamento"
+    end
+  end
+
+  describe "the alinhamento and multi-matchup tasks" do
+    test "alinhamento treats the dossier as the fixed reference" do
+      briefing = build(:alinhamento, dossier: @dossier)
+
+      assert briefing =~ "fixed reference"
+      assert briefing =~ "If nothing drifted, say so and propose nothing"
+    end
+
+    test "matchup accepts a list of targets" do
+      briefing = build(:matchup, against: ["um aggro rápido", "um controle pesado"])
+
+      assert briefing =~ "um aggro rápido; um controle pesado"
+    end
+  end
 end

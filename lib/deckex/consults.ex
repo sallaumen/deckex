@@ -85,7 +85,9 @@ defmodule Deckex.Consults do
   end
 
   defp start(deck, lens, models, opts) do
-    snapshot = Decks.snapshot(deck)
+    # The pipeline analyses its sandbox, not the deck: it passes the snapshot
+    # it built. Everything downstream — report, briefing, freeze — is shared.
+    snapshot = opts[:snapshot] || Decks.snapshot(deck)
     report = Analysis.report(snapshot, Settings.baselines())
     briefing = Briefing.build(report, snapshot, lens, briefing_opts(deck, lens, opts))
     frozen = freeze(report)
@@ -159,7 +161,8 @@ defmodule Deckex.Consults do
       status: :pending,
       briefing: briefing,
       report_snapshot: frozen,
-      model: model
+      model: model,
+      optimization_id: opts[:optimization_id]
     })
     |> Repo.insert!()
   end

@@ -209,4 +209,45 @@ defmodule Deckex.ConsultsTest do
       refute consult.briefing =~ "Leitura estratégica"
     end
   end
+
+  describe "consults inside an optimization" do
+    # Seeded in ONE call — two seed!/1 calls in one test is the documented
+    # 40P01 recipe (see CatalogueFixture's moduledoc).
+    test "request with a snapshot override freezes THAT list, tagged with the run" do
+      CatalogueFixture.seed!(~w(sol_ring forest counterspell cultivate))
+
+      {:ok, deck} =
+        Decks.import_from_text("1 Sol Ring\n1 Counterspell\n4 Forest", %{
+          name: "Deck de Consulta",
+          source: :paste
+        })
+
+      optimization = insert(:optimization, deck: deck)
+
+      # The sandbox differs from the deck: Cultivate is only in the sandbox.
+      sandbox = [
+        %{"name" => "Cultivate", "quantity" => 1},
+        %{"name" => "Forest", "quantity" => 4}
+      ]
+
+      snapshot = Deckex.Optimizations.snapshot_for(sandbox, [], deck)
+
+      {:ok, consult} =
+        Consults.request(deck, :full, snapshot: snapshot, optimization_id: optimization.id)
+
+      assert consult.optimization_id == optimization.id
+      assert consult.briefing =~ "Cultivate"
+      refute consult.briefing =~ "Counterspell"
+    end
+
+    test "the deck page never lists pipeline consults" do
+      deck = deck()
+      optimization = insert(:optimization, deck: deck)
+
+      {:ok, _mine} = Consults.request(deck, :full)
+      {:ok, _pipeline} = Consults.request(deck, :full, optimization_id: optimization.id)
+
+      assert [%{optimization_id: nil}] = Consults.list_for_deck(deck)
+    end
+  end
 end

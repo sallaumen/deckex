@@ -34,6 +34,8 @@ defmodule Deckex.Consults.Briefing do
 
     #{dossier_block(lens, opts)}
 
+    #{optimization_block(opts[:optimization])}
+
     #{decklist_block(snapshot)}
 
     ## What to do
@@ -81,7 +83,7 @@ defmodule Deckex.Consults.Briefing do
   # below the task are identical for all of them, which is deliberate: a
   # suggestion outside the colour identity is illegal no matter what was asked.
   defp task_block(:matchup, opts) do
-    against = opts[:against] || "an unspecified aggressive deck"
+    against = matchup_targets(opts[:against])
 
     """
     This deck keeps losing to: **#{against}**.
@@ -131,6 +133,18 @@ defmodule Deckex.Consults.Briefing do
 
     Suggest no cuts and no adds. This question is about where the deck sits,
     not about changing it.
+    """
+  end
+
+  defp task_block(:alinhamento, _opts) do
+    """
+    The dossier above is the **fixed reference**: it was written before any of
+    this optimization's changes. Compare the current list against it.
+
+    Does this deck still do what its dossier says it does? Propose changes
+    ONLY where the optimization drifted from the stated purpose — a card that
+    serves the plan poorly, a line of victory that got weakened, an identity
+    the changes diluted. If nothing drifted, say so and propose nothing.
     """
   end
 
@@ -250,6 +264,78 @@ defmodule Deckex.Consults.Briefing do
     Answer in **Portuguese (pt-BR)**, but never translate a card name.
     """
   end
+
+  defp matchup_targets(nil), do: "an unspecified aggressive deck"
+  defp matchup_targets(against) when is_binary(against), do: against
+  defp matchup_targets(against) when is_list(against), do: Enum.join(against, "; ")
+
+  # The pipeline's context: the contract every stage must respect, and the
+  # changelog of what earlier stages did — with the model's reasons for what
+  # went in and the ENGINE's reasons for what was refused. Disagreement is
+  # welcome once, with engagement; the flip-flop guard makes twice impossible.
+  defp optimization_block(nil), do: ""
+
+  defp optimization_block(%{contract: contract, changelog: changelog, stage_kind: stage_kind}) do
+    """
+    ## Otimização em andamento
+
+    You are one stage of an optimization pipeline running over a sandbox copy
+    of this deck. The contract for the whole run:
+
+    - Maximum bracket: **#{contract["bracket_max"]}** — an add that moves the deck past it will be rejected by the engine.
+    - Price ceilings: R$ #{contract["ceilings"]["card"]} per card, R$ #{contract["ceilings"]["land"]} per land.
+    #{keep_line(contract["keep"])}#{notes_line(contract["notes"])}
+    #{changelog_lines(changelog)}
+    You may revert an earlier stage's change, but engage its stated reason.
+    Each card may enter and leave this optimization once — the engine enforces
+    it, so do not propose re-flipping a card listed above as already reverted.
+    #{stage_kind_line(stage_kind)}
+    """
+  end
+
+  defp keep_line([]), do: ""
+  defp keep_line(nil), do: ""
+
+  defp keep_line(keep) do
+    "- Protected cards (never cut): #{Enum.join(keep, ", ")}.\n"
+  end
+
+  defp notes_line(""), do: ""
+  defp notes_line(nil), do: ""
+  defp notes_line(notes), do: "- Owner's notes: #{notes}\n"
+
+  defp changelog_lines([]), do: "\nNo stage has run before this one.\n"
+
+  defp changelog_lines(changelog) do
+    body =
+      Enum.map_join(changelog, "\n", fn stage ->
+        applied =
+          Enum.map_join(stage.applied, "\n", fn change ->
+            "  - #{change["action"]} #{change["card"]}: #{change["reason"]}"
+          end)
+
+        rejected =
+          Enum.map_join(stage.rejected, "\n", fn change ->
+            "  - REJECTED #{change["action"]} #{change["card"]}: #{Enum.join(change["problems"] || [], "; ")}"
+          end)
+
+        ["### #{stage.label}", applied, rejected]
+        |> Enum.reject(&(&1 == ""))
+        |> Enum.join("\n")
+      end)
+
+    "\nWhat earlier stages did:\n\n#{body}\n"
+  end
+
+  defp stage_kind_line(:checkpoint) do
+    "\nThis is a **stabilization checkpoint**: look at the whole picture. Reverting earlier changes that did not earn their place is exactly your job."
+  end
+
+  defp stage_kind_line(:validation) do
+    "\nThis is a **validation stage**: your job is to find what the tuning missed, not to tune further."
+  end
+
+  defp stage_kind_line(_lens), do: ""
 
   defp dossier_clause(nil), do: ""
   defp dossier_clause(_dossier), do: ", confronted with the dossier above"

@@ -18,7 +18,7 @@ defmodule Deckex.Optimizations.OptimizationQuery do
     |> Repo.get(id)
     |> case do
       nil -> nil
-      optimization -> Repo.preload(optimization, :steps)
+      optimization -> Repo.preload(optimization, steps: :consult)
     end
   end
 
@@ -49,7 +49,7 @@ defmodule Deckex.Optimizations.OptimizationQuery do
     Repo.one(
       from s in OptimizationStep,
         where: s.consult_id == ^consult_id,
-        preload: [optimization: :steps]
+        preload: [optimization: [steps: :consult]]
     )
   end
 
@@ -60,7 +60,7 @@ defmodule Deckex.Optimizations.OptimizationQuery do
     |> Repo.get(id)
     |> case do
       nil -> nil
-      step -> Repo.preload(step, optimization: :steps)
+      step -> Repo.preload(step, optimization: [steps: :consult])
     end
   end
 end
