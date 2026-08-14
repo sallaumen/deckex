@@ -54,11 +54,27 @@ defmodule DeckexWeb.OptimizationLive do
       optimization: optimization,
       deck: deck,
       card_count: Optimizations.card_count(Optimizations.current_list(optimization)),
+      stage_progress: stage_progress(optimization, deck, baselines),
       now: DateTime.utc_now(),
       report_original: Analysis.report(original, baselines),
       report_current: Analysis.report(current, baselines),
       page_title: page_title(optimization, deck)
     )
+  end
+
+  # Where the needle stood after each stage — computed, never stored, so it
+  # is always measured against the rules as they are NOW.
+  defp stage_progress(optimization, deck, baselines) do
+    optimization.steps
+    |> Enum.filter(&(&1.status == :done))
+    |> Map.new(fn step ->
+      list = Optimizations.list_after(step)
+      snapshot = Optimizations.snapshot_for(list, optimization.commanders, deck)
+      report = Analysis.report(snapshot, baselines)
+
+      {step.id,
+       %{criticals: Report.critical_count(report), cards: Optimizations.card_count(list)}}
+    end)
   end
 
   # The tab title carries the progress: the owner leaves this page open in a
@@ -211,6 +227,17 @@ defmodule DeckexWeb.OptimizationLive do
   defp run_status_label(:cancelled), do: "cancelada"
 
   defp criticals(report), do: Report.critical_count(report)
+
+  # Only adds carry a price tag: a cut costs nothing, and an unpriced card
+  # shows nothing rather than a guess (the price law).
+  defp add_price(%{"action" => "add", "card" => name}) do
+    case Cards.get_by_name(name) do
+      %{price_usd: %Decimal{} = usd} -> Money.brl(usd)
+      _missing_or_unpriced -> nil
+    end
+  end
+
+  defp add_price(_cut), do: nil
 
   defp running_position(optimization) do
     Enum.find_value(optimization.steps, &(&1.status == :running and &1.position))
@@ -394,6 +421,9 @@ defmodule DeckexWeb.OptimizationLive do
               <span :if={step.status == :done && step.consult} class="text-ink-faint">
                 · {duration_label(step.consult)}
               </span>
+              <span :if={chip = @stage_progress[step.id]} class="text-ink-faint">
+                · {chip.criticals} {if chip.criticals == 1, do: "crítico", else: "críticos"} · {chip.cards} cartas
+              </span>
             </span>
           </div>
 
@@ -515,6 +545,12 @@ defmodule DeckexWeb.OptimizationLive do
                 placeholder="anotar algo sobre esta etapa…"
                 class="min-h-11 w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-caption text-ink placeholder:text-ink-faint"
               />
+              <button
+                type="submit"
+                class="-my-2 inline-flex min-h-11 items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+              >
+                guardar
+              </button>
             </.form>
 
             <button
@@ -559,6 +595,7 @@ defmodule DeckexWeb.OptimizationLive do
                 {if change["action"] == "add", do: "+", else: "−"}
               </span>
               <span class="text-ink">{change["card"]}</span>
+              <span :if={price = add_price(change)} class="font-mono text-ink-faint">{price}</span>
               <span class="text-ink-muted">— {change["reason"]}</span>
             </li>
           </ul>
@@ -567,7 +604,30 @@ defmodule DeckexWeb.OptimizationLive do
             <summary class="cursor-pointer text-caption text-ink-faint hover:text-ink">
               Lista final para copiar
             </summary>
+            <button
+              id="copiar-lista"
+              type="button"
+              phx-hook=".CopyList"
+              data-target="lista-final"
+              class="-my-2 mt-1 inline-flex min-h-11 items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+            >
+              copiar tudo
+            </button>
+            <script :type={Phoenix.LiveView.ColocatedHook} name=".CopyList">
+              export default {
+                mounted() {
+                  this.el.addEventListener("click", () => {
+                    const target = document.getElementById(this.el.dataset.target)
+                    navigator.clipboard.writeText(target.value).then(() => {
+                      this.el.textContent = "copiado ✓"
+                      setTimeout(() => { this.el.textContent = "copiar tudo" }, 2000)
+                    })
+                  })
+                }
+              }
+            </script>
             <textarea
+              id="lista-final"
               readonly
               rows="12"
               class="mt-2 w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 font-mono text-caption text-ink"

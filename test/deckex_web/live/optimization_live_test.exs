@@ -133,6 +133,8 @@ defmodule DeckexWeb.OptimizationLiveTest do
       assert html =~ "Cultivate"
       assert html =~ "Recusadas pelo motor"
       assert html =~ "lista de proteção"
+      # The evolution chip: 5 cards + the applied Cultivate.
+      assert html =~ "6 cartas"
     end
 
     test "feedback round-trips", %{conn: conn} do
