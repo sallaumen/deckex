@@ -7,6 +7,8 @@ defmodule Deckex.Factory do
   alias Deckex.Consults.Consult
   alias Deckex.Decks.Deck
   alias Deckex.Decks.DeckCard
+  alias Deckex.Optimizations.Optimization
+  alias Deckex.Optimizations.OptimizationStep
 
   def card_factory do
     name = sequence(:card_name, &"Test Card #{&1}")
@@ -57,6 +59,39 @@ defmodule Deckex.Factory do
       card: build(:card),
       quantity: 1,
       board: :main
+    }
+  end
+
+  def optimization_factory do
+    %Optimization{
+      deck: build(:deck),
+      status: :running,
+      contract: %{
+        "bracket_max" => 3,
+        "ceilings" => %{"card" => 800, "land" => 200},
+        "keep" => [],
+        "matchups" => ["um deck aggro rápido"],
+        "notes" => "",
+        "model" => "sonnet"
+      },
+      recipe: [
+        %{"kind" => "lens", "lens" => "mana_ramp", "label" => "Mana"},
+        %{"kind" => "checkpoint", "lens" => "full", "label" => "Estabilização"}
+      ],
+      list_original: [%{"name" => "Sol Ring", "quantity" => 1}],
+      commanders: []
+    }
+  end
+
+  def optimization_step_factory do
+    %OptimizationStep{
+      optimization: build(:optimization),
+      position: 1,
+      kind: :lens,
+      lens: "mana_ramp",
+      label: "Mana",
+      status: :pending,
+      list_before: [%{"name" => "Sol Ring", "quantity" => 1}]
     }
   end
 end

@@ -20,6 +20,8 @@ defmodule Deckex.Error do
           | :invalid_setting
           | :not_commander_legal
           | :ai_timeout
+          | :optimization_running
+          | :optimization_not_found
           | :ai_unavailable
 
   @type t :: %__MODULE__{code: code(), message: String.t(), details: map()}

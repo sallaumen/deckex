@@ -40,6 +40,11 @@ defmodule Deckex.Consults.Consult do
     field :error, :string
     field :duration_ms, :integer
 
+    # Set when this consult is a stage of an optimization run. A plain column,
+    # not an assoc: the step owns the relationship (steps.consult_id); this is
+    # the tag the deck page filters on.
+    field :optimization_id, Ecto.UUID
+
     belongs_to :deck, Deck
 
     timestamps()
@@ -63,7 +68,8 @@ defmodule Deckex.Consults.Consult do
       :response,
       :model,
       :error,
-      :duration_ms
+      :duration_ms,
+      :optimization_id
     ])
     |> validate_required([:deck_id, :lens, :status, :briefing, :report_snapshot])
     |> foreign_key_constraint(:deck_id)

@@ -8,6 +8,7 @@ defmodule Deckex.Events do
 
   alias Deckex.Consults.Consult
   alias Deckex.Decks.Deck
+  alias Deckex.Optimizations.Optimization
 
   @pubsub Deckex.PubSub
 
@@ -36,6 +37,21 @@ defmodule Deckex.Events do
   def broadcast_consult(%Consult{deck_id: deck_id, id: id}) do
     Phoenix.PubSub.broadcast(@pubsub, consult_topic(deck_id), {:consult_updated, id})
   end
+
+  @typedoc "Broadcast when an optimization run or any of its stages changes."
+  @type optimization_updated :: {:optimization_updated, optimization_id :: String.t()}
+
+  @doc "Subscribes the calling process to one optimization run."
+  @spec subscribe_optimization(String.t()) :: :ok | {:error, term()}
+  def subscribe_optimization(id), do: Phoenix.PubSub.subscribe(@pubsub, optimization_topic(id))
+
+  @doc "Announces that an optimization run changed."
+  @spec broadcast_optimization(Optimization.t()) :: :ok | {:error, term()}
+  def broadcast_optimization(%Optimization{id: id}) do
+    Phoenix.PubSub.broadcast(@pubsub, optimization_topic(id), {:optimization_updated, id})
+  end
+
+  defp optimization_topic(id), do: "optimization:#{id}"
 
   defp deck_topic(deck_id), do: "deck:#{deck_id}"
   defp consult_topic(deck_id), do: "deck:#{deck_id}:consults"
