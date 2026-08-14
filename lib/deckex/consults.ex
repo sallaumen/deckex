@@ -26,6 +26,7 @@ defmodule Deckex.Consults do
   alias Deckex.Repo
   alias Deckex.Settings
   alias Deckex.Workers.ConsultWorker
+  alias Deckex.Workers.OptimizationAdvanceWorker
 
   # A consult is a long generation by design: the model reads a 100-card list,
   # searches the web, and reasons about swaps. The AI port's 2-minute default is
@@ -187,11 +188,22 @@ defmodule Deckex.Consults do
       })
       |> Repo.update!()
 
-    done = done |> deliver_dossier() |> catalogue()
+    done = done |> deliver_dossier() |> catalogue() |> advance_optimization()
 
     Events.broadcast_consult(done)
 
     done
+  end
+
+  # A pipeline consult hands its answer to the AdvanceWorker — a separate job,
+  # so a crash in the advance never loses an answer already paid for. Enqueued
+  # after catalogue(): the audit needs the suggested cards in the catalogue.
+  defp advance_optimization(%Consult{optimization_id: nil} = consult), do: consult
+
+  defp advance_optimization(%Consult{} = consult) do
+    {:ok, _job} = OptimizationAdvanceWorker.enqueue(consult.id)
+
+    consult
   end
 
   # A scout's answer IS the dossier. Writing it here — in the background job

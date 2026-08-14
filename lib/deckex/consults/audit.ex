@@ -46,20 +46,23 @@ defmodule Deckex.Consults.Audit do
           [Suggestion.t()],
           %{String.t() => list()},
           Baselines.t(),
-          %{card: pos_integer() | nil, land: pos_integer() | nil}
+          %{card: pos_integer() | nil, land: pos_integer() | nil},
+          keyword()
         ) :: t()
   def run(
         %DeckSnapshot{} = snapshot,
         suggestions,
         roles,
         %Baselines{} = baselines,
-        ceilings \\ %{card: nil, land: nil}
+        ceilings \\ %{card: nil, land: nil},
+        opts \\ []
       ) do
     in_main = MapSet.new(snapshot.main, &Name.normalize(&1.card.name))
+    pipeline = opts |> pipeline_opts() |> Map.put(:roles_for_adds, roles)
 
     problems =
       suggestions
-      |> Enum.map(&{key(&1), problems(&1, snapshot, in_main, ceilings)})
+      |> Enum.map(&{key(&1), problems(&1, snapshot, in_main, ceilings, pipeline)})
       |> Enum.reject(fn {_key, list} -> list == [] end)
       |> Map.new()
 
@@ -82,26 +85,91 @@ defmodule Deckex.Consults.Audit do
 
   defp key(%Suggestion{action: action, name: name}), do: {action, name}
 
-  # An unresolved suggestion has no card data to check; the table already
-  # marks it and the simulation cannot use it.
-  defp problems(%Suggestion{resolved?: false}, _snapshot, _in_main, _ceilings), do: []
+  # The three rules that only exist inside an optimization run, where nobody
+  # is clicking per-suggestion and the engine is the only gate.
+  defp pipeline_opts(opts) do
+    %{
+      flips:
+        opts |> Keyword.get(:history, []) |> Enum.frequencies_by(&Name.normalize(&1["card"])),
+      keep: opts |> Keyword.get(:keep, []) |> MapSet.new(&Name.normalize/1),
+      bracket_max: Keyword.get(opts, :bracket_max)
+    }
+  end
 
-  defp problems(%Suggestion{action: :cut} = suggestion, _snapshot, in_main, _ceilings) do
-    if MapSet.member?(in_main, Name.normalize(suggestion.name)) do
-      []
-    else
-      ["não está na lista principal"]
+  # Ping-pong is chained critics' known failure mode, and it is countable.
+  # One appearance in the history is a change; a second is the revert — the
+  # legitimate disagreement. A third touch is churn, and the engine ends it.
+  defp flip_flop_problem(%{flips: flips}, name) do
+    if Map.get(flips, Name.normalize(name), 0) >= 2 do
+      "já entrou e saiu nesta otimização — o vaivém para aqui"
     end
   end
 
-  defp problems(%Suggestion{action: :add, card: card} = suggestion, snapshot, in_main, ceilings) do
+  defp keep_problem(%Suggestion{action: :cut, name: name}, %{keep: keep}) do
+    if MapSet.member?(keep, Name.normalize(name)) do
+      "está na lista de proteção desta otimização"
+    end
+  end
+
+  # Inside a pipeline the bracket note becomes a hard rule: an add that moves
+  # the sandbox past the contract's bracket is refused, not annotated.
+  defp contract_bracket_problem(_card, _entry_roles, %{bracket_max: nil}, _snapshot), do: nil
+
+  defp contract_bracket_problem(card, entry_roles, %{bracket_max: max}, snapshot) when max <= 3 do
+    changers = Enum.count(snapshot.main ++ snapshot.commanders, & &1.card.game_changer)
+
+    cond do
+      card.game_changer and changers >= 3 ->
+        "seria o 4º Game Changer — o contrato limita ao Bracket #{max}"
+
+      :mass_land_denial in entry_roles or :extra_turn in entry_roles ->
+        "leva o deck ao Bracket 4, acima do contrato"
+
+      true ->
+        nil
+    end
+  end
+
+  defp contract_bracket_problem(_card, _roles, _pipeline, _snapshot), do: nil
+
+  # An unresolved suggestion has no card data to check; the table already
+  # marks it and the simulation cannot use it.
+  defp problems(%Suggestion{resolved?: false}, _snapshot, _in_main, _ceilings, _pipe), do: []
+
+  defp problems(%Suggestion{action: :cut} = suggestion, _snapshot, in_main, _ceilings, pipeline) do
+    presence =
+      if MapSet.member?(in_main, Name.normalize(suggestion.name)),
+        do: nil,
+        else: "não está na lista principal"
+
+    Enum.reject(
+      [
+        presence,
+        keep_problem(suggestion, pipeline),
+        flip_flop_problem(pipeline, suggestion.name)
+      ],
+      &is_nil/1
+    )
+  end
+
+  defp problems(
+         %Suggestion{action: :add, card: card} = suggestion,
+         snapshot,
+         in_main,
+         ceilings,
+         pipeline
+       ) do
+    entry_roles = MapSet.new(pipeline.roles_for_adds |> Map.get(card && card.id, []))
+
     Enum.reject(
       [
         identity_problem(card, snapshot.color_identity),
         singleton_problem(card, suggestion, in_main),
         legality_problem(card),
         ceiling_problem(card, suggestion.price_usd, ceilings),
-        bracket_problem(card, snapshot)
+        bracket_problem(card, snapshot),
+        contract_bracket_problem(card, entry_roles, pipeline, snapshot),
+        flip_flop_problem(pipeline, suggestion.name)
       ],
       &is_nil/1
     )

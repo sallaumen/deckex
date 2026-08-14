@@ -1,0 +1,221 @@
+defmodule Deckex.Optimizations.AdvanceTest do
+  @moduledoc """
+  The pipeline's heartbeat: each test scripts real consults through the Oban
+  workers with mocked model answers, then reads the stages the run recorded.
+  """
+  use Deckex.DataCase, async: true
+
+  import Mox
+
+  alias Deckex.CatalogueFixture
+  alias Deckex.Decks
+  alias Deckex.Decks.Deck
+  alias Deckex.Optimizations
+  alias Deckex.Workers.ConsultWorker
+  alias Deckex.Workers.OptimizationAdvanceWorker
+
+  setup :verify_on_exit!
+
+  @two_lenses [
+    %{"kind" => "lens", "lens" => "mana_ramp", "label" => "Mana"},
+    %{"kind" => "lens", "lens" => "speed_curve", "label" => "Early game"}
+  ]
+
+  defp deck do
+    CatalogueFixture.seed!(~w(sol_ring forest counterspell cultivate rhystic_study arid_mesa))
+
+    {:ok, deck} =
+      Decks.import_from_text("1 Sol Ring\n4 Forest", %{name: "Deck do Avanço", source: :paste})
+
+    deck
+    |> Deck.changeset(%{color_identity: ["G", "U"]})
+    |> Repo.update!()
+  end
+
+  defp answer(cuts, adds) do
+    {:ok,
+     %{
+       "leitura" => "Leio um deck de teste.",
+       "diagnosis" => "Diagnóstico de teste.",
+       "cuts" => Enum.map(cuts, &%{"card" => &1, "reason" => "corte de teste"}),
+       "adds" => Enum.map(adds, &%{"card" => &1, "reason" => "entrada de teste"})
+     }}
+  end
+
+  # Runs the stage's consult and the advance it enqueues — one full heartbeat.
+  defp beat(optimization_id) do
+    {:ok, optimization} = Optimizations.fetch(optimization_id)
+    step = Enum.find(optimization.steps, &(&1.status == :running))
+
+    assert :ok = perform_job(ConsultWorker, %{consult_id: step.consult_id})
+    assert :ok = perform_job(OptimizationAdvanceWorker, %{consult_id: step.consult_id})
+
+    Optimizations.fetch(optimization_id)
+  end
+
+  defp stub_scryfall do
+    stub(Deckex.Scryfall.Mock, :fetch_by_names, fn names ->
+      {:ok, %{found: [], not_found: names}}
+    end)
+  end
+
+  test "clean changes are applied and the next stage receives the new list" do
+    stub_scryfall()
+    {:ok, optimization} = Optimizations.start(deck(), %{}, @two_lenses)
+
+    expect(Deckex.AI.Mock, :complete, fn _p, _s, _o -> answer([], ["Cultivate"]) end)
+    {:ok, after_first} = beat(optimization.id)
+
+    [first, second] = after_first.steps
+    assert first.status == :done
+    assert [%{"action" => "add", "card" => "Cultivate"}] = first.applied
+    assert first.rejected == []
+
+    assert second.status == :running
+    assert %{"name" => "Cultivate", "quantity" => 1} in second.list_before
+  end
+
+  test "a revert is legitimate disagreement; a second flip is churn and dies" do
+    stub_scryfall()
+
+    recipe = @two_lenses ++ [%{"kind" => "lens", "lens" => "interaction", "label" => "Interação"}]
+    {:ok, optimization} = Optimizations.start(deck(), %{}, recipe)
+
+    # Stage 1 adds Cultivate; stage 2 cuts it (the revert — allowed); stage 3
+    # tries to add it back (the flip-flop — rejected by the engine).
+    expect(Deckex.AI.Mock, :complete, fn _p, _s, _o -> answer([], ["Cultivate"]) end)
+    {:ok, _} = beat(optimization.id)
+
+    expect(Deckex.AI.Mock, :complete, fn prompt, _s, _o ->
+      assert prompt =~ "add Cultivate: entrada de teste"
+      answer(["Cultivate"], [])
+    end)
+
+    {:ok, _} = beat(optimization.id)
+
+    expect(Deckex.AI.Mock, :complete, fn _p, _s, _o -> answer([], ["Cultivate"]) end)
+    {:ok, final} = beat(optimization.id)
+
+    [first, second, third] = final.steps
+    assert [%{"card" => "Cultivate", "action" => "add"}] = first.applied
+    assert [%{"card" => "Cultivate", "action" => "cut"}] = second.applied
+
+    assert [%{"card" => "Cultivate", "problems" => [problem]}] = third.rejected
+    assert problem =~ "já entrou e saiu"
+    assert third.applied == []
+  end
+
+  test "the keep list and the commander are untouchable" do
+    stub_scryfall()
+
+    {:ok, optimization} =
+      Optimizations.start(deck(), %{"keep" => ["Sol Ring"]}, @two_lenses)
+
+    expect(Deckex.AI.Mock, :complete, fn _p, _s, _o -> answer(["Sol Ring"], []) end)
+    {:ok, after_first} = beat(optimization.id)
+
+    [first | _] = after_first.steps
+    assert [%{"card" => "Sol Ring", "problems" => [problem]}] = first.rejected
+    assert problem =~ "lista de proteção"
+  end
+
+  test "an add that would break the contract's bracket is refused" do
+    stub_scryfall()
+
+    {:ok, optimization} = Optimizations.start(deck(), %{"bracket_max" => 3}, @two_lenses)
+
+    # The count-based guard is proven in audit_test; here we prove the
+    # pipeline WIRES the contract through — a mass-land-denial role on the
+    # added card must be refused under bracket_max 3.
+    {:ok, _roles} =
+      Deckex.Cards.set_role_manually(
+        Deckex.Cards.get_by_name("Arid Mesa"),
+        :mass_land_denial,
+        "teste: negação"
+      )
+
+    expect(Deckex.AI.Mock, :complete, fn _p, _s, _o -> answer([], ["Arid Mesa"]) end)
+    {:ok, after_first} = beat(optimization.id)
+
+    [first | _] = after_first.steps
+    assert [%{"card" => "Arid Mesa", "problems" => problems}] = first.rejected
+    assert Enum.any?(problems, &(&1 =~ "Bracket 4, acima do contrato"))
+  end
+
+  test "a checkpoint over an unchanged picture is skipped and the run stabilizes" do
+    stub_scryfall()
+
+    recipe =
+      @two_lenses ++ [%{"kind" => "checkpoint", "lens" => "full", "label" => "Estabilização"}]
+
+    {:ok, optimization} = Optimizations.start(deck(), %{}, recipe)
+
+    expect(Deckex.AI.Mock, :complete, 2, fn _p, _s, _o -> answer([], []) end)
+    {:ok, _} = beat(optimization.id)
+    {:ok, final} = beat(optimization.id)
+
+    [_first, _second, checkpoint] = final.steps
+    assert checkpoint.status == :skipped
+    assert final.status == :done
+    assert final.outcome == "estabilizou"
+    assert final.finished_at != nil
+  end
+
+  test "a checkpoint after real changes runs, and completion is honest" do
+    stub_scryfall()
+
+    recipe = [
+      %{"kind" => "lens", "lens" => "mana_ramp", "label" => "Mana"},
+      %{"kind" => "checkpoint", "lens" => "full", "label" => "Estabilização"}
+    ]
+
+    {:ok, optimization} = Optimizations.start(deck(), %{}, recipe)
+
+    expect(Deckex.AI.Mock, :complete, fn _p, _s, _o -> answer([], ["Cultivate"]) end)
+    {:ok, mid} = beat(optimization.id)
+    assert Enum.at(mid.steps, 1).status == :running
+
+    expect(Deckex.AI.Mock, :complete, fn _p, _s, _o -> answer([], []) end)
+    {:ok, final} = beat(optimization.id)
+
+    assert final.status == :done
+    assert final.outcome == "completo"
+  end
+
+  test "pause persists results and stops the advance; resume continues" do
+    stub_scryfall()
+    {:ok, optimization} = Optimizations.start(deck(), %{}, @two_lenses)
+
+    {:ok, paused} = Optimizations.pause(optimization)
+    step = Enum.find(paused.steps, &(&1.status == :running))
+
+    expect(Deckex.AI.Mock, :complete, fn _p, _s, _o -> answer([], ["Cultivate"]) end)
+    assert :ok = perform_job(ConsultWorker, %{consult_id: step.consult_id})
+    assert :ok = perform_job(OptimizationAdvanceWorker, %{consult_id: step.consult_id})
+
+    {:ok, after_pause} = Optimizations.fetch(optimization.id)
+    [first, second] = after_pause.steps
+    assert first.status == :done
+    assert first.applied != []
+    assert second.status == :pending
+
+    {:ok, resumed} = Optimizations.resume(after_pause)
+    assert Enum.at(resumed.steps, 1).status == :running
+  end
+
+  test "a dead consult pauses the run and marks the stage failed" do
+    stub_scryfall()
+    {:ok, optimization} = Optimizations.start(deck(), %{}, @two_lenses)
+    step = Enum.find(optimization.steps, &(&1.status == :running))
+
+    expect(Deckex.AI.Mock, :complete, fn _p, _s, _o ->
+      {:error, Deckex.Error.new(:ai_unavailable, "cli sumiu")}
+    end)
+
+    assert {:cancel, _msg} = perform_job(ConsultWorker, %{consult_id: step.consult_id})
+
+    {:ok, after_failure} = Optimizations.fetch(optimization.id)
+    assert after_failure.status == :paused
+    assert Enum.at(after_failure.steps, 0).status == :failed
+  end
+end

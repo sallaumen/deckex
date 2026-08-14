@@ -15,6 +15,9 @@ defmodule Deckex.Optimizations do
   alias Deckex.Analysis.DeckSnapshot
   alias Deckex.Cards
   alias Deckex.Cards.Name
+  alias Deckex.Consults
+  alias Deckex.Consults.Audit
+  alias Deckex.Consults.Suggestions
   alias Deckex.Decks
   alias Deckex.Decks.Deck
   alias Deckex.Decks.DeckQuery
@@ -114,19 +117,7 @@ defmodule Deckex.Optimizations do
 
           recipe
           |> Enum.with_index(1)
-          |> Enum.each(fn {spec, position} ->
-            %OptimizationStep{}
-            |> OptimizationStep.changeset(%{
-              optimization_id: optimization.id,
-              position: position,
-              kind: String.to_existing_atom(spec["kind"]),
-              lens: spec["lens"],
-              label: spec["label"],
-              status: :pending,
-              list_before: if(position == 1, do: list)
-            })
-            |> Repo.insert!()
-          end)
+          |> Enum.each(&insert_step!(optimization, &1, list))
 
           {:ok, optimization}
         end)
@@ -195,15 +186,276 @@ defmodule Deckex.Optimizations do
     end
   end
 
-  # Replaced by the real pipeline runner in Task 5 of the plan; the lifecycle
-  # is testable without a consult in flight.
-  defp run_step(%OptimizationStep{} = step), do: {:ok, step}
+  @doc """
+  Starts one stage: builds the sandbox snapshot, freezes a briefing carrying
+  the contract and the changelog, and queues the consult.
+  """
+  @spec run_step(OptimizationStep.t()) :: {:ok, OptimizationStep.t()}
+  def run_step(%OptimizationStep{} = step) do
+    {:ok, optimization} = fetch(step.optimization_id)
+    {:ok, deck} = Decks.fetch_deck(optimization.deck_id)
+    step = ensure_list_before(step, optimization)
+    snapshot = snapshot_for(step.list_before, optimization.commanders, deck)
+
+    {:ok, consult} =
+      Consults.request(deck, String.to_existing_atom(step.lens),
+        snapshot: snapshot,
+        optimization_id: optimization.id,
+        model: optimization.contract["model"],
+        against: optimization.contract["matchups"],
+        optimization: %{
+          contract: optimization.contract,
+          changelog: changelog(optimization, step),
+          stage_kind: step.kind
+        }
+      )
+
+    updated =
+      step
+      |> OptimizationStep.changeset(%{status: :running, consult_id: consult.id})
+      |> Repo.update!()
+
+    Events.broadcast_optimization(optimization)
+
+    {:ok, updated}
+  end
+
+  @doc """
+  A finished pipeline consult comes home: audit the answer, apply the clean
+  changes to the sandbox, and start the next stage — or finish.
+
+  Persist first, broadcast last, exactly like `Consults.succeed/3`: the
+  optimization event is a promise that the stage's results are readable.
+  """
+  @spec advance(Consults.Consult.t()) :: :ok
+  def advance(consult) do
+    step = OptimizationQuery.step_for_consult(consult.id)
+    optimization = step.optimization
+    {:ok, deck} = Decks.fetch_deck(optimization.deck_id)
+
+    {applied, rejected} = judge(consult, step, optimization, deck)
+
+    done =
+      step
+      |> OptimizationStep.changeset(%{status: :done, applied: applied, rejected: rejected})
+      |> Repo.update!()
+
+    {:ok, refreshed} = fetch(optimization.id)
+    settle(refreshed, done)
+
+    {:ok, final} = fetch(optimization.id)
+    Events.broadcast_optimization(final)
+
+    :ok
+  end
+
+  @doc "A stage's consult failed for good: the run pauses, paid work stays."
+  @spec mark_failed(Consults.Consult.t()) :: :ok
+  def mark_failed(consult) do
+    case OptimizationQuery.step_for_consult(consult.id) do
+      nil ->
+        :ok
+
+      step ->
+        step |> OptimizationStep.changeset(%{status: :failed}) |> Repo.update!()
+
+        {:ok, optimization} = fetch(step.optimization_id)
+        {:ok, _paused} = pause(optimization)
+
+        :ok
+    end
+  end
+
+  # ── the judgment ──────────────────────────────────────────────────────────
+
+  defp judge(consult, step, optimization, deck) do
+    snapshot = snapshot_for(step.list_before, optimization.commanders, deck)
+    suggestions = Suggestions.for_consult(consult)
+
+    roles =
+      suggestions
+      |> Enum.filter(&(&1.resolved? and &1.action == :add))
+      |> Enum.map(& &1.card.id)
+      |> Cards.roles_by_card_ids()
+
+    ceilings = %{
+      card: optimization.contract["ceilings"]["card"],
+      land: optimization.contract["ceilings"]["land"]
+    }
+
+    audit =
+      Audit.run(
+        snapshot,
+        suggestions,
+        roles,
+        Settings.baselines(),
+        ceilings,
+        history: history(optimization, step),
+        keep: (optimization.contract["keep"] || []) ++ optimization.commanders,
+        bracket_max: optimization.contract["bracket_max"]
+      )
+
+    split(suggestions, audit)
+  end
+
+  defp split(suggestions, audit) do
+    {clean, dirty} =
+      Enum.split_with(suggestions, fn suggestion ->
+        suggestion.resolved? and
+          not Map.has_key?(audit.problems, {suggestion.action, suggestion.name})
+      end)
+
+    applied =
+      Enum.map(clean, fn s ->
+        %{"action" => to_string(s.action), "card" => s.name, "reason" => s.reason}
+      end)
+
+    rejected =
+      Enum.map(dirty, fn s ->
+        problems =
+          if s.resolved?,
+            do: Map.get(audit.problems, {s.action, s.name}, []),
+            else: ["não resolvida na Scryfall"]
+
+        %{
+          "action" => to_string(s.action),
+          "card" => s.name,
+          "reason" => s.reason,
+          "problems" => problems
+        }
+      end)
+
+    {applied, rejected}
+  end
+
+  # Every change earlier stages actually applied — the flip-flop guard's memory.
+  defp history(optimization, current_step) do
+    optimization.steps
+    |> Enum.filter(&(&1.status == :done and &1.position < current_step.position))
+    |> Enum.flat_map(& &1.applied)
+  end
+
+  # ── the advance ───────────────────────────────────────────────────────────
+
+  defp settle(optimization, done_step) do
+    case next_runnable(optimization, done_step) do
+      :finished ->
+        finish(optimization)
+
+      {:ok, next} ->
+        if optimization.status == :running do
+          next
+          |> OptimizationStep.changeset(%{list_before: list_after(done_step)})
+          |> Repo.update!()
+          |> run_step()
+        end
+
+        :ok
+    end
+  end
+
+  # Convergence (spec §4): a checkpoint is skipped when every stage since the
+  # previous checkpoint — inclusive — applied zero changes. A second look at
+  # an unchanged picture buys noise with money.
+  defp next_runnable(optimization, done_step) do
+    case Enum.find(optimization.steps, &(&1.status == :pending)) do
+      nil ->
+        :finished
+
+      %{kind: :checkpoint} = next ->
+        if stable_since_last_checkpoint?(optimization, next) do
+          skipped = next |> OptimizationStep.changeset(%{status: :skipped}) |> Repo.update!()
+          {:ok, refreshed} = fetch(optimization.id)
+
+          next_runnable(refreshed, %{skipped | list_before: done_step && list_after(done_step)})
+        else
+          {:ok, next}
+        end
+
+      next ->
+        {:ok, next}
+    end
+  end
+
+  defp stable_since_last_checkpoint?(optimization, upcoming) do
+    segment =
+      optimization.steps
+      |> Enum.filter(&(&1.position < upcoming.position and &1.status in [:done, :skipped]))
+      |> Enum.reverse()
+      |> Enum.take_while(&(&1.kind != :checkpoint or &1.applied == []))
+
+    segment != [] and Enum.all?(segment, &(&1.applied == []))
+  end
+
+  defp finish(optimization) do
+    # Re-read: the skip that led here was persisted after this struct was
+    # loaded, and the outcome depends on seeing it.
+    {:ok, optimization} = fetch(optimization.id)
+
+    outcome =
+      case List.last(optimization.steps) do
+        %{kind: :checkpoint, status: :skipped} -> "estabilizou"
+        _ran -> "completo"
+      end
+
+    optimization
+    |> Optimization.changeset(%{
+      status: :done,
+      outcome: outcome,
+      finished_at: DateTime.utc_now(:second)
+    })
+    |> Repo.update!()
+
+    :ok
+  end
+
+  defp ensure_list_before(%OptimizationStep{list_before: nil} = step, optimization) do
+    previous =
+      optimization.steps
+      |> Enum.filter(&(&1.status == :done and &1.position < step.position))
+      |> List.last()
+
+    list = if previous, do: list_after(previous), else: optimization.list_original
+
+    step |> OptimizationStep.changeset(%{list_before: list}) |> Repo.update!()
+  end
+
+  defp ensure_list_before(step, _optimization), do: step
+
+  defp changelog(optimization, current_step) do
+    optimization.steps
+    |> Enum.filter(&(&1.status == :done and &1.position < current_step.position))
+    |> Enum.map(&%{label: &1.label, applied: &1.applied, rejected: &1.rejected})
+  end
+
+  defp insert_step!(optimization, {spec, position}, list) do
+    %OptimizationStep{}
+    |> OptimizationStep.changeset(%{
+      optimization_id: optimization.id,
+      position: position,
+      kind: String.to_existing_atom(spec["kind"]),
+      lens: spec["lens"],
+      label: spec["label"],
+      status: :pending,
+      list_before: if(position == 1, do: list)
+    })
+    |> Repo.insert!()
+  end
 
   defp fork_list(optimization, nil), do: current_list(optimization)
   defp fork_list(_optimization, step), do: list_after(step)
 
   defp resumable_step(%Optimization{steps: steps}) do
-    Enum.find(steps, &(&1.status in [:pending, :failed]))
+    case Enum.find(steps, &(&1.status in [:failed, :pending])) do
+      nil ->
+        nil
+
+      %{status: :failed} = step ->
+        step |> OptimizationStep.changeset(%{status: :pending}) |> Repo.update!()
+
+      step ->
+        step
+    end
   end
 
   defp transition(optimization, status) do

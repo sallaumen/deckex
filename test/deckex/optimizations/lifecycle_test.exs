@@ -3,6 +3,7 @@ defmodule Deckex.Optimizations.LifecycleTest do
 
   alias Deckex.CatalogueFixture
   alias Deckex.Decks
+  alias Deckex.Decks.Deck
   alias Deckex.Error
   alias Deckex.Optimizations
 
@@ -17,7 +18,7 @@ defmodule Deckex.Optimizations.LifecycleTest do
 
     case map_size(attrs) do
       0 -> deck
-      _some -> deck |> Deckex.Decks.Deck.changeset(attrs) |> Repo.update!()
+      _some -> deck |> Deck.changeset(attrs) |> Repo.update!()
     end
   end
 

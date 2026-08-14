@@ -3,6 +3,7 @@ defmodule Deckex.Optimizations.SandboxTest do
 
   alias Deckex.CatalogueFixture
   alias Deckex.Decks
+  alias Deckex.Decks.DecklistParser
   alias Deckex.Optimizations
 
   defp deck do
@@ -108,7 +109,7 @@ defmodule Deckex.Optimizations.SandboxTest do
 
       assert text =~ "Commander:\n1 Iroh, Grand Lotus"
 
-      {:ok, entries} = Deckex.Decks.DecklistParser.parse(text)
+      {:ok, entries} = DecklistParser.parse(text)
 
       assert %{board: :commander, name: "Iroh, Grand Lotus"} =
                Enum.find(entries, &(&1.board == :commander))

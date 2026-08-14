@@ -17,18 +17,34 @@ defmodule Deckex.Workers.ConsultWorker do
   end
 
   @impl Oban.Worker
-  def perform(%Oban.Job{args: %{"consult_id" => consult_id}}) do
+  def perform(%Oban.Job{args: %{"consult_id" => consult_id}} = job) do
     case Consults.fetch(consult_id) do
-      {:ok, consult} -> run(consult)
+      {:ok, consult} -> run(consult, job)
       {:error, error} -> {:cancel, error.message}
     end
   end
 
-  defp run(consult) do
+  defp run(consult, job) do
     case Consults.run(consult) do
-      {:ok, _done} -> :ok
-      {:error, %{code: :ai_timeout} = error} -> {:error, error}
-      {:error, error} -> {:cancel, error.message}
+      {:ok, _done} ->
+        :ok
+
+      {:error, %{code: :ai_timeout} = error} ->
+        # Retryable — but the LAST attempt is final, and a pipeline must not
+        # sit forever waiting for a stage that will never land.
+        if job.attempt >= job.max_attempts, do: pipeline_failed(consult)
+
+        {:error, error}
+
+      {:error, error} ->
+        pipeline_failed(consult)
+
+        {:cancel, error.message}
     end
   end
+
+  # A failed stage pauses its run rather than cancelling it: everything
+  # already paid for stays, and the owner retries one stage, not the run.
+  defp pipeline_failed(%{optimization_id: nil}), do: :ok
+  defp pipeline_failed(consult), do: Deckex.Optimizations.mark_failed(consult)
 end
