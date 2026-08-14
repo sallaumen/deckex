@@ -202,6 +202,10 @@ defmodule DeckexWeb.DeckLive do
           </p>
         </div>
         <div class="flex items-center gap-4">
+          <.button navigate={~p"/decks/#{@deck.id}/otimizacoes"} variant="primary">
+            Otimizar
+          </.button>
+
           <div class="text-right">
             <p class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
               Bracket (piso)

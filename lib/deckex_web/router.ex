@@ -46,6 +46,8 @@ defmodule DeckexWeb.Router do
     live "/importar", ImportLive, :new
     live "/ajustes", SettingsLive, :edit
     live "/decks/:id", DeckLive, :show
+    live "/decks/:id/otimizacoes", OptimizationsLive, :index
+    live "/otimizacoes/:id", OptimizationLive, :show
 
     get "/consultas/:id/csv", ExportController, :consult_csv
   end
