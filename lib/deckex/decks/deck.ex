@@ -11,7 +11,8 @@ defmodule Deckex.Decks.Deck do
   import Ecto.Changeset
 
   @fields ~w(name moxfield_url moxfield_public_id source color_identity status
-             raw_decklist last_synced_at last_error notes archived_at)a
+             raw_decklist last_synced_at last_error notes archived_at
+             dossier dossier_source dossier_stale dossier_updated_at)a
   @required ~w(name source status)a
 
   @type t :: %__MODULE__{}
@@ -28,6 +29,12 @@ defmodule Deckex.Decks.Deck do
     field :last_error, :string
     field :notes, :string
     field :archived_at, :utc_datetime
+
+    # The scout's strategic reading — see the 2026-08-14 meta-prompt spec.
+    field :dossier, :map
+    field :dossier_source, Ecto.Enum, values: [:scout, :manual]
+    field :dossier_stale, :boolean, default: false
+    field :dossier_updated_at, :utc_datetime
 
     timestamps()
   end

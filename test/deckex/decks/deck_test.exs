@@ -142,4 +142,38 @@ defmodule Deckex.Decks.DeckTest do
       assert DeckQuery.get_by_public_id("nao-existe") == nil
     end
   end
+
+  describe "dossier fields" do
+    test "a new deck has no dossier and is not stale" do
+      deck = insert(:deck)
+
+      assert deck.dossier == nil
+      assert deck.dossier_source == nil
+      assert deck.dossier_stale == false
+      assert deck.dossier_updated_at == nil
+    end
+
+    test "changeset accepts the dossier fields" do
+      dossier = %{
+        "plano" => "Spellslinger Temur.",
+        "sinergias" => "Iroh dá flashback às Lessons.",
+        "linhas_de_vitoria" => "Storm Kiln Artist + magias baratas.",
+        "fraquezas" => "Depende inteiramente do cemitério."
+      }
+
+      deck =
+        :deck
+        |> insert()
+        |> Deck.changeset(%{
+          dossier: dossier,
+          dossier_source: :scout,
+          dossier_stale: false,
+          dossier_updated_at: DateTime.utc_now(:second)
+        })
+        |> Repo.update!()
+
+      assert deck.dossier["plano"] == "Spellslinger Temur."
+      assert deck.dossier_source == :scout
+    end
+  end
 end
