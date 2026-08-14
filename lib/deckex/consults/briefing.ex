@@ -149,6 +149,31 @@ defmodule Deckex.Consults.Briefing do
     """
   end
 
+  defp task_block(:visao, _opts) do
+    """
+    Propose **three different directions** this deck could take to become
+    genuinely stronger. This is not a tuning pass: you are allowed to change
+    what the deck *is*.
+
+    The three MUST differ in `eixo` — one may make the deck more consistent,
+    another faster, another harder to disrupt, another change how it wins.
+    Three flavours of the same plan is a failed answer.
+
+    For each direction give, in pt-BR: a short name, the thesis for why it
+    makes this deck stronger, and — with the same care — what the deck
+    **loses** by going that way. List the key cards that define the direction
+    by exact name. **Never state a price**: the app prices them from Scryfall
+    and shows the owner the real number in R$.
+
+    You may propose a different commander for a direction, but it must have
+    **exactly this deck's colour identity**. The app verifies this and prints a
+    refusal on your vision if it does not. Omit it to keep the current one.
+
+    Propose no cuts and no adds here. The owner picks one direction, and the
+    stages after you will build it.
+    """
+  end
+
   defp task_block(:scout, _opts) do
     """
     Read this deck and write its strategic dossier — nothing else.

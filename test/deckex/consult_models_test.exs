@@ -99,12 +99,12 @@ defmodule Deckex.ConsultModelsTest do
     end
 
     # :finding rides the "Pedir diagnóstico" buttons, :scout the dossier card,
-    # and :alinhamento the optimization pipeline — none belongs in the lens
-    # dropdown, so none has a label.
+    # and :alinhamento and :visao the optimization pipeline — none belongs in
+    # the lens dropdown, so none has a label.
     test "every pickable lens has a label" do
       labels = Map.new(Consults.lens_labels())
 
-      for lens <- Consult.lenses(), lens not in [:finding, :scout, :alinhamento] do
+      for lens <- Consult.lenses(), lens not in [:finding, :scout, :alinhamento, :visao] do
         assert Map.has_key?(labels, lens), "sem rótulo para #{lens}"
       end
     end

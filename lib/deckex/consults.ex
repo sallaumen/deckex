@@ -21,6 +21,7 @@ defmodule Deckex.Consults do
   alias Deckex.Consults.Schemas
   alias Deckex.Consults.Suggestion
   alias Deckex.Consults.Suggestions
+  alias Deckex.Consults.Visions
   alias Deckex.Decks
   alias Deckex.Decks.Deck
   alias Deckex.Error
@@ -237,7 +238,9 @@ defmodule Deckex.Consults do
   """
   @spec refresh_catalogue(Consult.t()) :: :ok
   def refresh_catalogue(%Consult{} = consult) do
-    case consult |> Suggestions.names() |> Cards.resolve_names() do
+    names = Suggestions.names(consult) ++ Visions.card_names(consult)
+
+    case Cards.resolve_names(names) do
       {:ok, %{cards: cards}} ->
         Enum.each(cards, &Cards.classify_card/1)
 

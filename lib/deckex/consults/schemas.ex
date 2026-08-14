@@ -2,9 +2,11 @@ defmodule Deckex.Consults.Schemas do
   @moduledoc """
   The JSON schema a consult's answer must satisfy.
 
-  Two shapes now. The scout writes the strategic dossier — four prose fields,
+  Three shapes now. The scout writes the strategic dossier — four prose fields,
   no cuts, no adds: a scout that suggests cards has become a consultant, and
-  the consultant already exists. Every other lens shares the diagnosis/cuts/
+  the consultant already exists. The `:visao` lens writes three directions —
+  name, thesis, honest cost, key cards — and likewise proposes no changes: it
+  is asked what the deck could become, not what to do this turn. Every other lens shares the diagnosis/cuts/
   adds shape, opened by a required `leitura`: the model's own reading of the
   deck, confronted with the dossier when one was injected. The mandated
   disagreement makes `leitura` double as a stale-dossier detector.
@@ -70,6 +72,56 @@ defmodule Deckex.Consults.Schemas do
         }
       },
       "required" => ["plano", "sinergias", "linhas_de_vitoria", "fraquezas"]
+    }
+  end
+
+  def for_lens(:visao) do
+    %{
+      "type" => "object",
+      "properties" => %{
+        "visoes" => %{
+          "type" => "array",
+          "minItems" => 3,
+          "maxItems" => 3,
+          "items" => %{
+            "type" => "object",
+            "properties" => %{
+              "nome" => %{
+                "type" => "string",
+                "description" => "pt-BR: a short name for this direction, 2-4 words."
+              },
+              "eixo" => %{
+                "type" => "string",
+                "enum" => ["consistencia", "velocidade", "resiliencia", "eixo_de_vitoria"],
+                "description" =>
+                  "The axis this direction moves. The three visions MUST differ here."
+              },
+              "tese" => %{
+                "type" => "string",
+                "description" => "One paragraph, pt-BR: why this makes the deck stronger."
+              },
+              "custo" => %{
+                "type" => "string",
+                "description" =>
+                  "One paragraph, pt-BR: what the deck LOSES going this way. Be honest."
+              },
+              "cartas_chave" => %{
+                "type" => "array",
+                "items" => %{"type" => "string"},
+                "description" =>
+                  "Exact card names, untranslated, that define this direction. Never state a price."
+              },
+              "comandante" => %{
+                "type" => "string",
+                "description" =>
+                  "Optional: a different commander for this direction. It MUST have exactly the deck's colour identity. Omit to keep the current one."
+              }
+            },
+            "required" => ["nome", "eixo", "tese", "custo", "cartas_chave"]
+          }
+        }
+      },
+      "required" => ["visoes"]
     }
   end
 
