@@ -25,7 +25,7 @@ defmodule Deckex.Optimizations.OptimizationStep do
 
   schema "optimization_steps" do
     field :position, :integer
-    field :kind, Ecto.Enum, values: [:lens, :checkpoint, :validation]
+    field :kind, Ecto.Enum, values: [:lens, :checkpoint, :validation, :reconstruction]
     field :lens, :string
     field :label, :string
     field :status, Ecto.Enum, values: [:pending, :running, :done, :skipped, :failed]

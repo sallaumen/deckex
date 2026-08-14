@@ -17,6 +17,7 @@ defmodule Deckex.Optimizations do
   alias Deckex.Cards.Name
   alias Deckex.Consults
   alias Deckex.Consults.Audit
+  alias Deckex.Consults.ConsultQuery
   alias Deckex.Consults.Suggestions
   alias Deckex.Decks
   alias Deckex.Decks.Deck
@@ -136,12 +137,87 @@ defmodule Deckex.Optimizations do
 
   @doc "Resumes a paused run: the next pending (or failed) stage runs again."
   @spec resume(Optimization.t()) :: {:ok, Optimization.t()}
-  def resume(%Optimization{} = optimization) do
+  def resume(%Optimization{status: :awaiting_choice} = optimization) do
+    if chosen_vision(optimization) do
+      do_resume(optimization)
+    else
+      {:error,
+       Error.new(
+         :vision_not_chosen,
+         "Essa rodada está esperando: escolha uma direção para continuar."
+       )}
+    end
+  end
+
+  def resume(%Optimization{} = optimization), do: do_resume(optimization)
+
+  defp do_resume(%Optimization{} = optimization) do
     {:ok, resumed} = transition(optimization, :running)
 
     case resumable_step(resumed) do
       nil -> {:ok, resumed}
       step -> with {:ok, _step} <- run_step(step), do: fetch(resumed.id)
+    end
+  end
+
+  @doc "The visions this run has asked for, oldest first. Declined sets stay."
+  @spec vision_consults(Optimization.t()) :: [Consults.Consult.t()]
+  def vision_consults(%Optimization{} = optimization) do
+    ConsultQuery.list_for_optimization(optimization.id, :visao)
+  end
+
+  @doc "The direction the owner picked, or nil while the run still waits."
+  @spec chosen_vision(Optimization.t()) :: map() | nil
+  def chosen_vision(%Optimization{} = optimization), do: optimization.contract["visao"]
+
+  @doc """
+  Freezes the chosen direction into the contract and resumes the run.
+
+  `index` is the position in the most recent set of visions — what the owner
+  clicked. Frozen like every other contract field: a run whose target drifts
+  mid-flight is one nobody can reason about afterwards.
+  """
+  @spec choose_vision(Optimization.t(), non_neg_integer()) ::
+          {:ok, Optimization.t()} | {:error, Error.t()}
+  def choose_vision(%Optimization{} = optimization, index) do
+    visions =
+      case List.last(vision_consults(optimization)) do
+        nil -> []
+        consult -> List.wrap(consult.response["visoes"])
+      end
+
+    case Enum.at(visions, index) do
+      nil ->
+        {:error, Error.new(:vision_not_found, "Não achei essa direção nesta rodada.")}
+
+      vision ->
+        contract = Map.put(optimization.contract, "visao", vision)
+
+        optimization
+        |> Optimization.changeset(%{contract: contract})
+        |> Repo.update!()
+        |> resume()
+    end
+  end
+
+  @doc """
+  Spends one more consult on a fresh set of directions.
+
+  The same step runs again with a new consult, so no position moves and the
+  declined sets stay attached to the run by `optimization_id` — what the owner
+  turned down is part of the record.
+  """
+  @spec ask_again(Optimization.t()) :: {:ok, Optimization.t()} | {:error, Error.t()}
+  def ask_again(%Optimization{} = optimization) do
+    case Enum.find(optimization.steps, &vision_step?/1) do
+      nil ->
+        {:error, Error.new(:no_vision_step, "Essa rodada não tem etapa de visões.")}
+
+      step ->
+        {:ok, _running} = transition(optimization, :running)
+        {:ok, _step} = run_step(step)
+
+        fetch(optimization.id)
     end
   end
 
@@ -243,13 +319,24 @@ defmodule Deckex.Optimizations do
       |> Repo.update!()
 
     {:ok, refreshed} = fetch(optimization.id)
-    settle(refreshed, done)
+
+    if vision_step?(done) do
+      {:ok, _waiting} = transition(refreshed, :awaiting_choice)
+    else
+      settle(refreshed, done)
+    end
 
     {:ok, final} = fetch(optimization.id)
     Events.broadcast_optimization(final)
 
     :ok
   end
+
+  # A vision answer proposes no changes and picks no direction — the owner
+  # does that. The pipeline stops here rather than spending the next stage
+  # against a direction nobody chose.
+  defp vision_step?(%OptimizationStep{lens: "visao"}), do: true
+  defp vision_step?(_step), do: false
 
   @doc "A stage's consult failed for good: the run pauses, paid work stays."
   @spec mark_failed(Consults.Consult.t()) :: :ok
