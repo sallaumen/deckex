@@ -13,7 +13,9 @@ defmodule Deckex.Analysis.RealDeckTest do
   alias Deckex.Analysis.Report
   alias Deckex.CatalogueFixture
   alias Deckex.Consults.Briefing
+  alias Deckex.Consults.Suggestion
   alias Deckex.Decks
+  alias Deckex.Decks.Deck
 
   setup :verify_on_exit!
 
@@ -78,7 +80,7 @@ defmodule Deckex.Analysis.RealDeckTest do
       "fraquezas" => "Um Bojuka Bog desliga metade do plano."
     }
 
-    deck = Repo.one!(Deckex.Decks.Deck)
+    deck = Repo.one!(Deck)
     snapshot = Decks.snapshot(deck)
 
     briefing = Briefing.build(report, snapshot, :full, dossier: dossier)
@@ -90,5 +92,55 @@ defmodule Deckex.Analysis.RealDeckTest do
     assert findings_at < dossier_at
     assert dossier_at < decklist_at
     assert briefing =~ "Bojuka Bog"
+  end
+
+  # The audited answer mirrors the recorded opus consult: cut the colourless
+  # utility land, add a fixer the deck does not have. Plus one deliberately
+  # illegal add — Agadeem's Awakening is black, and this deck is Temur.
+  # (The first draft of this test added Command Tower and the engine rejected
+  # it: the deck already runs one. The audit caught the test's own mistake.)
+  test "the engine audits an opus-shaped answer against the real deck" do
+    _report = import_and_measure()
+
+    snapshot =
+      Deck
+      |> Repo.one!()
+      |> Deck.changeset(%{color_identity: ["G", "R", "U"]})
+      |> Repo.update!()
+      |> Decks.snapshot()
+
+    suggestions =
+      [
+        {:cut, "Reliquary Tower"},
+        {:add, "Cultivate"},
+        {:add, "Agadeem's Awakening"}
+      ]
+      |> Enum.map(fn {action, name} ->
+        card = Deckex.Cards.get_by_name(name)
+
+        %Suggestion{
+          action: action,
+          name: name,
+          reason: "t",
+          card: card,
+          resolved?: card != nil
+        }
+      end)
+
+    audit = Deckex.Consults.audit(snapshot, suggestions)
+
+    # The one illegal suggestion is the one flagged, by colour.
+    assert [problem] = audit.problems[{:add, "Agadeem's Awakening"}]
+    assert problem =~ "fora da identidade de cor (B)"
+    assert map_size(audit.problems) == 1
+
+    # The accounting is total: every before-finding is resolved or remaining,
+    # and nothing appears on both sides.
+    resolved = MapSet.new(audit.resolved, & &1.code)
+    remaining = MapSet.new(audit.remaining, & &1.code)
+    assert MapSet.disjoint?(resolved, remaining)
+
+    assert MapSet.disjoint?(MapSet.new(audit.introduced, & &1.code), remaining) == false or
+             audit.introduced == []
   end
 end

@@ -17,6 +17,7 @@ defmodule Deckex.Consults do
   alias Deckex.Consults.Consult
   alias Deckex.Consults.ConsultQuery
   alias Deckex.Consults.Schemas
+  alias Deckex.Consults.Suggestion
   alias Deckex.Consults.Suggestions
   alias Deckex.Decks
   alias Deckex.Decks.Deck
@@ -129,7 +130,7 @@ defmodule Deckex.Consults do
   Computed on read, never stored — it always answers "what would happen if
   applied **now**", against the deck as it currently is.
   """
-  @spec audit(DeckSnapshot.t(), [Suggestions.Suggestion.t()]) :: Audit.t()
+  @spec audit(DeckSnapshot.t(), [Suggestion.t()]) :: Audit.t()
   def audit(%DeckSnapshot{} = snapshot, suggestions) do
     roles =
       suggestions

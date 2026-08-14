@@ -7,6 +7,7 @@ defmodule Deckex.Consults.AuditTest do
   alias Deckex.Consults.Audit
   alias Deckex.Consults.Suggestion
   alias Deckex.Decks
+  alias Deckex.Decks.Deck
 
   # A pasted list with no commander has an empty colour identity — identity
   # comes from the commander alone. These tests model a mono-G commander deck,
@@ -18,7 +19,7 @@ defmodule Deckex.Consults.AuditTest do
       Decks.import_from_text("1 Sol Ring\n4 Forest", %{name: "Deck Auditado", source: :paste})
 
     deck
-    |> Deckex.Decks.Deck.changeset(%{color_identity: ["G"]})
+    |> Deck.changeset(%{color_identity: ["G"]})
     |> Repo.update!()
     |> Decks.snapshot()
   end
