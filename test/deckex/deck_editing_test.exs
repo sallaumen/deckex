@@ -103,4 +103,65 @@ defmodule Deckex.DeckEditingTest do
       assert later.interaction.counters == before.interaction.counters + 1
     end
   end
+
+  describe "the dossier" do
+    @dossier %{
+      "plano" => "Spellslinger.",
+      "sinergias" => "Flashback nas Lessons.",
+      "linhas_de_vitoria" => "Tesouros do Storm Kiln.",
+      "fraquezas" => "Cemitério é tudo."
+    }
+
+    test "put_dossier/2 stores the scout's reading and stamps it" do
+      deck = deck()
+
+      assert {:ok, updated} = Decks.put_dossier(deck, @dossier)
+
+      assert updated.dossier["plano"] == "Spellslinger."
+      assert updated.dossier_source == :scout
+      assert updated.dossier_stale == false
+      assert updated.dossier_updated_at != nil
+    end
+
+    test "edit_dossier/2 marks the text as the owner's and clears staleness" do
+      {:ok, deck} = deck() |> Decks.put_dossier(@dossier)
+      # add_card returns the DeckCard, not the deck — do not rebind `deck`.
+      {:ok, _card} = Decks.add_card(deck, "Counterspell")
+      {:ok, stale} = Decks.fetch_deck(deck.id)
+      assert stale.dossier_stale
+
+      assert {:ok, edited} = Decks.edit_dossier(stale, %{@dossier | "plano" => "Meu plano."})
+
+      assert edited.dossier["plano"] == "Meu plano."
+      assert edited.dossier_source == :manual
+      assert edited.dossier_stale == false
+    end
+
+    test "adding a card marks an existing dossier stale" do
+      {:ok, deck} = deck() |> Decks.put_dossier(@dossier)
+
+      {:ok, _card} = Decks.add_card(deck, "Counterspell")
+
+      {:ok, fresh} = Decks.fetch_deck(deck.id)
+      assert fresh.dossier_stale
+    end
+
+    test "removing a card marks an existing dossier stale" do
+      {:ok, deck} = deck() |> Decks.put_dossier(@dossier)
+
+      {:ok, :removed} = Decks.remove_card(deck, "Sol Ring")
+
+      {:ok, fresh} = Decks.fetch_deck(deck.id)
+      assert fresh.dossier_stale
+    end
+
+    test "editing a deck with no dossier does not invent a stale flag" do
+      deck = deck()
+
+      {:ok, _card} = Decks.add_card(deck, "Counterspell")
+
+      {:ok, fresh} = Decks.fetch_deck(deck.id)
+      refute fresh.dossier_stale
+    end
+  end
 end

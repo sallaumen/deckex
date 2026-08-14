@@ -117,6 +117,7 @@ defmodule Deckex.Decks do
       # lens — the interaction count would not move when you add a counterspell,
       # which is precisely the feedback the button exists to give.
       {:ok, _roles} = Cards.classify_card(card)
+      :ok = mark_dossier_stale(deck)
 
       {:ok, upsert_deck_card!(deck, card, board, quantity)}
     end
@@ -148,12 +149,61 @@ defmodule Deckex.Decks do
     with {:ok, card} <- resolve_one(name),
          %DeckCard{} = deck_card <- find_any_board(deck, card) do
       drop_one!(deck_card)
+      :ok = mark_dossier_stale(deck)
 
       {:ok, :removed}
     else
       nil -> {:error, not_in_deck(name)}
       {:error, _reason} = error -> error
     end
+  end
+
+  @doc """
+  Stores the scout's reading of the deck.
+
+  Cannot fail for an expected reason — the map comes from a schema-validated
+  model answer — so the tagged shape is uniformity, not an error channel.
+  """
+  @spec put_dossier(Deck.t(), map()) :: {:ok, Deck.t()}
+  def put_dossier(%Deck{} = deck, %{} = dossier) do
+    {:ok, write_dossier!(deck, dossier, :scout)}
+  end
+
+  @doc """
+  The owner's edit of the dossier.
+
+  Also clears staleness: an edit asserts current truth, which is exactly what
+  the stale flag says is missing.
+  """
+  @spec edit_dossier(Deck.t(), map()) :: {:ok, Deck.t()}
+  def edit_dossier(%Deck{} = deck, %{} = dossier) do
+    {:ok, write_dossier!(deck, Map.take(dossier, dossier_fields()), :manual)}
+  end
+
+  @doc "The four prose fields a dossier carries, in display order."
+  @spec dossier_fields() :: [String.t()]
+  def dossier_fields, do: ["plano", "sinergias", "linhas_de_vitoria", "fraquezas"]
+
+  defp write_dossier!(deck, dossier, source) do
+    deck
+    |> Deck.changeset(%{
+      dossier: dossier,
+      dossier_source: source,
+      dossier_stale: false,
+      dossier_updated_at: DateTime.utc_now(:second)
+    })
+    |> Repo.update!()
+  end
+
+  # An edit changes what the dossier describes. Flag it; never re-run anything
+  # automatically — a consult costs money and minutes, so spending is always
+  # the owner's click.
+  defp mark_dossier_stale(%Deck{dossier: nil}), do: :ok
+
+  defp mark_dossier_stale(%Deck{} = deck) do
+    deck |> Deck.changeset(%{dossier_stale: true}) |> Repo.update!()
+
+    :ok
   end
 
   defp resolve_one(name) do
