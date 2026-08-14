@@ -234,3 +234,19 @@ All through the existing Mox boundaries; no test touches the network.
 | `leitura` required in every answer | Forces the model to reason before prescribing, and doubles as a stale-dossier detector via the mandated-disagreement instruction. |
 | Staleness is a flag, not a version | Edits are cheap to detect; history is a different feature with a different design. |
 | Manual dossier replaced only behind a confirm | Same provenance ethos as `:manual` roles, adapted: never silently. |
+
+## Validation — 2026-08-14, same day
+
+The scout ran on the real Iroh deck (opus, 214s) and wrote a dossier that read
+cards no earlier analysis had touched (Stormsplitter, Vivi Ornitier, White
+Lotus Hideout) and named the weakness the numbers cannot see: the deck's good
+identity costs {3}{G}{U}{R}, and Iroh's flashback does nothing on defence.
+
+Then the thesis test: the same `:full` question to **sonnet** — the model that,
+pre-dossier, cut a Lesson without knowing Lessons are the engine — now with
+the dossier injected. Result (180s): no Lesson cut; the `leitura` engaged the
+dossier exactly as designed, agreeing with its core and **disagreeing on two
+specific points with new reasoning** (the deck's extra mana is all R/U and
+masks the GG hunger; the only board wipe kills its own token army). The
+cheaper model now sees what only opus saw, and the mandated disagreement
+produced insight neither the dossier nor the earlier opus answer contained.
