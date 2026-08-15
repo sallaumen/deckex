@@ -185,6 +185,63 @@ defmodule Deckex.Consults.AuditTest do
     end
   end
 
+  describe "the run's budget" do
+    setup do
+      CatalogueFixture.seed!(~w(sol_ring forest rhystic_study))
+
+      {:ok, deck} =
+        Decks.import_from_text("1 Sol Ring\n4 Forest", %{name: "Deck Orçado", source: :paste})
+
+      snapshot =
+        deck
+        |> Deck.changeset(%{color_identity: ["G", "U"]})
+        |> Repo.update!()
+        |> Decks.snapshot()
+
+      %{snapshot: snapshot}
+    end
+
+    # Per-card ceilings cannot answer "what is this whole round costing me".
+    test "an add that crosses the total is refused, with the running total", %{snapshot: snapshot} do
+      suggestion = priced(:add, "Rhystic Study")
+
+      audit =
+        Audit.run(
+          snapshot,
+          [suggestion],
+          %{},
+          Settings.baselines(),
+          %{card: nil, land: nil},
+          budget: 100,
+          spent: Decimal.new(90)
+        )
+
+      assert [problem] = audit.problems[{:add, "Rhystic Study"}]
+      assert problem =~ "orçamento da rodada"
+    end
+
+    test "with room left it passes", %{snapshot: snapshot} do
+      audit =
+        Audit.run(
+          snapshot,
+          [priced(:add, "Rhystic Study")],
+          %{},
+          Settings.baselines(),
+          %{card: nil, land: nil},
+          budget: 10_000,
+          spent: Decimal.new(0)
+        )
+
+      refute audit.problems[{:add, "Rhystic Study"}]
+    end
+
+    test "no budget set refuses nothing", %{snapshot: snapshot} do
+      audit = Audit.run(snapshot, [priced(:add, "Rhystic Study")], %{}, Settings.baselines())
+
+      refute audit.problems[{:add, "Rhystic Study"}]
+    end
+  end
+
   describe "the salt contract" do
     # Identity widened to UG on the struct, not in the database: the point of
     # these tests is the salt guard, and an identity refusal would mask it.

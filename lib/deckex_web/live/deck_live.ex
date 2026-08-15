@@ -47,6 +47,7 @@ defmodule DeckexWeb.DeckLive do
       report: Analysis.report(snapshot, Settings.baselines()),
       model: Settings.model(),
       card_uris: card_uris(snapshot),
+      deck_value: deck_value(snapshot),
       running_optimization: Optimizations.running_for_deck(deck.id),
       page_title: deck.name
     )
@@ -133,6 +134,17 @@ defmodule DeckexWeb.DeckLive do
 
   defp apply_edit(socket, {:error, error}, _message) do
     put_flash(socket, :error, error.message)
+  end
+
+  # A player who says their decks reach R$ 8-10 mil has no way to see where
+  # one sits today, and the app has held every price all along.
+  defp deck_value(snapshot) do
+    (snapshot.main ++ snapshot.commanders)
+    |> Enum.map(&{&1.card.price_usd, &1.quantity})
+    |> Enum.reject(fn {price, _qty} -> is_nil(price) end)
+    |> Enum.reduce(Decimal.new(0), fn {price, qty}, total ->
+      Decimal.add(total, Decimal.mult(price, qty))
+    end)
   end
 
   # One map for the whole screen, built from the snapshot already in memory —
@@ -240,6 +252,15 @@ defmodule DeckexWeb.DeckLive do
           >
             Otimizar
           </.button>
+
+          <div class="text-right">
+            <p class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+              Valor do deck
+            </p>
+            <p class="font-mono text-numeral-sm font-semibold leading-none text-ink">
+              {Money.brl(@deck_value)}
+            </p>
+          </div>
 
           <div class="text-right">
             <p class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">

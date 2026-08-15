@@ -447,6 +447,26 @@ defmodule Deckex.Optimizations do
     fetch(optimization.id)
   end
 
+  @doc """
+  What the run's applied entries have cost so far, in reais.
+
+  The run page already shows this as **Entradas**; the budget guard compares
+  against the same number the owner is reading.
+  """
+  @spec spent_so_far(Optimization.t()) :: Decimal.t()
+  def spent_so_far(%Optimization{} = optimization) do
+    optimization.steps
+    |> Enum.flat_map(& &1.applied)
+    |> Enum.filter(&(&1["action"] == "add"))
+    |> Enum.map(&Cards.get_by_name(&1["card"]))
+    |> Enum.reject(&is_nil/1)
+    |> Enum.map(& &1.price_usd)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.reduce(Decimal.new(0), fn usd, total ->
+      Decimal.add(total, Deckex.Money.to_brl(usd) || Decimal.new(0))
+    end)
+  end
+
   @doc "How many stages a redo of this one would discard."
   @spec stages_after(Optimization.t(), String.t()) :: non_neg_integer()
   def stages_after(%Optimization{} = optimization, step_id) do
@@ -550,7 +570,9 @@ defmodule Deckex.Optimizations do
         history: history(optimization, step),
         keep: (optimization.contract["keep"] || []) ++ current_commanders(optimization),
         bracket_max: optimization.contract["bracket_max"],
-        avoid: Salt.avoided(optimization.contract["salt"])
+        avoid: Salt.avoided(optimization.contract["salt"]),
+        budget: optimization.contract["orcamento_total"],
+        spent: spent_so_far(optimization)
       )
 
     split(suggestions, audit)

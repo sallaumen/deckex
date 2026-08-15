@@ -93,7 +93,9 @@ defmodule Deckex.Consults.Audit do
         opts |> Keyword.get(:history, []) |> Enum.frequencies_by(&Name.normalize(&1["card"])),
       keep: opts |> Keyword.get(:keep, []) |> MapSet.new(&Name.normalize/1),
       bracket_max: Keyword.get(opts, :bracket_max),
-      avoid: Keyword.get(opts, :avoid, %{})
+      avoid: Keyword.get(opts, :avoid, %{}),
+      budget: Keyword.get(opts, :budget),
+      spent: Keyword.get(opts, :spent, Decimal.new(0))
     }
   end
 
@@ -137,6 +139,21 @@ defmodule Deckex.Consults.Audit do
   # their table, and inside a pipeline nobody is there to click "no". Only
   # `evitar` reaches here — wanting a tactic is an invitation in the briefing,
   # because no engine can force a model to have an idea.
+  # Per-card ceilings answer "is this one card too expensive". They cannot
+  # answer "what is this whole round costing me", which is the question an
+  # owner with a real budget actually has.
+  defp budget_problem(_price, %{budget: nil}), do: nil
+  defp budget_problem(nil, _pipeline), do: nil
+
+  defp budget_problem(price_usd, %{budget: budget, spent: spent}) do
+    running = Decimal.add(spent, Money.to_brl(price_usd) || Decimal.new(0))
+
+    if Decimal.gt?(running, Decimal.new(budget)) do
+      "passaria o orçamento da rodada: #{Money.brl(price_usd)} levaria o total a " <>
+        "R$ #{Decimal.round(running, 2)} de um teto de R$ #{budget}"
+    end
+  end
+
   defp salt_problem(entry_roles, %{avoid: avoid}) do
     case Enum.find(avoid, fn {role, _label} -> role in entry_roles end) do
       {_role, label} -> "você marcou evitar #{label} nesta rodada"
@@ -182,6 +199,7 @@ defmodule Deckex.Consults.Audit do
         bracket_problem(card, snapshot),
         contract_bracket_problem(card, entry_roles, pipeline, snapshot),
         salt_problem(entry_roles, pipeline),
+        budget_problem(suggestion.price_usd, pipeline),
         flip_flop_problem(pipeline, suggestion.name)
       ],
       &is_nil/1
