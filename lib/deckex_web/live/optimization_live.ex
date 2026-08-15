@@ -242,6 +242,27 @@ defmodule DeckexWeb.OptimizationLive do
     fork(socket, nil)
   end
 
+  def handle_event("aplicar-no-deck", %{"step" => step_id}, socket) do
+    apply_run(socket, find_step(socket, step_id))
+  end
+
+  def handle_event("aplicar-no-deck", _params, socket) do
+    apply_run(socket, nil)
+  end
+
+  defp apply_run(socket, step) do
+    case Optimizations.apply_to_deck(socket.assigns.optimization, step) do
+      {:ok, deck} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Aplicado em #{deck.name}. Virou a versão mais nova do deck.")
+         |> push_navigate(to: ~p"/decks/#{deck.id}/versoes")}
+
+      {:error, %Error{} = error} ->
+        {:noreply, put_flash(socket, :error, error.message)}
+    end
+  end
+
   defp fork(socket, step) do
     case Optimizations.save_as_deck(socket.assigns.optimization, step) do
       {:ok, deck} ->
@@ -272,6 +293,14 @@ defmodule DeckexWeb.OptimizationLive do
       other ->
         other
     end)
+  end
+
+  # Spelled out because it writes over the deck's cards: the number is the one
+  # thing that decides whether this is safe to click, and the sentence after it
+  # is the reason it is — the list being replaced does not disappear.
+  defp apply_warning(deck, card_count) do
+    "Aplicar esta otimização em #{deck.name}? " <>
+      "O deck passa a ter #{card_count} cartas, e a lista de agora fica guardada como versão."
   end
 
   defp elapsed_label(started_at, now) do
@@ -421,14 +450,27 @@ defmodule DeckexWeb.OptimizationLive do
             >
               Cancelar
             </.button>
+            <%!-- Applying is the default and forking is the exception: a run
+                  is work done on a deck, and the deck is where it belongs.
+                  Forking stays for the case the owner wants both lists side by
+                  side, which is a different intention and reads as one. --%>
+            <.button
+              :if={@optimization.status == :done}
+              type="button"
+              phx-click="aplicar-no-deck"
+              phx-disable-with="Aplicando…"
+              data-confirm={apply_warning(@deck, @card_count)}
+              variant="primary"
+            >
+              Aplicar no deck
+            </.button>
             <.button
               :if={@optimization.status == :done}
               type="button"
               phx-click="salvar-como-deck"
               phx-disable-with="Salvando…"
-              variant="primary"
             >
-              Salvar como novo deck
+              Salvar como deck separado
             </.button>
           </div>
         </div>
@@ -759,6 +801,17 @@ defmodule DeckexWeb.OptimizationLive do
                 Refazer
               </button>
             </.form>
+
+            <button
+              type="button"
+              phx-click="aplicar-no-deck"
+              phx-value-step={step.id}
+              phx-disable-with="aplicando…"
+              data-confirm={"Aplicar o deck até esta etapa em #{@deck.name}? A lista de agora fica guardada como versão."}
+              class="-my-2 inline-flex min-h-touch items-center whitespace-nowrap px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+            >
+              Aplicar até aqui
+            </button>
 
             <button
               type="button"

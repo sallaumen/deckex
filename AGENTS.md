@@ -228,6 +228,19 @@ for *what* we are building and *why*. This file is *how*.
   only while nothing checked the count, and two features now do. The same
   lesson as `commander_legal` defaulting to `false` in `AnalysisFixture`: a
   fixture that models something impossible hides the bug it was meant to catch.
+- **An applied optimization is a version of the deck it came from.** A run is
+  work done on a deck, so applying it writes the deck's own cards and marks the
+  version that says what it did — `Versions.apply_list/4`, never a second deck
+  named "— otimizado". Forking still exists for the owner who wants both lists
+  side by side, which is a different intention and reads as one on the page.
+- **Nothing overwrites a list that was never saved.** `apply_list/4`
+  photographs the working state first when it has drifted from the last
+  version, or when there is no version at all. The five cards someone edited by
+  hand before running the optimizer are theirs to go back to.
+- **A version's changelog is the net, not the transcript.** A card added by one
+  stage and cut by a later one nets to nothing, and the history reads as what
+  happened to the deck rather than as a diary of the run — the same fold
+  `consolidated_diff/2` already applies to the shopping list.
 
 ## Operating notes
 
