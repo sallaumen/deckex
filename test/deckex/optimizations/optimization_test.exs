@@ -2,6 +2,7 @@ defmodule Deckex.Optimizations.OptimizationTest do
   use Deckex.DataCase, async: true
 
   alias Deckex.Consults.Consult
+  alias Deckex.Optimizations
   alias Deckex.Optimizations.OptimizationQuery
 
   test "an optimization and its steps round-trip every field" do
@@ -80,6 +81,62 @@ defmodule Deckex.Optimizations.OptimizationTest do
       optimization = insert(:optimization, status: :awaiting_choice)
 
       assert OptimizationQuery.running_for_deck(optimization.deck_id)
+    end
+  end
+
+  describe "consolidated_diff/1" do
+    defp step_with(applied), do: %{applied: applied}
+    defp run_with(steps), do: %Deckex.Optimizations.Optimization{steps: steps}
+
+    defp touch(action, card, reason \\ "t"),
+      do: %{"action" => action, "card" => card, "reason" => reason}
+
+    # The bug the owner caught on his own run: the mana stage cut two basic
+    # Mountains, the diff showed one, and a run that stayed at exactly 100
+    # cards reported thirteen cuts against fourteen adds.
+    test "two cuts of the same basic land are two cuts" do
+      run =
+        run_with([
+          step_with([touch("cut", "Mountain", "excedente vermelho")]),
+          step_with([touch("cut", "Mountain", "segunda do excedente")])
+        ])
+
+      assert [first, second] = Optimizations.consolidated_diff(run)
+      assert first["card"] == "Mountain"
+      assert second["card"] == "Mountain"
+      # Each copy keeps its own stage's argument; the second is not an echo.
+      assert Enum.sort([first["reason"], second["reason"]]) ==
+               ["excedente vermelho", "segunda do excedente"]
+    end
+
+    test "a card added and later cut is not in the diff at all" do
+      run =
+        run_with([
+          step_with([touch("add", "Aetherize")]),
+          step_with([touch("cut", "Aetherize")])
+        ])
+
+      assert Optimizations.consolidated_diff(run) == []
+    end
+
+    test "adds and cuts of different cards both survive, sorted" do
+      run = run_with([step_with([touch("cut", "Sol Ring"), touch("add", "Cultivate")])])
+
+      assert [%{"card" => "Cultivate"}, %{"card" => "Sol Ring"}] =
+               Optimizations.consolidated_diff(run)
+    end
+
+    # Three copies in, one out, is two copies in — the count is what a deck
+    # holds, and the owner buys from this list.
+    test "the net keeps the count, not merely the direction" do
+      run =
+        run_with([
+          step_with([touch("add", "Forest", "a"), touch("add", "Forest", "b")]),
+          step_with([touch("add", "Forest", "c"), touch("cut", "Forest", "d")])
+        ])
+
+      assert [one, two] = Optimizations.consolidated_diff(run)
+      assert one["action"] == "add" and two["action"] == "add"
     end
   end
 end

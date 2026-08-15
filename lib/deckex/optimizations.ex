@@ -304,6 +304,41 @@ defmodule Deckex.Optimizations do
   end
 
   @doc """
+  What actually changed between the original list and the final one.
+
+  A card added by one stage and cut by a later one nets to nothing, so it does
+  not belong on a list the owner reads to know what to buy.
+
+  **The count matters, not just the name.** A mana stage that cuts two basic
+  Mountains made two changes, and collapsing them to one row reported thirteen
+  cuts against fourteen adds on a run that stayed at exactly 100 cards — the
+  arithmetic looked broken when only the display was. Basic lands are the one
+  card a deck holds several of, and they are precisely what a mana stage cuts
+  in multiples. Each surviving copy keeps its own stage's reason: the two
+  Mountains were cut for related but different arguments, and the second one is
+  not an echo of the first.
+  """
+  @spec consolidated_diff(Optimization.t()) :: [map()]
+  def consolidated_diff(%Optimization{} = optimization) do
+    optimization.steps
+    |> Enum.flat_map(& &1.applied)
+    |> Enum.group_by(& &1["card"])
+    |> Enum.flat_map(fn {_card, touches} -> surviving(touches) end)
+    |> Enum.sort_by(&{&1["action"], &1["card"]})
+  end
+
+  defp surviving(touches) do
+    {adds, cuts} = Enum.split_with(touches, &(&1["action"] == "add"))
+    net = length(adds) - length(cuts)
+
+    cond do
+      net > 0 -> Enum.take(adds, -net)
+      net < 0 -> Enum.take(cuts, net)
+      true -> []
+    end
+  end
+
+  @doc """
   The sandbox's commanders as they stand now.
 
   `optimization.commanders` stays frozen as the original — the before/after

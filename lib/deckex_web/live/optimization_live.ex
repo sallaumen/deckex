@@ -347,27 +347,9 @@ defmodule DeckexWeb.OptimizationLive do
     optimization.steps |> Enum.map(&length(&1.applied)) |> Enum.sum()
   end
 
-  defp consolidated_diff(optimization) do
-    optimization.steps |> Enum.flat_map(& &1.applied) |> net_changes()
-  end
-
-  # A card added and later cut nets to nothing; the diff the owner reads is
-  # what actually changed between the original list and the final one.
-  defp net_changes(changes) do
-    changes
-    |> Enum.group_by(& &1["card"])
-    |> Enum.flat_map(fn {_card, touches} ->
-      adds = Enum.count(touches, &(&1["action"] == "add"))
-      cuts = Enum.count(touches, &(&1["action"] == "cut"))
-
-      cond do
-        adds > cuts -> [List.last(Enum.filter(touches, &(&1["action"] == "add")))]
-        cuts > adds -> [List.last(Enum.filter(touches, &(&1["action"] == "cut")))]
-        true -> []
-      end
-    end)
-    |> Enum.sort_by(&{&1["action"], &1["card"]})
-  end
+  # What actually changed, net of a card that entered and left. The arithmetic
+  # is the domain's — an edge translates and delegates.
+  defdelegate consolidated_diff(optimization), to: Optimizations
 
   @impl Phoenix.LiveView
   def render(assigns) do
