@@ -51,6 +51,7 @@ defmodule DeckexWeb.Router do
 
     get "/consultas/:id/csv", ExportController, :consult_csv
     get "/decks/:id/lista.txt", ExportController, :deck_txt
+    get "/otimizacoes/:id/compras.txt", ExportController, :optimization_shopping_txt
   end
 
   # Other scopes may use custom stacks.

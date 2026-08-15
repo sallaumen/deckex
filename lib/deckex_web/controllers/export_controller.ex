@@ -11,10 +11,23 @@ defmodule DeckexWeb.ExportController do
   alias Deckex.Consults
   alias Deckex.Consults.Suggestions
   alias Deckex.Decks
+  alias Deckex.Optimizations
 
   def consult_csv(conn, %{"id" => id}) do
     case Consults.fetch(id) do
       {:ok, consult} -> send_csv(conn, consult)
+      {:error, error} -> conn |> put_status(:not_found) |> text(error.message)
+    end
+  end
+
+  def optimization_shopping_txt(conn, %{"id" => id}) do
+    with {:ok, run} <- Optimizations.fetch(id),
+         {:ok, deck} <- Decks.fetch_deck(run.deck_id) do
+      conn
+      |> put_resp_content_type("text/plain")
+      |> put_resp_header("content-disposition", ~s(attachment; filename="comprar.txt"))
+      |> send_resp(200, Optimizations.shopping_list_text(run, deck))
+    else
       {:error, error} -> conn |> put_status(:not_found) |> text(error.message)
     end
   end

@@ -339,6 +339,75 @@ defmodule Deckex.Optimizations do
   end
 
   @doc """
+  What this run says to buy: its net adds, minus whatever the real deck
+  already holds.
+
+  The diff answers "what changed in the sandbox". This answers the question
+  the owner actually walks into a shop with, and they are not the same list:
+  a card he applied to the real deck after reading the run is a change he
+  already made, not a card he still needs. Subtracting them is the difference
+  between a shopping list and a changelog.
+
+  A card with no known price is listed and left out of the total. Guessing what
+  it costs to make the arithmetic tidy would be exactly the invention this app
+  refuses everywhere else.
+  """
+  @spec shopping_list(Optimization.t(), Deck.t()) :: %{
+          cards: [map()],
+          total_usd: Decimal.t(),
+          unpriced: non_neg_integer()
+        }
+  def shopping_list(%Optimization{} = optimization, %Deck{} = deck) do
+    owned =
+      deck
+      |> Decks.list_deck_cards()
+      |> MapSet.new(&Name.normalize(&1.card.name))
+
+    cards =
+      optimization
+      |> consolidated_diff()
+      |> Enum.filter(&(&1["action"] == "add"))
+      |> Enum.reject(&MapSet.member?(owned, Name.normalize(&1["card"])))
+      |> Enum.map(&priced_entry/1)
+
+    # Totalled in dollars and converted once, like every other sum here: the
+    # rate is applied at the edge, so the number on screen rounds the same way
+    # the prices beside it do.
+    %{
+      cards: cards,
+      total_usd:
+        Enum.reduce(cards, Decimal.new(0), &Decimal.add(&2, &1.price_usd || Decimal.new(0))),
+      unpriced: Enum.count(cards, &is_nil(&1.price_usd))
+    }
+  end
+
+  defp priced_entry(change) do
+    card = Cards.get_by_name(change["card"])
+
+    %{
+      name: change["card"],
+      reason: change["reason"],
+      card: card,
+      price_usd: card && card.price_usd,
+      rank: card && card.edhrec_rank
+    }
+  end
+
+  @doc """
+  The shopping list as plain text, one card per line.
+
+  The format a shop's bulk-add box reads, which is the same one this app's own
+  importer reads.
+  """
+  @spec shopping_list_text(Optimization.t(), Deck.t()) :: String.t()
+  def shopping_list_text(%Optimization{} = optimization, %Deck{} = deck) do
+    case shopping_list(optimization, deck).cards do
+      [] -> ""
+      cards -> Enum.map_join(cards, "\n", &"1 #{&1.name}") <> "\n"
+    end
+  end
+
+  @doc """
   The sandbox's commanders as they stand now.
 
   `optimization.commanders` stays frozen as the original — the before/after

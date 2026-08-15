@@ -60,6 +60,7 @@ defmodule DeckexWeb.OptimizationLive do
       visions: vision_cards(optimization, deck),
       card_uris: Cards.uris_for_names(named_cards(optimization)),
       card_ranks: Cards.ranks_for_names(named_cards(optimization)),
+      shopping: Optimizations.shopping_list(optimization, deck),
       now: DateTime.utc_now(),
       report_original: Analysis.report(original, baselines),
       report_current: Analysis.report(current, baselines),
@@ -754,6 +755,72 @@ defmodule DeckexWeb.OptimizationLive do
           </div>
         </li>
       </ol>
+
+      <%!-- Before the changelog, because this is the one the owner acts on.
+            It is not the same list: a card he already applied to the real deck
+            is a change he made, not a card he still needs to buy. --%>
+      <section :if={@optimization.status == :done and @shopping.cards != []} class="mt-10">
+        <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+          O que comprar
+        </h2>
+
+        <div class="rounded-xl border border-hairline-soft bg-surface p-6">
+          <ul class="divide-y divide-hairline-soft">
+            <li
+              :for={item <- @shopping.cards}
+              class="flex flex-wrap items-baseline gap-x-2 gap-y-1 py-2 first:pt-0 last:pb-0"
+            >
+              <.card_link
+                name={item.name}
+                uri={item.card && item.card.scryfall_uri}
+                class="text-body text-ink"
+              />
+              <.play_rate rank={item.rank} />
+              <span class="ml-auto font-mono text-caption text-ink-secondary">
+                {Money.brl(item.card && item.card.price_usd)}
+              </span>
+            </li>
+          </ul>
+
+          <div class="mt-4 flex flex-wrap items-baseline justify-between gap-3 border-t border-hairline-soft pt-4">
+            <p class="font-mono text-numeral-sm leading-none text-ink">
+              {Money.brl(@shopping.total_usd)}
+              <span class="font-sans text-caption text-ink-faint">
+                por {length(@shopping.cards)} carta(s)
+              </span>
+            </p>
+
+            <div class="flex items-center gap-3">
+              <a
+                href={~p"/otimizacoes/#{@optimization.id}/compras.txt"}
+                download
+                class="-my-2 inline-flex min-h-touch items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+              >
+                Baixar
+              </a>
+              <button
+                id="copiar-compras"
+                type="button"
+                phx-hook=".CopyList"
+                data-target="lista-compras"
+                class="-my-2 inline-flex min-h-touch items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+              >
+                copiar tudo
+              </button>
+            </div>
+          </div>
+
+          <%!-- Unpriced cards are listed and left out of the total: guessing
+                what one costs to make the arithmetic tidy is the invention
+                this app refuses everywhere else. --%>
+          <p :if={@shopping.unpriced > 0} class="mt-2 text-micro text-ink-faint">
+            {@shopping.unpriced} carta(s) sem preço conhecido não entram no total.
+          </p>
+
+          <label for="lista-compras" class="sr-only">Lista de compra</label>
+          <textarea id="lista-compras" readonly rows="1" class="sr-only">{Optimizations.shopping_list_text(@optimization, @deck)}</textarea>
+        </div>
+      </section>
 
       <section :if={@optimization.status == :done} class="mt-10">
         <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
