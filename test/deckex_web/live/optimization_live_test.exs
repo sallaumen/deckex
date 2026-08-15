@@ -115,6 +115,63 @@ defmodule DeckexWeb.OptimizationLiveTest do
     end
   end
 
+  # A run is an argument about a list, so which list it argued about is part of
+  # the record — and the answer is almost always "a mais nova".
+  describe "starting from a version" do
+    test "the launcher offers the versions, newest first and already chosen", %{conn: conn} do
+      deck = deck()
+      {:ok, _} = Decks.add_card(deck, "Cultivate")
+      {:ok, _v2} = Versions.mark(deck, label: "Antes de otimizar")
+
+      {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}/otimizacoes")
+      html = live |> element("button[phx-click='abrir-lancador']") |> render_click()
+
+      assert html =~ "A partir de qual versão"
+      assert html =~ "mais recente"
+      assert html =~ "Antes de otimizar"
+    end
+
+    test "the run starts from the chosen version's list", %{conn: conn} do
+      deck = deck()
+      {:ok, v1} = Versions.fetch(deck, 1)
+      # v1 has no Cultivate; the deck does now.
+      {:ok, _} = Decks.add_card(deck, "Cultivate")
+      {:ok, _v2} = Versions.mark(deck)
+
+      {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}/otimizacoes")
+      live |> element("button[phx-click='abrir-lancador']") |> render_click()
+
+      live
+      |> form("#launch-form",
+        contract: %{
+          "from_version" => to_string(v1.number),
+          "bracket_max" => "3",
+          "ceiling_card" => "",
+          "ceiling_land" => "",
+          "keep" => "",
+          "matchups" => "",
+          "notes" => "",
+          "model" => "fable"
+        }
+      )
+      |> render_submit()
+
+      [run] = Optimizations.list_for_deck(deck.id)
+
+      assert run.contract["from_version"] == 1
+      refute Enum.any?(run.list_original, &(&1["name"] == "Cultivate"))
+    end
+
+    test "the run page says which version it started from", %{conn: conn} do
+      deck = deck()
+      {:ok, run} = Optimizations.start(deck, %{"from_version" => 1}, @two_lenses)
+
+      {:ok, _live, html} = live(conn, ~p"/otimizacoes/#{run.id}")
+
+      assert html =~ "a partir da v1"
+    end
+  end
+
   describe "the timeline" do
     test "shows stages live: leitura, applied, rejected with reasons", %{conn: conn} do
       deck = deck()

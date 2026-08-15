@@ -13,6 +13,7 @@ defmodule DeckexWeb.OptimizationsLive do
   alias Deckex.Analysis.Report
   alias Deckex.Consults
   alias Deckex.Decks
+  alias Deckex.Decks.DeckVersion
   alias Deckex.Decks.Versions
   alias Deckex.Error
   alias Deckex.Events
@@ -33,6 +34,9 @@ defmodule DeckexWeb.OptimizationsLive do
            deck: deck,
            runs: runs,
            applied: Versions.applied_runs(deck),
+           versions: Versions.list(deck),
+           drifted?: Versions.drifted?(deck),
+           deck_size: deck_size(deck),
            contract: Optimizations.default_contract(deck),
            recipe: Optimizations.recipe(deck, :refine),
            mode: :refine,
@@ -44,6 +48,16 @@ defmodule DeckexWeb.OptimizationsLive do
       {:error, %Error{} = error} ->
         {:ok, socket |> put_flash(:error, error.message) |> push_navigate(to: ~p"/")}
     end
+  end
+
+  # Commanders included: 100 is the number the rule is about, and the picker
+  # sits next to versions that count themselves the same way.
+  defp deck_size(deck) do
+    deck
+    |> Decks.snapshot()
+    |> Analysis.report(Settings.baselines())
+    |> Map.fetch!(:legality)
+    |> Map.fetch!(:size)
   end
 
   # Computed, not stored: reports are arithmetic over ~100 structs and the app
@@ -118,7 +132,8 @@ defmodule DeckexWeb.OptimizationsLive do
       "matchups" => lines(params["matchups"]),
       "notes" => String.trim(params["notes"] || ""),
       "model" => params["model"],
-      "salt" => salt_for(socket)
+      "salt" => salt_for(socket),
+      "from_version" => parse_int(params["from_version"])
     }
 
     # Refused here rather than mid-run: every add the contract contradicts
@@ -293,9 +308,12 @@ defmodule DeckexWeb.OptimizationsLive do
         >
           <header class="border-b border-hairline-soft px-6 py-4">
             <h2 class="text-heading font-semibold text-ink">Nova otimização</h2>
+            <%!-- The total, not just the per-stage cost: ten stages at "2–5
+                  min cada" is half an hour of the afternoon, and that is the
+                  number someone decides with. --%>
             <p class="text-caption text-ink-muted">
-              {length(@recipe)} etapas, uma consulta de 2–5 min cada. O pipeline aplica só o que o
-              motor aprovar — e só na cópia.
+              {length(@recipe)} etapas · {length(@recipe) * 2}–{length(@recipe) * 5} min no total,
+              rodando sozinho. O pipeline aplica só o que o motor aprovar — e só na cópia.
             </p>
           </header>
 
@@ -386,6 +404,41 @@ defmodule DeckexWeb.OptimizationsLive do
               <p class="text-micro text-ink-muted">
                 O motor recusa entradas que violem o que você marcou como evitar. "Quero" é convite —
                 nenhum motor obriga um modelo a ter ideia.
+              </p>
+            </div>
+
+            <%!-- A run is an argument about a list, so which list it argues
+                  about is the first thing to decide — and the answer is almost
+                  always "a mais nova", which is why it is already chosen. --%>
+            <div :if={@versions != []}>
+              <label
+                for="launch-from"
+                class="mb-1 block text-caption font-semibold text-ink-secondary"
+              >
+                A partir de qual versão
+              </label>
+              <select
+                id="launch-from"
+                name="contract[from_version]"
+                class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-2 py-2 text-caption text-ink"
+              >
+                <option :if={@drifted?} value="" selected>
+                  Como está agora — {@deck_size} cartas, com mudanças não marcadas
+                </option>
+                <option
+                  :for={{version, index} <- Enum.with_index(@versions)}
+                  value={version.number}
+                  selected={not @drifted? and index == 0}
+                >
+                  v{version.number} · {DeckVersion.size(version)} cartas{if version.label,
+                    do: " · #{version.label}"}{if index == 0, do: " · mais recente"}
+                </option>
+              </select>
+              <p class="mt-1 text-micro text-ink-muted">
+                {if @drifted?,
+                  do:
+                    "O deck mudou desde a última versão, então a lista de agora é a mais nova — é ela que vai ser otimizada.",
+                  else: "O pipeline copia essa lista e mexe só na cópia."}
               </p>
             </div>
 
