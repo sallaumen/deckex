@@ -17,7 +17,7 @@ defmodule Deckex.Optimizations.OptimizationStep do
   alias Deckex.Consults.Consult
   alias Deckex.Optimizations.Optimization
 
-  @fields ~w(optimization_id position kind lens label status consult_id
+  @fields ~w(optimization_id position kind lens label status model consult_id
              list_before applied rejected feedback)a
   @required ~w(optimization_id position kind lens label status)a
 
@@ -29,6 +29,9 @@ defmodule Deckex.Optimizations.OptimizationStep do
     field :lens, :string
     field :label, :string
     field :status, Ecto.Enum, values: [:pending, :running, :done, :skipped, :failed]
+    # Null means "whatever the contract says". A value here is the owner having
+    # redone this one stage with a different model.
+    field :model, :string
     field :list_before, {:array, :map}
     field :applied, {:array, :map}, default: []
     field :rejected, {:array, :map}, default: []

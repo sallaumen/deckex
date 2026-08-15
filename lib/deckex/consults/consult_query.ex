@@ -48,4 +48,14 @@ defmodule Deckex.Consults.ConsultQuery do
         order_by: [asc: c.inserted_at]
     )
   end
+
+  @doc "Every consult a run produced, oldest first — including redone ones."
+  @spec list_all_for_optimization(String.t()) :: [Consult.t()]
+  def list_all_for_optimization(optimization_id) do
+    Repo.all(
+      from c in Consult,
+        where: c.optimization_id == ^optimization_id,
+        order_by: [asc: c.inserted_at]
+    )
+  end
 end

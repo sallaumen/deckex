@@ -12,6 +12,7 @@ defmodule DeckexWeb.OptimizationLive do
   alias Deckex.Analysis
   alias Deckex.Analysis.Report
   alias Deckex.Cards
+  alias Deckex.Consults
   alias Deckex.Consults.Visions
   alias Deckex.Decks
   alias Deckex.Error
@@ -215,6 +216,16 @@ defmodule DeckexWeb.OptimizationLive do
     {:noreply, socket |> load(optimization) |> put_flash(:info, "Nota guardada.")}
   end
 
+  def handle_event("refazer", %{"step" => step_id, "modelo" => model}, socket) do
+    case Optimizations.redo_step(socket.assigns.optimization, step_id, model) do
+      {:ok, optimization} ->
+        {:noreply, socket |> load(optimization) |> put_flash(:info, "Refazendo com #{model}.")}
+
+      {:error, %Error{} = error} ->
+        {:noreply, put_flash(socket, :error, error.message)}
+    end
+  end
+
   def handle_event("criar-deck", %{"step" => step_id}, socket) do
     step = find_step(socket, step_id)
     fork(socket, step)
@@ -298,6 +309,17 @@ defmodule DeckexWeb.OptimizationLive do
   end
 
   defp add_price(_cut), do: nil
+
+  # The cost, in the currency that matters: how many paid stages this discards.
+  defp redo_warning(optimization, step) do
+    case Optimizations.stages_after(optimization, step.id) do
+      0 ->
+        "Refazer esta etapa com outro modelo?"
+
+      n ->
+        "Refazer esta etapa descarta as #{n} etapas seguintes, que serão consultadas de novo. Seguir?"
+    end
+  end
 
   defp running_position(optimization) do
     Enum.find_value(optimization.steps, &(&1.status == :running and &1.position))
@@ -691,6 +713,38 @@ defmodule DeckexWeb.OptimizationLive do
                 class="-my-2 inline-flex min-h-touch items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
               >
                 guardar
+              </button>
+            </.form>
+
+            <.form
+              for={%{}}
+              as={:refazer}
+              id={"refazer-#{step.id}"}
+              phx-submit="refazer"
+              class="flex items-center gap-1"
+            >
+              <input type="hidden" name="step" value={step.id} />
+              <label for={"modelo-#{step.id}"} class="sr-only">Refazer esta etapa com</label>
+              <select
+                id={"modelo-#{step.id}"}
+                name="modelo"
+                class="min-h-touch rounded-md border border-hairline-soft bg-inlay px-2 font-mono text-micro text-ink"
+              >
+                <option
+                  :for={model <- Consults.models_at_or_above(Settings.model_floor())}
+                  value={model}
+                  selected={model == (step.model || @optimization.contract["model"])}
+                >
+                  {model}
+                </option>
+              </select>
+              <button
+                type="submit"
+                phx-disable-with="refazendo…"
+                data-confirm={redo_warning(@optimization, step)}
+                class="-my-2 inline-flex min-h-touch items-center whitespace-nowrap px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink motion-reduce:transition-none"
+              >
+                Refazer
               </button>
             </.form>
 

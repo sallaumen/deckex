@@ -356,7 +356,7 @@ defmodule Deckex.Optimizations do
       Consults.request(deck, String.to_existing_atom(step.lens),
         snapshot: snapshot,
         optimization_id: optimization.id,
-        model: optimization.contract["model"],
+        model: step.model || optimization.contract["model"],
         against: optimization.contract["matchups"],
         optimization: %{
           contract: optimization.contract,
@@ -374,6 +374,89 @@ defmodule Deckex.Optimizations do
     Events.broadcast_optimization(optimization)
 
     {:ok, updated}
+  end
+
+  @doc """
+  Recomputes one stage with a different model, rewinding everything after it.
+
+  Stage N's answer is the input to N+1, so recomputing N while keeping the
+  stages that were built on it would leave the sandbox describing a history
+  that never happened. Everything after N goes back to `:pending`; its
+  `list_before` is derived and costs nothing to rebuild.
+
+  The discarded consults are **not** deleted — they stay attached to the run by
+  `optimization_id`, and reading what the cheaper model said beside the better
+  one is most of why this exists.
+
+  Refused while a consult is in flight: redoing under a live stage would race
+  the answer that is already on its way.
+  """
+  @spec redo_step(Optimization.t(), String.t(), String.t()) ::
+          {:ok, Optimization.t()} | {:error, Error.t()}
+  def redo_step(%Optimization{} = optimization, step_id, model) do
+    step = Enum.find(optimization.steps, &(&1.id == step_id))
+
+    cond do
+      is_nil(step) ->
+        {:error, Error.new(:step_not_found, "Não achei essa etapa nesta rodada.")}
+
+      Enum.any?(optimization.steps, &(&1.status == :running)) ->
+        {:error,
+         Error.new(
+           :stage_in_flight,
+           "Tem uma etapa consultando agora. Espere ela chegar antes de refazer outra."
+         )}
+
+      Consults.model_rank(model) < Consults.model_rank(Settings.model_floor()) ->
+        {:error,
+         Error.new(
+           :model_below_floor,
+           "#{model} está abaixo do seu piso (#{Settings.model_floor()}) para mudar cartas."
+         )}
+
+      true ->
+        rewind_to(optimization, step, model)
+    end
+  end
+
+  defp rewind_to(optimization, step, model) do
+    Enum.each(optimization.steps, fn other ->
+      if other.position > step.position do
+        other
+        |> OptimizationStep.changeset(%{
+          status: :pending,
+          applied: [],
+          rejected: [],
+          consult_id: nil,
+          list_before: nil
+        })
+        |> Repo.update!()
+      end
+    end)
+
+    optimization
+    |> Optimization.changeset(%{status: :running, outcome: nil, finished_at: nil})
+    |> Repo.update!()
+
+    {:ok, _step} =
+      step
+      |> OptimizationStep.changeset(%{model: model, status: :pending})
+      |> Repo.update!()
+      |> run_step()
+
+    fetch(optimization.id)
+  end
+
+  @doc "How many stages a redo of this one would discard."
+  @spec stages_after(Optimization.t(), String.t()) :: non_neg_integer()
+  def stages_after(%Optimization{} = optimization, step_id) do
+    case Enum.find(optimization.steps, &(&1.id == step_id)) do
+      nil ->
+        0
+
+      step ->
+        Enum.count(optimization.steps, &(&1.position > step.position and &1.status != :pending))
+    end
   end
 
   @doc """

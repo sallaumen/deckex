@@ -38,6 +38,7 @@ defmodule Deckex.Consults do
   @default_timeout_ms 600_000
 
   defdelegate list_for_deck(deck), to: ConsultQuery
+  defdelegate list_all_for_optimization(id), to: ConsultQuery
   defdelegate fetch(id), to: ConsultQuery
 
   @doc """
