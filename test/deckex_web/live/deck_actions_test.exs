@@ -289,4 +289,50 @@ defmodule DeckexWeb.DeckActionsTest do
       assert html =~ "a menos"
     end
   end
+
+  describe "what a legality finding offers" do
+    # Legality is arithmetic against the rules, not a judgement call. Nothing a
+    # model could say would change what has to happen, so offering to buy an
+    # opinion on "your deck has 105 cards" spends money on a fact.
+    test "the size finding points at the list instead of selling a consult", %{conn: conn} do
+      deck = deck()
+
+      {:ok, live, html} = live(conn, ~p"/decks/#{deck.id}")
+
+      assert html =~ "Ajustar a lista"
+      refute has_element?(live, "button[phx-value-code='legality.deck_size']")
+    end
+
+    test "an ordinary finding still offers the consult", %{conn: conn} do
+      deck = deck()
+
+      {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}")
+
+      assert has_element?(live, "button[phx-click='consult-finding']")
+    end
+
+    # Named as illegal and one click from gone: the finding says which cards
+    # make it true, so each of them gets a button.
+    test "an illegal card is removable from the finding that names it", %{conn: conn} do
+      CatalogueFixture.seed!(~w(sol_ring natures_lore forest counterspell))
+
+      {:ok, deck} =
+        Decks.import_from_text(
+          "Commander:\n1 Nature's Lore\n\nDeck:\n1 Sol Ring\n1 Counterspell\n4 Forest",
+          %{name: "Fora da Identidade", source: :paste}
+        )
+
+      {:ok, live, html} = live(conn, ~p"/decks/#{deck.id}")
+
+      assert html =~ "Cartas fora da identidade de cor"
+
+      # Scoped to the finding: the card's own tile offers the same cut, and
+      # both are legitimate ways to get rid of it.
+      live
+      |> element("button[phx-value-name='Counterspell']", "Tirar Counterspell")
+      |> render_click()
+
+      refute "Counterspell" in Enum.map(Decks.list_deck_cards(deck), & &1.card.name)
+    end
+  end
 end

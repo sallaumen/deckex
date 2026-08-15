@@ -646,7 +646,31 @@ defmodule DeckexWeb.DeckLive do
             >
               <:detail>{finding.detail}</:detail>
               <:actions>
+                <%!-- A legality finding is arithmetic against the rules, not a
+                      judgement call: nothing a model could say would change
+                      what has to happen, and offering to buy an opinion on
+                      "your deck has 105 cards" spends money on a fact. What it
+                      needs is the list, which is one link away. --%>
+                <a
+                  :if={legality?(finding)}
+                  href="#as-cartas"
+                  class="-my-2 inline-flex min-h-touch items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+                >
+                  Ajustar a lista ↓
+                </a>
+
                 <button
+                  :for={name <- removable_cards(finding, @snapshot)}
+                  type="button"
+                  phx-click="apply-cut"
+                  phx-value-name={name}
+                  class="-my-2 inline-flex min-h-touch items-center px-1 py-2 text-caption text-sev-critical underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+                >
+                  Tirar {name}
+                </button>
+
+                <button
+                  :if={not legality?(finding)}
                   type="button"
                   phx-click="consult-finding"
                   phx-disable-with="enviando…"
@@ -1197,7 +1221,7 @@ defmodule DeckexWeb.DeckLive do
             fix it belong. Until now this section could only be read: an owner
             told by the engine that his deck holds 105 cards had no way to cut
             one without re-importing the whole thing. --%>
-      <section class="mt-12">
+      <section id="as-cartas" class="mt-12 scroll-mt-6">
         <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
           <h2 class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
             As cartas — {@report.legality.size} de {@report.legality.target_size}
@@ -1282,6 +1306,22 @@ defmodule DeckexWeb.DeckLive do
   defp land_tone(%{land_count: count, land_target: target}) when count < target - 1, do: :critical
   defp land_tone(%{land_count: count, land_target: target}) when count > target + 2, do: :warning
   defp land_tone(_mana), do: :healthy
+
+  defp legality?(%{lens: :legality}), do: true
+  defp legality?(_finding), do: false
+
+  # The cards a legality finding names are the ones that make it true, so each
+  # gets a button. Not the size finding: which card to cut is the owner's call
+  # and every card in the deck is a candidate — that one points at the list.
+  @removable ~w(legality.outside_identity legality.singleton legality.not_legal)
+
+  defp removable_cards(%{code: code, card_names: names}, snapshot) when code in @removable do
+    in_main = MapSet.new(snapshot.main, & &1.card.name)
+
+    Enum.filter(names, &MapSet.member?(in_main, &1))
+  end
+
+  defp removable_cards(_finding, _snapshot), do: []
 
   defp size_gap(%{size: size, target_size: target}) when size > target,
     do: "#{size - target} a mais"
