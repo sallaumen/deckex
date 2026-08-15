@@ -13,6 +13,7 @@ defmodule DeckexWeb.MesaLive do
   alias Deckex.Analysis.Report
   alias Deckex.Decks
   alias Deckex.Error
+  alias Deckex.Optimizations
   alias Deckex.Settings
 
   @impl Phoenix.LiveView
@@ -49,6 +50,8 @@ defmodule DeckexWeb.MesaLive do
   # this stays cheap for the handful of decks one person tracks; if that ever
   # stops being true, the vital sign is what to cache, not the report.
   defp load_decks do
+    live = Optimizations.live_by_deck()
+
     Enum.map(Decks.list_decks(), fn deck ->
       snapshot = Decks.snapshot(deck)
       report = Analysis.report(snapshot)
@@ -64,6 +67,10 @@ defmodule DeckexWeb.MesaLive do
         # finding that said 105, and both were honest — which is worse than
         # one of them being wrong.
         cards: report.legality.size,
+        # The most expensive state in the app is a run that already spent
+        # money and is now waiting on a person. Invisible from here, it waits
+        # forever — so the tile says it before you open anything.
+        running: live[deck.id],
         cost: Decks.deletion_cost(deck)
       }
     end)
@@ -176,7 +183,7 @@ defmodule DeckexWeb.MesaLive do
                 </span>
               </div>
 
-              <div class="flex items-center gap-3 text-caption text-ink-faint">
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-caption text-ink-faint">
                 <span class="font-mono">{row.cards} cartas</span>
                 <span aria-hidden="true">·</span>
                 <span class={[
@@ -186,6 +193,7 @@ defmodule DeckexWeb.MesaLive do
                 ]}>
                   {vital_sign(row)}
                 </span>
+                <.run_chip running={row.running} />
               </div>
             </div>
           </.link>
@@ -233,9 +241,10 @@ defmodule DeckexWeb.MesaLive do
               <p :if={row.commander} class="truncate text-caption text-ink-muted">
                 {row.commander.card.name}
               </p>
-              <p class="mt-0.5 flex items-center gap-2 sm:hidden">
+              <p class="mt-0.5 flex flex-wrap items-center gap-2 sm:hidden">
                 <.color_identity colors={row.deck.color_identity} size={11} />
                 <span class={["font-mono text-micro", vital_tone(row)]}>{vital_sign(row)}</span>
+                <.run_chip running={row.running} />
               </p>
             </div>
 
@@ -261,6 +270,10 @@ defmodule DeckexWeb.MesaLive do
             ]}>
               {vital_sign(row)}
             </span>
+
+            <span class="hidden shrink-0 sm:block">
+              <.run_chip running={row.running} />
+            </span>
           </.link>
 
           <.delete_deck_button row={row} />
@@ -269,6 +282,32 @@ defmodule DeckexWeb.MesaLive do
     </div>
     """
   end
+
+  attr :running, :map, default: nil
+
+  defp run_chip(assigns) do
+    ~H"""
+    <span
+      :if={@running}
+      class={[
+        "inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 font-mono text-micro",
+        @running.status == :awaiting_choice && "bg-sev-warning/15 text-sev-warning",
+        @running.status != :awaiting_choice && "bg-inlay text-ink-secondary"
+      ]}
+    >
+      <span
+        :if={@running.status == :running}
+        class="size-1.5 animate-pulse rounded-full bg-current motion-reduce:animate-none"
+        aria-hidden="true"
+      />
+      {run_chip_label(@running.status)}
+    </span>
+    """
+  end
+
+  defp run_chip_label(:awaiting_choice), do: "esperando você"
+  defp run_chip_label(:paused), do: "otimização pausada"
+  defp run_chip_label(_running), do: "otimizando"
 
   attr :row, :map, required: true
 

@@ -6,6 +6,7 @@ defmodule DeckexWeb.VersionsLiveTest do
   alias Deckex.CatalogueFixture
   alias Deckex.Decks
   alias Deckex.Decks.Versions
+  alias Deckex.Optimizations
 
   defp deck do
     CatalogueFixture.seed!(~w(sol_ring forest natures_lore cultivate counterspell))
@@ -54,6 +55,16 @@ defmodule DeckexWeb.VersionsLiveTest do
       assert html =~ "O deck mudou desde a última versão"
     end
 
+    # A version identical to the one before it is a row that says nothing
+    # happened — the button says why it is off instead of making one.
+    test "marking is off when nothing changed", %{conn: conn} do
+      deck = deck()
+
+      {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}/versoes")
+
+      assert live |> element("button[disabled]", "Marcar versão agora") |> has_element?()
+    end
+
     test "says nothing about drift when there is none", %{conn: conn} do
       deck = deck()
 
@@ -86,6 +97,24 @@ defmodule DeckexWeb.VersionsLiveTest do
 
       assert html =~ "Comprar (1)"
       assert html =~ "Cultivate"
+    end
+  end
+
+  describe "the way back to a run" do
+    test "a version made by an optimization links to it", %{conn: conn} do
+      deck = deck()
+
+      {:ok, run} =
+        Optimizations.start(deck, %{}, [%{"kind" => "lens", "lens" => "full", "label" => "Tudo"}])
+
+      {:ok, _} = Decks.add_card(deck, "Cultivate")
+
+      {:ok, _} =
+        Versions.mark(deck, origin: :optimization, optimization_id: run.id, label: "Rodada")
+
+      {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}/versoes")
+
+      assert live |> element(~s|a[href="/otimizacoes/#{run.id}"]|) |> has_element?()
     end
   end
 

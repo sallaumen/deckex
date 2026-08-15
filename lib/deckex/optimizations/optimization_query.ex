@@ -43,6 +43,22 @@ defmodule Deckex.Optimizations.OptimizationQuery do
     )
   end
 
+  @doc """
+  Every deck that has a run in flight, as `deck_id => optimization`.
+
+  One query for the whole table: A Mesa draws a dozen tiles and asking per
+  tile would be a dozen round trips for a chip.
+  """
+  @spec live_by_deck() :: %{String.t() => Optimization.t()}
+  def live_by_deck do
+    Repo.all(
+      from o in Optimization,
+        where: o.status in [:running, :awaiting_choice, :paused],
+        order_by: [desc: o.inserted_at]
+    )
+    |> Map.new(&{&1.deck_id, &1})
+  end
+
   @doc "The step that owns a consult, with its optimization."
   @spec step_for_consult(String.t()) :: OptimizationStep.t() | nil
   def step_for_consult(consult_id) do

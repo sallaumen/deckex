@@ -205,6 +205,27 @@ defmodule DeckexWeb.OptimizationLiveTest do
       assert latest.origin == :optimization
     end
 
+    # Applying the same run twice is one click away, and the history is opened
+    # with exactly this question: which of these did I already put in the deck?
+    test "a run already applied says so on both screens", %{conn: conn} do
+      deck = deck()
+      {:ok, optimization} = Optimizations.start(deck, %{}, @two_lenses)
+      {:ok, done} = run_first_stage(optimization, [], ["Cultivate"])
+      step = hd(done.steps)
+
+      {:ok, live, _html} = live(conn, ~p"/otimizacoes/#{optimization.id}")
+
+      live
+      |> element("button[phx-click='aplicar-no-deck'][phx-value-step='#{step.id}']")
+      |> render_click()
+
+      {:ok, _run_live, run_html} = live(conn, ~p"/otimizacoes/#{optimization.id}")
+      assert run_html =~ "já aplicada · v2"
+
+      {:ok, _history, history_html} = live(conn, ~p"/decks/#{deck.id}/otimizacoes")
+      assert history_html =~ "aplicada · v2"
+    end
+
     test "pause and resume drive the run from the page", %{conn: conn} do
       deck = deck()
       {:ok, optimization} = Optimizations.start(deck, %{}, @two_lenses)

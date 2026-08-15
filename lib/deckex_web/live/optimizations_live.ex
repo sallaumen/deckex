@@ -13,6 +13,7 @@ defmodule DeckexWeb.OptimizationsLive do
   alias Deckex.Analysis.Report
   alias Deckex.Consults
   alias Deckex.Decks
+  alias Deckex.Decks.Versions
   alias Deckex.Error
   alias Deckex.Events
   alias Deckex.Optimizations
@@ -31,6 +32,7 @@ defmodule DeckexWeb.OptimizationsLive do
          assign(socket,
            deck: deck,
            runs: runs,
+           applied: Versions.applied_runs(deck),
            contract: Optimizations.default_contract(deck),
            recipe: Optimizations.recipe(deck, :refine),
            mode: :refine,
@@ -74,7 +76,11 @@ defmodule DeckexWeb.OptimizationsLive do
 
   @impl Phoenix.LiveView
   def handle_info({:optimization_updated, _id}, socket) do
-    {:noreply, assign(socket, runs: Optimizations.list_for_deck(socket.assigns.deck.id))}
+    {:noreply,
+     assign(socket,
+       runs: Optimizations.list_for_deck(socket.assigns.deck.id),
+       applied: Versions.applied_runs(socket.assigns.deck)
+     )}
   end
 
   @impl Phoenix.LiveView
@@ -192,7 +198,7 @@ defmodule DeckexWeb.OptimizationsLive do
         <div>
           <h1 class="text-display font-semibold text-ink">Otimizações</h1>
           <p class="mt-1 text-body text-ink-muted">
-            O pipeline mexe numa cópia. O deck de verdade só muda quando você salvar.
+            O pipeline mexe numa cópia. O deck de verdade só muda quando você aplicar.
           </p>
         </div>
 
@@ -228,6 +234,15 @@ defmodule DeckexWeb.OptimizationsLive do
                 <span :if={run.contract["visao"]} class="text-caption text-ink-secondary">
                   {run.contract["visao"]["nome"]}
                 </span>
+              </span>
+              <%!-- Without this the history cannot answer the one question it
+                    is opened with: which of these did I already put in the
+                    deck? Applying the same run twice is a real click away. --%>
+              <span
+                :if={version = @applied[run.id]}
+                class="rounded-full bg-inlay px-2 py-0.5 font-mono text-micro text-ink-secondary"
+              >
+                aplicada · v{version.number}
               </span>
               <span class={[
                 "font-mono text-caption",

@@ -34,6 +34,33 @@ defmodule DeckexWeb.SettingsAndTableTest do
       assert Settings.get(:claude_model) == "opus"
     end
 
+    # The header promises the panel saves by itself. Nine "Salvar" buttons said
+    # otherwise, and for a select the promise was simply false — nothing saved
+    # until you clicked. Now changing a field IS the save.
+    test "changing a field saves it, with no button to press", %{conn: conn} do
+      {:ok, live, html} = live(conn, ~p"/ajustes")
+
+      refute html =~ ">Salvar<"
+
+      saved =
+        live
+        |> form("#panel-claude_model", setting: %{key: "claude_model", value: "haiku"})
+        |> render_change()
+
+      assert Settings.get(:claude_model) == "haiku"
+      assert saved =~ "salvo"
+    end
+
+    test "a baseline saves on change too", %{conn: conn} do
+      {:ok, live, _html} = live(conn, ~p"/ajustes")
+
+      live
+      |> form("#panel-baseline-land_base", baseline: %{field: "land_base", value: "37"})
+      |> render_change()
+
+      assert Settings.baselines().land_base == 37
+    end
+
     # The gear opens the same component the page renders — one implementation,
     # two ways in. Two settings screens is how two settings screens drift.
     test "the gear on a deck page opens the same panel", %{conn: conn} do

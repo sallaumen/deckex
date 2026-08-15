@@ -45,6 +45,23 @@ defmodule Deckex.Decks.Versions do
     end
   end
 
+  @doc """
+  Which run produced which version, as `optimization_id => version`.
+
+  So the history of runs can say "aplicada · v3" instead of leaving the owner
+  to remember. A run applied twice keeps the first version it made — going
+  back is what the second one is for.
+  """
+  @spec applied_runs(Deck.t()) :: %{String.t() => DeckVersion.t()}
+  def applied_runs(%Deck{id: deck_id}) do
+    Repo.all(
+      from v in DeckVersion,
+        where: v.deck_id == ^deck_id and not is_nil(v.optimization_id),
+        order_by: [asc: v.number]
+    )
+    |> Map.new(&{&1.optimization_id, &1})
+  end
+
   @doc "The most recent version, or nil for a deck that has never marked one."
   @spec latest(Deck.t()) :: DeckVersion.t() | nil
   def latest(%Deck{id: deck_id}) do

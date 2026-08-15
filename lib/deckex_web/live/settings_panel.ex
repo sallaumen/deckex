@@ -36,6 +36,7 @@ defmodule DeckexWeb.SettingsPanel do
      |> assign_new(:open, fn -> false end)
      |> assign_new(:refreshed, fn -> nil end)
      |> assign_new(:repricing, fn -> nil end)
+     |> assign_new(:saved, fn -> nil end)
      |> load()}
   end
 
@@ -102,7 +103,7 @@ defmodule DeckexWeb.SettingsPanel do
 
   defp save(socket, key, value) do
     case Settings.put(key, value) do
-      {:ok, _value} -> load(socket)
+      {:ok, _value} -> socket |> load() |> assign(saved: key)
       {:error, error} -> assign(socket, error: error.message)
     end
   end
@@ -189,6 +190,7 @@ defmodule DeckexWeb.SettingsPanel do
                 for={%{}}
                 as={:setting}
                 id={"panel-#{entry.key}"}
+                phx-change="save"
                 phx-submit="save"
                 phx-target={@myself}
                 class="flex flex-wrap items-end gap-3"
@@ -198,9 +200,16 @@ defmodule DeckexWeb.SettingsPanel do
                 <div class="min-w-0 flex-1">
                   <label
                     for={"panel-field-#{entry.key}"}
-                    class="mb-1 block text-caption font-semibold text-ink-secondary"
+                    class="mb-1 flex items-baseline gap-2 text-caption font-semibold text-ink-secondary"
                   >
                     {entry.label}
+                    <%!-- The header promised the panel saves by itself; nine
+                          "Salvar" buttons said otherwise, and for a select the
+                          promise was simply false. Now it is true, and the
+                          field says so where the eye already is. --%>
+                    <span :if={@saved == entry.key} class="font-mono text-micro text-sev-healthy">
+                      salvo
+                    </span>
                   </label>
 
                   <select
@@ -223,6 +232,7 @@ defmodule DeckexWeb.SettingsPanel do
                     id={"panel-field-#{entry.key}"}
                     type="text"
                     inputmode={if entry.type in [:integer, :number], do: "decimal"}
+                    phx-debounce="blur"
                     name="setting[value]"
                     value={@values[entry.key]}
                     class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 font-mono text-body-lg text-ink"
@@ -230,8 +240,6 @@ defmodule DeckexWeb.SettingsPanel do
 
                   <p :if={entry.hint} class="mt-1 text-micro text-ink-muted">{entry.hint}</p>
                 </div>
-
-                <.button type="submit">Salvar</.button>
               </.form>
             </section>
 
@@ -292,6 +300,7 @@ defmodule DeckexWeb.SettingsPanel do
                   for={%{}}
                   as={:baseline}
                   id={"panel-baseline-#{field}"}
+                  phx-change="save-baseline"
                   phx-submit="save-baseline"
                   phx-target={@myself}
                   class="flex items-end gap-2"
@@ -309,13 +318,12 @@ defmodule DeckexWeb.SettingsPanel do
                       id={"panel-baseline-field-#{field}"}
                       type="text"
                       inputmode="decimal"
+                      phx-debounce="blur"
                       name="baseline[value]"
                       value={value}
                       class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-2 py-2 font-mono text-caption text-ink"
                     />
                   </div>
-
-                  <.button type="submit">ok</.button>
                 </.form>
               </div>
             </details>
