@@ -112,13 +112,29 @@ defmodule Deckex.Cards do
       |> Enum.filter(&(&1.source == :manual))
       |> MapSet.new(& &1.kind)
 
-    roles =
+    matches =
       card
       |> Roles.classify()
       |> Enum.reject(&MapSet.member?(protected, &1.kind))
-      |> Enum.map(&upsert_role!(card, &1, :rule))
 
-    {:ok, roles}
+    prune_stale_rules!(card, matches)
+
+    {:ok, Enum.map(matches, &upsert_role!(card, &1, :rule))}
+  end
+
+  # A rule that gets tightened has to be able to take a role back. Without
+  # this the catalogue only ever accumulates: a card keeps a verdict no rule
+  # would give it today, and reclassifying looks like it did nothing.
+  #
+  # Only `:rule` rows are pruned. An `:ai` verdict was paid for and a
+  # `:manual` one is the user's correction; neither is ours to drop.
+  defp prune_stale_rules!(card, matches) do
+    keep = MapSet.new(matches, & &1.kind)
+
+    card
+    |> CardQuery.list_roles()
+    |> Enum.filter(&(&1.source == :rule and not MapSet.member?(keep, &1.kind)))
+    |> Enum.each(&Repo.delete!/1)
   end
 
   @doc """

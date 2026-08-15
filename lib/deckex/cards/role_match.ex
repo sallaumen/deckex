@@ -10,7 +10,8 @@ defmodule Deckex.Cards.RoleMatch do
 
   @kinds ~w(ramp ritual cost_reduction fixing counter spot_removal board_wipe
             protection draw tutor recursion wincon graveyard_hate stax
-            mass_land_denial extra_turn mill)a
+            mass_land_denial extra_turn mill taxation theft hoser
+            forced_sacrifice free_spell chaos)a
 
   @type kind :: atom()
   @type confidence :: :high | :medium | :low
