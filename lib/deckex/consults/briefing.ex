@@ -200,6 +200,11 @@ defmodule Deckex.Consults.Briefing do
     """
     Work the findings above. For each one, name specific cards to **cut** from
     the list and specific cards to **add**, and say why in one sentence each.
+
+    Prefer answers that work against **anything** over answers aimed at one
+    deck. This owner plays a four-player pod where every archetype shows up;
+    a card that only beats the deck you guessed is dead against the other two.
+    Flexible removal, not hate cards.
     """
   end
 

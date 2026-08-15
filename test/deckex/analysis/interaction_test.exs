@@ -79,6 +79,28 @@ defmodule Deckex.Analysis.InteractionTest do
       assert "interaction.no_protection" in codes(with_roles(:spot_removal, 10))
     end
 
+    test "removal that only knows one shape is called out" do
+      narrow =
+        with_roles(:spot_removal, 5, oracle_text: "Destroy target creature.") ++
+          with_roles(:protection, 2) ++ with_roles(:board_wipe, 2)
+
+      assert "interaction.answers_too_narrow" in codes(narrow)
+    end
+
+    test "removal that answers any permanent is not" do
+      flexible =
+        with_roles(:spot_removal, 5, oracle_text: "Destroy target permanent.") ++
+          with_roles(:protection, 2) ++ with_roles(:board_wipe, 2)
+
+      refute "interaction.answers_too_narrow" in codes(flexible)
+    end
+
+    # Silence is not evidence of narrowness — the same rule that stops an
+    # unpriced card being refused for being expensive.
+    test "a card whose text we cannot read counts as neither" do
+      refute "interaction.answers_too_narrow" in codes(with_roles(:spot_removal, 7))
+    end
+
     test "a healthy answer suite produces no interaction findings" do
       entries =
         with_roles(:spot_removal, 7) ++ with_roles(:board_wipe, 2) ++ with_roles(:protection, 2)

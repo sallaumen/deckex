@@ -68,7 +68,8 @@ defmodule Deckex.Analysis.Baselines do
             blockers_target: 6,
             board_exposure_floor: 12,
             graveyard_exposure_floor: 8,
-            table_close_turn: 8
+            table_close_turn: 8,
+            pod_size: 4
 
   @doc "The documented Commander defaults."
   @spec default() :: t()
