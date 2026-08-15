@@ -67,6 +67,33 @@ defmodule Deckex.Cards.CardQuery do
     Repo.all(from c in Card, order_by: [asc: c.oracle_id])
   end
 
+  @doc """
+  Cards whose price was last read before `cutoff`, plus every card that has
+  never been priced at all.
+
+  A `nil` `prices_updated_at` is the oldest price there is, not a missing row
+  to skip: an unpriced card is exactly the one whose ceiling guard is silently
+  passing everything.
+  """
+  @spec list_stale_prices(DateTime.t()) :: [Card.t()]
+  def list_stale_prices(%DateTime{} = cutoff) do
+    Repo.all(
+      from c in Card,
+        where: is_nil(c.prices_updated_at) or c.prices_updated_at < ^cutoff,
+        order_by: [asc: c.oracle_id]
+    )
+  end
+
+  @doc "When the freshest and the stalest price in the catalogue were read."
+  @spec price_age() :: %{oldest: DateTime.t() | nil, newest: DateTime.t() | nil}
+  def price_age do
+    {oldest, newest} =
+      Repo.one(from c in Card, select: {min(c.prices_updated_at), max(c.prices_updated_at)}) ||
+        {nil, nil}
+
+    %{oldest: oldest, newest: newest}
+  end
+
   @doc "Lists the persisted roles for a card, ordered by kind."
   @spec list_roles(Card.t()) :: [CardRole.t()]
   def list_roles(%Card{id: card_id}) do

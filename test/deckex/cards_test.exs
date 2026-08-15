@@ -283,4 +283,44 @@ defmodule Deckex.CardsTest do
   end
 
   defp printing(usd), do: %{"prices" => %{"usd" => usd}}
+
+  describe "stale prices" do
+    # A price the owner budgets from should say how old it is, and the sweep
+    # should touch only what has aged — a full reprice costs one request per
+    # card, and prices do not move fast enough to pay that daily.
+    test "a price read today is not stale" do
+      insert(:card, name: "Fresca", prices_updated_at: DateTime.utc_now(:second))
+
+      assert Cards.stale_prices() == []
+    end
+
+    test "a price older than the window is stale" do
+      old = DateTime.add(DateTime.utc_now(:second), -(Cards.price_max_age_days() + 1), :day)
+      insert(:card, name: "Velha", prices_updated_at: old)
+
+      assert [%{name: "Velha"}] = Cards.stale_prices()
+    end
+
+    # Never priced is the oldest price there is, not a row to skip: an unpriced
+    # card is exactly the one whose ceiling guard passes everything.
+    test "a card that was never priced counts as stale" do
+      insert(:card, name: "Sem Preço", price_usd: nil, prices_updated_at: nil)
+
+      assert [%{name: "Sem Preço"}] = Cards.stale_prices()
+    end
+
+    test "price_age reports the oldest and the newest read" do
+      old = DateTime.add(DateTime.utc_now(:second), -30, :day)
+      insert(:card, name: "Velha", prices_updated_at: old)
+      insert(:card, name: "Nova", prices_updated_at: DateTime.utc_now(:second))
+
+      %{oldest: oldest, newest: newest} = Cards.price_age()
+
+      assert DateTime.compare(oldest, newest) == :lt
+    end
+
+    test "an empty catalogue has no age at all, rather than a date of zero" do
+      assert %{oldest: nil, newest: nil} = Cards.price_age()
+    end
+  end
 end

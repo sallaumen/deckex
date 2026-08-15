@@ -24,7 +24,12 @@ config :deckex, Oban,
   queues: [default: 10, scryfall: 1, ai: 2],
   plugins: [
     {Oban.Plugins.Pruner, max_age: 60 * 60 * 24 * 7, interval: :timer.minutes(30)},
-    {Oban.Plugins.Lifeline, rescue_after: :timer.minutes(30), interval: :timer.minutes(5)}
+    {Oban.Plugins.Lifeline, rescue_after: :timer.minutes(30), interval: :timer.minutes(5)},
+    # Prices are the one card fact that goes stale on its own, and the owner
+    # budgets from them. The sweep only touches what has aged past a week, so
+    # after the first pass it costs a handful of requests or none at all.
+    {Oban.Plugins.Cron,
+     crontab: [{"0 6 * * *", Deckex.Workers.RepriceWorker, args: %{stale: true}}]}
   ]
 
 # Integration ports (ports & adapters). Tests override these with Mox mocks.

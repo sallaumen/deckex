@@ -269,6 +269,31 @@ defmodule Deckex.Cards do
   @spec list_all() :: [Card.t()]
   defdelegate list_all(), to: CardQuery, as: :list_all_by_oracle_id
 
+  @doc "When the freshest and the stalest price in the catalogue were read."
+  defdelegate price_age(), to: CardQuery
+
+  @doc """
+  How old a price may get before it is worth reading again.
+
+  A week. Card prices move, and the owner budgets from these numbers — but
+  they move slowly enough that a daily sweep of the whole catalogue would spend
+  Scryfall's budget to change the third decimal place.
+  """
+  @spec price_max_age_days() :: pos_integer()
+  def price_max_age_days, do: 7
+
+  @doc """
+  The cards whose price is older than `price_max_age_days/0`, or absent.
+
+  What the daily sweep and the Ajustes button both work on. Repricing the
+  whole catalogue costs one request per card; repricing only what has gone
+  stale costs almost nothing once the catalogue has been swept once.
+  """
+  @spec stale_prices() :: [Card.t()]
+  def stale_prices do
+    CardQuery.list_stale_prices(DateTime.add(DateTime.utc_now(), -price_max_age_days(), :day))
+  end
+
   defp reprice_one(card, acc) do
     case reprice(card) do
       {:ok, repriced} ->

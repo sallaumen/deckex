@@ -13,6 +13,7 @@ defmodule DeckexWeb.DeckLive do
   alias Deckex.Analysis
   alias Deckex.Analysis.Bracket
   alias Deckex.Budget
+  alias Deckex.Cards
   alias Deckex.Cards.PlayRate
   alias Deckex.Consults
   alias Deckex.Consults.Suggestions
@@ -55,6 +56,7 @@ defmodule DeckexWeb.DeckLive do
       deck_value: deck_value(snapshot),
       budget_policy: budget_policy,
       budget_line: budget_line(snapshot, budget_policy),
+      price_age: price_age_label(),
       running_optimization: Optimizations.running_for_deck(deck.id),
       deletion_cost: Decks.deletion_cost(deck),
       page_title: deck.name
@@ -226,6 +228,25 @@ defmodule DeckexWeb.DeckLive do
       Decimal.add(total, Decimal.mult(price, qty))
     end)
   end
+
+  # A price the owner budgets from should say how old it is. Nothing showed
+  # this, and the day the whole catalogue turned out to be mispriced there was
+  # no way to tell a fresh number from one read a week ago.
+  defp price_age_label do
+    case Cards.price_age().oldest do
+      nil ->
+        nil
+
+      oldest ->
+        days = DateTime.diff(DateTime.utc_now(), oldest, :day)
+
+        {days, age_sentence(days)}
+    end
+  end
+
+  defp age_sentence(0), do: "preços de hoje"
+  defp age_sentence(1), do: "preços de ontem"
+  defp age_sentence(days), do: "preços de #{days} dias atrás"
 
   # "3/10 caras · 1/2 exceções" — the deck's spending shape in one line, or
   # nothing at all when neither limit is switched on. Written only for the
@@ -449,6 +470,16 @@ defmodule DeckexWeb.DeckLive do
                   is. Ten cards at four hundred and two above the ceiling is a
                   policy about the list, and the owner cannot hold it in his
                   head while reading suggestions. --%>
+            <p
+              :if={@price_age}
+              class={[
+                "mt-1 font-mono text-micro",
+                elem(@price_age, 0) > Cards.price_max_age_days() && "text-sev-warning",
+                elem(@price_age, 0) <= Cards.price_max_age_days() && "text-ink-faint"
+              ]}
+            >
+              {elem(@price_age, 1)}
+            </p>
             <p
               :if={@budget_line}
               title={"Limite: #{@budget_policy.expensive.max} cartas acima de R$ #{@budget_policy.expensive.threshold} e #{@budget_policy.exception.max} exceções acima de R$ #{@budget_policy.exception.threshold}"}
