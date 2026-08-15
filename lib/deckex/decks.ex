@@ -83,6 +83,72 @@ defmodule Deckex.Decks do
   end
 
   @doc """
+  Renames a deck.
+
+  A name is the one thing about a deck that is purely the owner's, and until
+  now it was whatever the import happened to produce — "Frodo and sam food
+  chaos 1.0" is a Moxfield title, not a decision.
+
+  Blank is refused rather than stored: a deck with no name is unfindable on a
+  screen whose whole job is telling decks apart.
+  """
+  @spec rename(Deck.t(), String.t()) :: {:ok, Deck.t()} | {:error, Error.t()}
+  def rename(%Deck{} = deck, name) do
+    case String.trim(to_string(name)) do
+      "" ->
+        {:error, Error.new(:invalid_deck_name, "O deck precisa de um nome.", %{deck_id: deck.id})}
+
+      trimmed ->
+        renamed = deck |> Deck.changeset(%{name: trimmed}) |> Repo.update!()
+
+        Events.broadcast_deck_updated(renamed)
+
+        {:ok, renamed}
+    end
+  end
+
+  @doc """
+  Copies a deck into a new one, list and all.
+
+  Built from the deck's **current** cards, never from `raw_decklist`: that
+  field is the text the import arrived with, and every cut and add made since
+  would be silently undone by copying it. A duplicate that quietly differs from
+  what is on screen is worse than no duplicate at all.
+
+  Goes through `import_from_text/2` like everything else, so the copy resolves,
+  classifies and analyses by exactly the same path — no second way for a deck
+  to come into existence.
+  """
+  @spec duplicate(Deck.t()) :: {:ok, Deck.t()} | {:error, Error.t()}
+  def duplicate(%Deck{} = deck) do
+    import_from_text(to_decklist_text(deck), %{name: "#{deck.name} — cópia", source: :paste})
+  end
+
+  @doc """
+  A deck's current cards as decklist text, commanders in their own block.
+
+  The format `import_from_text/2` reads, so a deck can always round-trip
+  through the only door the app has.
+  """
+  @spec to_decklist_text(Deck.t()) :: String.t()
+  def to_decklist_text(%Deck{} = deck) do
+    deck_cards = DeckQuery.list_deck_cards(deck)
+    {commanders, main} = Enum.split_with(deck_cards, &(&1.board == :commander))
+
+    commander_block =
+      case commanders do
+        [] -> ""
+        rows -> "Commander:\n" <> lines(rows) <> "\n\n"
+      end
+
+    commander_block <> "Deck:\n" <> lines(main) <> "\n"
+  end
+
+  defp lines(deck_cards) do
+    Enum.map_join(deck_cards, "\n", &"#{&1.quantity} #{&1.card.name}")
+  end
+
+  @doc """
   Imports a deck from decklist text.
 
   `attrs` carries `:name` and `:source`, plus optionally `:moxfield_url` and

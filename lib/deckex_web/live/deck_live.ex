@@ -56,9 +56,23 @@ defmodule DeckexWeb.DeckLive do
       budget_policy: budget_policy,
       budget_line: budget_line(snapshot, budget_policy),
       running_optimization: Optimizations.running_for_deck(deck.id),
+      deletion_cost: Decks.deletion_cost(deck),
       page_title: deck.name
     )
+    |> assign_new(:renaming, fn -> false end)
     |> refresh_consults()
+  end
+
+  # Spelled out, with counts: a consult cost money, and finding out afterwards
+  # that deleting the deck took ten of them is the kind of thing an app gets to
+  # do to someone exactly once.
+  defp delete_warning(deck, %{consults: 0, optimizations: 0}) do
+    "Apagar #{deck.name}? A lista some; o catálogo de cartas fica."
+  end
+
+  defp delete_warning(deck, cost) do
+    "Apagar #{deck.name}? Vão junto #{cost.consults} consulta(s) e " <>
+      "#{cost.optimizations} otimização(ões) — inclusive as já pagas. Não dá para desfazer."
   end
 
   @impl Phoenix.LiveView
@@ -100,6 +114,51 @@ defmodule DeckexWeb.DeckLive do
     {:ok, fresh} = Decks.fetch_deck(socket.assigns.deck.id)
 
     {:noreply, socket |> assign_deck(fresh) |> put_flash(:info, "Dossiê salvo.")}
+  end
+
+  def handle_event("start-rename", _params, socket),
+    do: {:noreply, assign(socket, renaming: true)}
+
+  def handle_event("cancel-rename", _params, socket),
+    do: {:noreply, assign(socket, renaming: false)}
+
+  def handle_event("rename", %{"deck" => %{"name" => name}}, socket) do
+    case Decks.rename(socket.assigns.deck, name) do
+      {:ok, renamed} ->
+        {:noreply, socket |> assign(renaming: false) |> assign_deck(renamed)}
+
+      {:error, %Error{} = error} ->
+        {:noreply, put_flash(socket, :error, error.message)}
+    end
+  end
+
+  # The copy is built from the deck as it stands, so an owner who wants to try
+  # a variation does not have to choose between losing their edits and losing
+  # the original.
+  def handle_event("duplicate", _params, socket) do
+    case Decks.duplicate(socket.assigns.deck) do
+      {:ok, copy} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Cópia criada: #{copy.name}.")
+         |> push_navigate(to: ~p"/decks/#{copy.id}")}
+
+      {:error, %Error{} = error} ->
+        {:noreply, put_flash(socket, :error, error.message)}
+    end
+  end
+
+  def handle_event("delete", _params, socket) do
+    case Decks.delete_deck(socket.assigns.deck) do
+      {:ok, deleted} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "#{deleted.name} foi apagado.")
+         |> push_navigate(to: ~p"/")}
+
+      {:error, %Error{} = error} ->
+        {:noreply, put_flash(socket, :error, error.message)}
+    end
   end
 
   def handle_event("apply-add", %{"name" => name}, socket) do
@@ -264,8 +323,36 @@ defmodule DeckexWeb.DeckLive do
       </.link>
 
       <header class="mt-3 mb-10 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 class="text-display font-semibold text-ink">{@deck.name}</h1>
+        <div class="min-w-0">
+          <%!-- The name is the one thing about a deck that is purely the
+                owner's, and until now it was whatever the import produced. --%>
+          <.form
+            :if={@renaming}
+            for={%{}}
+            as={:deck}
+            phx-submit="rename"
+            class="flex flex-wrap items-center gap-2"
+          >
+            <%!-- No focus ring here: `:focus-visible` is declared once in
+                  app.css, and a local one would be a second answer to a
+                  question the design system already settled. --%>
+            <input
+              type="text"
+              name="deck[name]"
+              value={@deck.name}
+              autofocus
+              aria-label="Nome do deck"
+              class={[
+                "min-h-touch min-w-0 flex-1 rounded-md border border-hairline-strong bg-surface px-3",
+                "text-display font-semibold text-ink focus:border-ink-faint"
+              ]}
+            />
+            <.button type="submit" variant="primary">Salvar</.button>
+            <.button type="button" phx-click="cancel-rename">Cancelar</.button>
+          </.form>
+
+          <h1 :if={not @renaming} class="text-display font-semibold text-ink">{@deck.name}</h1>
+
           <p :for={commander <- @snapshot.commanders} class="mt-1 flex items-center gap-2">
             <.card_link
               name={commander.card.name}
@@ -274,6 +361,34 @@ defmodule DeckexWeb.DeckLive do
             />
             <.mana_cost cost={commander.card.mana_cost} size={14} />
           </p>
+
+          <div :if={not @renaming} class="mt-2 flex flex-wrap items-center gap-1">
+            <button
+              type="button"
+              phx-click="start-rename"
+              class="-my-2 inline-flex min-h-touch items-center px-1 py-2 text-caption text-ink-faint transition-colors hover:text-ink motion-reduce:transition-none"
+            >
+              Renomear
+            </button>
+            <span class="text-ink-faint" aria-hidden="true">·</span>
+            <button
+              type="button"
+              phx-click="duplicate"
+              data-confirm="Criar uma cópia deste deck, com a lista como está agora?"
+              class="-my-2 inline-flex min-h-touch items-center px-1 py-2 text-caption text-ink-faint transition-colors hover:text-ink motion-reduce:transition-none"
+            >
+              Duplicar
+            </button>
+            <span class="text-ink-faint" aria-hidden="true">·</span>
+            <button
+              type="button"
+              phx-click="delete"
+              data-confirm={delete_warning(@deck, @deletion_cost)}
+              class="-my-2 inline-flex min-h-touch items-center px-1 py-2 text-caption text-ink-faint transition-colors hover:text-sev-critical motion-reduce:transition-none"
+            >
+              Apagar
+            </button>
+          </div>
         </div>
         <div class="flex items-center gap-4">
           <.button
