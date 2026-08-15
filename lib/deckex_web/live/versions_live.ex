@@ -1,0 +1,297 @@
+defmodule DeckexWeb.VersionsLive do
+  @moduledoc """
+  One deck's line of versions: what each one did, going back to one, and what
+  it costs to get from one to another.
+
+  The comparison is the reason this screen exists rather than a list on the
+  deck page. "Which cards do I have to buy, holding v1, to end up at v7" is the
+  question an owner asks with a shop open in the next tab, and it needs two
+  pickers and a total — not a footnote.
+  """
+  use DeckexWeb, :live_view
+
+  alias Deckex.Decks
+  alias Deckex.Decks.DeckVersion
+  alias Deckex.Decks.Versions
+  alias Deckex.Error
+  alias Deckex.Money
+
+  @impl Phoenix.LiveView
+  def mount(%{"id" => deck_id}, _session, socket) do
+    case Decks.fetch_deck(deck_id) do
+      {:ok, deck} ->
+        {:ok, load(socket, deck)}
+
+      {:error, %Error{} = error} ->
+        {:ok, socket |> put_flash(:error, error.message) |> push_navigate(to: ~p"/")}
+    end
+  end
+
+  defp load(socket, deck) do
+    versions = Versions.list(deck)
+
+    socket
+    |> assign(
+      deck: deck,
+      versions: versions,
+      drifted?: Versions.drifted?(deck),
+      page_title: "Versões · #{deck.name}"
+    )
+    # The default comparison is the one the owner almost always wants: the
+    # oldest against the newest, which is "everything that happened".
+    |> assign_new(:from, fn -> versions |> List.last() |> number_of() end)
+    |> assign_new(:to, fn -> versions |> List.first() |> number_of() end)
+    |> compare()
+  end
+
+  defp number_of(nil), do: nil
+  defp number_of(%DeckVersion{number: number}), do: number
+
+  defp compare(socket) do
+    %{deck: deck, from: from, to: to} = socket.assigns
+
+    with true <- not is_nil(from) and not is_nil(to),
+         {:ok, from_version} <- Versions.fetch(deck, from),
+         {:ok, to_version} <- Versions.fetch(deck, to) do
+      assign(socket, diff: Versions.diff(from_version, to_version))
+    else
+      _nothing_to_compare -> assign(socket, diff: nil)
+    end
+  end
+
+  @impl Phoenix.LiveView
+  def handle_event("comparar", %{"from" => from, "to" => to}, socket) do
+    {:noreply,
+     socket
+     |> assign(from: String.to_integer(from), to: String.to_integer(to))
+     |> compare()}
+  end
+
+  def handle_event("marcar", _params, socket) do
+    {:ok, version} = Versions.mark(socket.assigns.deck)
+
+    {:noreply,
+     socket
+     |> load(socket.assigns.deck)
+     |> put_flash(:info, "Versão v#{version.number} marcada.")}
+  end
+
+  def handle_event("restaurar", %{"number" => number}, socket) do
+    deck = socket.assigns.deck
+
+    with {:ok, version} <- Versions.fetch(deck, String.to_integer(number)),
+         {:ok, restored} <- Versions.restore(deck, version) do
+      {:noreply,
+       socket
+       |> load(restored)
+       |> put_flash(:info, "Deck voltou para a v#{version.number}. As versões seguintes ficam.")}
+    else
+      {:error, %Error{} = error} -> {:noreply, put_flash(socket, :error, error.message)}
+    end
+  end
+
+  defp origin_label(:import), do: "importado"
+  defp origin_label(:optimization), do: "otimização"
+  defp origin_label(:manual), do: "marcada por você"
+
+  # A version that changed nothing is worth saying so out loud: it means the
+  # owner marked the same list twice, which is a fact, not an error.
+  defp change_summary(version) do
+    applied = DeckVersion.applied(version)
+    adds = Enum.count(applied, &(&1["action"] == "add"))
+    cuts = Enum.count(applied, &(&1["action"] == "cut"))
+
+    if applied == [], do: "sem mudanças", else: "+#{adds} / −#{cuts}"
+  end
+
+  @impl Phoenix.LiveView
+  def render(assigns) do
+    ~H"""
+    <div class="mx-auto max-w-[1100px] px-6 py-10 lg:px-10 lg:py-14">
+      <DeckexWeb.Layouts.flash_group flash={@flash} />
+      <.live_component module={DeckexWeb.SettingsPanel} id="settings-panel" />
+
+      <.link
+        navigate={~p"/decks/#{@deck.id}"}
+        class="-my-2 inline-flex min-h-touch items-center py-2 text-caption text-ink-faint transition-colors hover:text-ink"
+      >
+        ← {@deck.name}
+      </.link>
+
+      <header class="mt-3 mb-8 flex flex-col items-start gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 class="text-display font-semibold text-ink">Versões</h1>
+          <p class="mt-1 text-body text-ink-muted">
+            Cada versão é uma foto do deck. Voltar para uma não apaga as outras.
+          </p>
+        </div>
+
+        <.button type="button" phx-click="marcar" variant="primary">Marcar versão agora</.button>
+      </header>
+
+      <%!-- Said before it is discovered: an owner who edited five cards and
+            never marked a version should not learn that from a diff. --%>
+      <p
+        :if={@drifted?}
+        class="mb-6 rounded-lg border border-sev-warning/40 bg-sev-warning/10 px-4 py-3 text-caption text-ink"
+      >
+        O deck mudou desde a última versão. Marque uma para guardar onde ele está agora.
+      </p>
+
+      <div
+        :if={@versions == []}
+        class="rounded-xl border border-hairline-soft bg-surface p-10 text-center"
+      >
+        <p class="text-body text-ink-secondary">Nenhuma versão ainda.</p>
+      </div>
+
+      <section
+        :if={length(@versions) > 1}
+        class="mb-8 rounded-xl border border-hairline-soft bg-surface p-6"
+      >
+        <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+          Comparar
+        </h2>
+
+        <.form for={%{}} id="comparar" phx-change="comparar" class="flex flex-wrap items-end gap-3">
+          <div>
+            <label for="from" class="mb-1 block text-caption text-ink-secondary">Tenho a</label>
+            <select id="from" name="from" class={select_class()}>
+              <option
+                :for={version <- @versions}
+                value={version.number}
+                selected={version.number == @from}
+              >
+                v{version.number} · {origin_label(version.origin)}
+              </option>
+            </select>
+          </div>
+
+          <div>
+            <label for="to" class="mb-1 block text-caption text-ink-secondary">Quero a</label>
+            <select id="to" name="to" class={select_class()}>
+              <option
+                :for={version <- @versions}
+                value={version.number}
+                selected={version.number == @to}
+              >
+                v{version.number} · {origin_label(version.origin)}
+              </option>
+            </select>
+          </div>
+        </.form>
+
+        <div :if={@diff} class="mt-5">
+          <p :if={@diff.buy == [] and @diff.drop == []} class="text-body text-ink-secondary">
+            Nada muda entre essas duas — as listas são iguais.
+          </p>
+
+          <div :if={@diff.buy != []} class="mb-4">
+            <h3 class="mb-2 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+              Comprar ({length(@diff.buy)})
+            </h3>
+            <ul class="divide-y divide-hairline-soft">
+              <li
+                :for={item <- @diff.buy}
+                class="flex flex-wrap items-baseline gap-x-2 py-1.5 first:pt-0"
+              >
+                <span class="font-mono text-micro text-ink-faint">{item.quantity}×</span>
+                <.card_link
+                  name={item.name}
+                  uri={item.card && item.card.scryfall_uri}
+                  class="text-ink"
+                />
+                <.play_rate card={item.card} />
+                <span class="ml-auto font-mono text-caption text-ink-secondary">
+                  {Money.brl(item.price_usd)}
+                </span>
+              </li>
+            </ul>
+
+            <div class="mt-3 flex flex-wrap items-baseline justify-between gap-3 border-t border-hairline-soft pt-3">
+              <p class="font-mono text-numeral-sm leading-none text-ink">
+                {Money.brl(@diff.total_usd)}
+              </p>
+              <a
+                href={~p"/decks/#{@deck.id}/versoes/#{@from}/para/#{@to}/compras.txt"}
+                download
+                class="-my-2 inline-flex min-h-touch items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+              >
+                Baixar a lista de compra
+              </a>
+            </div>
+
+            <p :if={@diff.unpriced > 0} class="mt-2 text-micro text-ink-faint">
+              {@diff.unpriced} carta(s) sem preço conhecido não entram no total.
+            </p>
+          </div>
+
+          <div :if={@diff.drop != []}>
+            <h3 class="mb-2 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+              Sai do deck ({length(@diff.drop)})
+            </h3>
+            <p class="text-caption text-ink-muted">
+              {Enum.map_join(@diff.drop, ", ", & &1.name)}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <ol class="space-y-3">
+        <li
+          :for={version <- @versions}
+          class="rounded-xl border border-hairline-soft bg-surface p-5"
+        >
+          <div class="flex flex-wrap items-baseline justify-between gap-3">
+            <h2 class="text-heading font-semibold text-ink">
+              v{version.number}
+              <span :if={version.label} class="text-body font-normal text-ink-secondary">
+                — {version.label}
+              </span>
+            </h2>
+
+            <span class="font-mono text-caption text-ink-faint">
+              {origin_label(version.origin)} · {Calendar.strftime(version.inserted_at, "%d/%m %H:%M")} · {DeckVersion.size(
+                version
+              )} cartas · {change_summary(version)}
+            </span>
+          </div>
+
+          <ul :if={DeckVersion.applied(version) != []} class="mt-3 space-y-1">
+            <li
+              :for={change <- DeckVersion.applied(version)}
+              class="text-caption text-ink-secondary"
+            >
+              <span class={[
+                "font-mono",
+                change["action"] == "add" && "text-sev-healthy",
+                change["action"] == "cut" && "text-sev-critical"
+              ]}>
+                {if change["action"] == "add", do: "+", else: "−"}
+              </span>
+              {change["card"]}
+              <span :if={change["reason"]} class="text-ink-muted">— {change["reason"]}</span>
+            </li>
+          </ul>
+
+          <div class="mt-4 border-t border-hairline-soft pt-3">
+            <button
+              type="button"
+              phx-click="restaurar"
+              phx-value-number={version.number}
+              data-confirm={"Voltar o deck para a v#{version.number}? As versões seguintes continuam guardadas."}
+              class="-my-2 inline-flex min-h-touch items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+            >
+              Voltar para esta versão
+            </button>
+          </div>
+        </li>
+      </ol>
+    </div>
+    """
+  end
+
+  defp select_class do
+    "min-h-touch rounded-md border border-hairline-soft bg-inlay px-3 text-caption text-ink focus:border-ink-faint"
+  end
+end
