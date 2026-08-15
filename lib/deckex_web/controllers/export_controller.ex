@@ -11,6 +11,7 @@ defmodule DeckexWeb.ExportController do
   alias Deckex.Consults
   alias Deckex.Consults.Suggestions
   alias Deckex.Decks
+  alias Deckex.Decks.Versions
   alias Deckex.Optimizations
 
   def consult_csv(conn, %{"id" => id}) do
@@ -27,6 +28,24 @@ defmodule DeckexWeb.ExportController do
       |> put_resp_content_type("text/plain")
       |> put_resp_header("content-disposition", ~s(attachment; filename="comprar.txt"))
       |> send_resp(200, Optimizations.shopping_list_text(run, deck))
+    else
+      {:error, error} -> conn |> put_status(:not_found) |> text(error.message)
+    end
+  end
+
+  def version_diff_txt(conn, %{"id" => id, "from" => from, "to" => to}) do
+    with {:ok, deck} <- Decks.fetch_deck(id),
+         {:ok, from_version} <- Versions.fetch(deck, String.to_integer(from)),
+         {:ok, to_version} <- Versions.fetch(deck, String.to_integer(to)) do
+      text = from_version |> Versions.diff(to_version) |> Versions.buy_text()
+
+      conn
+      |> put_resp_content_type("text/plain")
+      |> put_resp_header(
+        "content-disposition",
+        ~s(attachment; filename="comprar-v#{from}-para-v#{to}.txt")
+      )
+      |> send_resp(200, text)
     else
       {:error, error} -> conn |> put_status(:not_found) |> text(error.message)
     end

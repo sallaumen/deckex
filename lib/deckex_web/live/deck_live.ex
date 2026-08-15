@@ -18,6 +18,7 @@ defmodule DeckexWeb.DeckLive do
   alias Deckex.Consults
   alias Deckex.Consults.Suggestions
   alias Deckex.Decks
+  alias Deckex.Decks.Versions
   alias Deckex.Error
   alias Deckex.Events
   alias Deckex.Money
@@ -59,6 +60,8 @@ defmodule DeckexWeb.DeckLive do
       price_age: price_age_label(),
       running_optimization: Optimizations.running_for_deck(deck.id),
       deletion_cost: Decks.deletion_cost(deck),
+      version_count: deck |> Versions.list() |> length(),
+      drifted?: Versions.drifted?(deck),
       page_title: deck.name
     )
     |> assign_new(:renaming, fn -> false end)
@@ -398,6 +401,15 @@ defmodule DeckexWeb.DeckLive do
           </p>
 
           <div :if={not @renaming} class="mt-2 flex flex-wrap items-center gap-1">
+            <%!-- The count is the point of the link: "Versões" alone says a
+                  screen exists, "Versões (7)" says there is something on it. --%>
+            <.link
+              navigate={~p"/decks/#{@deck.id}/versoes"}
+              class="-my-2 inline-flex min-h-touch items-center px-1 py-2 text-caption text-ink-faint transition-colors hover:text-ink motion-reduce:transition-none"
+            >
+              Versões ({@version_count}){if @drifted?, do: " •"}
+            </.link>
+            <span class="text-ink-faint" aria-hidden="true">·</span>
             <button
               type="button"
               phx-click="start-rename"
