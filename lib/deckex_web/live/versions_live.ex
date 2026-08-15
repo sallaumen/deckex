@@ -38,10 +38,19 @@ defmodule DeckexWeb.VersionsLive do
       page_title: "Versões · #{deck.name}"
     )
     # The default comparison is the one the owner almost always wants: the
-    # oldest against the newest, which is "everything that happened".
-    |> assign_new(:from, fn -> versions |> List.last() |> number_of() end)
-    |> assign_new(:to, fn -> versions |> List.first() |> number_of() end)
+    # oldest against the newest, which is "everything that happened". A choice
+    # already made survives a reload; a number that no longer exists does not.
+    |> assign(
+      from: kept_or(socket.assigns[:from], versions, &List.last/1),
+      to: kept_or(socket.assigns[:to], versions, &List.first/1)
+    )
     |> compare()
+  end
+
+  defp kept_or(chosen, versions, fallback) do
+    numbers = Enum.map(versions, & &1.number)
+
+    if chosen in numbers, do: chosen, else: versions |> fallback.() |> number_of()
   end
 
   defp number_of(nil), do: nil
@@ -72,6 +81,9 @@ defmodule DeckexWeb.VersionsLive do
 
     {:noreply,
      socket
+     # The version just made is what the owner wants to look at, so the
+     # comparison moves to it rather than staying on whatever it held before.
+     |> assign(to: version.number)
      |> load(socket.assigns.deck)
      |> put_flash(:info, "Versão v#{version.number} marcada.")}
   end

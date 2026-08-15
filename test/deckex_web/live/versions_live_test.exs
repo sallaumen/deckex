@@ -74,6 +74,19 @@ defmodule DeckexWeb.VersionsLiveTest do
       assert html =~ "marcada por você"
       refute html =~ "O deck mudou desde a última versão"
     end
+
+    # The version just made is the one the owner wants to look at. Leaving the
+    # comparison on "v1 against v1" made the new version look like a no-op.
+    test "the comparison moves to the version just marked", %{conn: conn} do
+      deck = deck()
+      {:ok, _} = Decks.add_card(deck, "Cultivate")
+
+      {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}/versoes")
+      html = live |> element("button", "Marcar versão agora") |> render_click()
+
+      assert html =~ "Comprar (1)"
+      assert html =~ "Cultivate"
+    end
   end
 
   describe "going back" do
