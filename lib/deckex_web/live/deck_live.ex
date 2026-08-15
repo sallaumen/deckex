@@ -380,6 +380,17 @@ defmodule DeckexWeb.DeckLive do
               Duplicar
             </button>
             <span class="text-ink-faint" aria-hidden="true">·</span>
+            <%!-- The list goes back out the door it came in through: the same
+                  format the app imports, which is also the format a shop's
+                  bulk-add box reads. --%>
+            <a
+              href={~p"/decks/#{@deck.id}/lista.txt"}
+              download
+              class="-my-2 inline-flex min-h-touch items-center px-1 py-2 text-caption text-ink-faint transition-colors hover:text-ink motion-reduce:transition-none"
+            >
+              Baixar lista
+            </a>
+            <span class="text-ink-faint" aria-hidden="true">·</span>
             <button
               type="button"
               phx-click="delete"
@@ -849,6 +860,25 @@ defmodule DeckexWeb.DeckLive do
                   </.form>
                 </details>
               </div>
+            </div>
+          </section>
+
+          <%!-- A fresh deck showed nothing at all here, which reads as a
+                broken screen rather than as "you have not asked anything
+                yet". The measurements above are already the deck's; this
+                column is what the models said about them. --%>
+          <section :if={@consults == []}>
+            <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+              Consultas
+            </h2>
+
+            <div class="rounded-xl border border-hairline-soft bg-surface p-6">
+              <p class="text-body text-ink-secondary">Nenhuma pergunta feita ainda.</p>
+              <p class="mt-1 text-caption text-ink-faint">
+                As medições ao lado já são suas. Uma consulta pega esses números e pergunta a um
+                modelo o que cortar e o que colocar — a resposta aparece aqui, e o motor confere
+                cada sugestão contra a carta de verdade.
+              </p>
             </div>
           </section>
 

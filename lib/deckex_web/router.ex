@@ -50,6 +50,7 @@ defmodule DeckexWeb.Router do
     live "/otimizacoes/:id", OptimizationLive, :show
 
     get "/consultas/:id/csv", ExportController, :consult_csv
+    get "/decks/:id/lista.txt", ExportController, :deck_txt
   end
 
   # Other scopes may use custom stacks.

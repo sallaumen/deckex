@@ -123,4 +123,39 @@ defmodule DeckexWeb.DeckActionsTest do
       assert html =~ "1 consulta(s)"
     end
   end
+
+  describe "downloading the list" do
+    # The deck goes back out the door it came in through: the same format the
+    # app imports, and the one a shop's bulk-add box reads.
+    test "serves the current cards as decklist text", %{conn: conn} do
+      deck = deck("Iroh das Lontra")
+      {:ok, _} = Decks.remove_card(deck, "Sol Ring")
+
+      response = conn |> get(~p"/decks/#{deck.id}/lista.txt") |> response(200)
+
+      assert response =~ "Commander:\n1 Nature's Lore"
+      assert response =~ "4 Forest"
+      refute response =~ "Sol Ring"
+    end
+
+    test "the filename is a filename, not the deck's name with spaces in it", %{conn: conn} do
+      deck = deck("Iroh das Lontra — otimizado")
+
+      conn = get(conn, ~p"/decks/#{deck.id}/lista.txt")
+
+      assert [disposition] = Plug.Conn.get_resp_header(conn, "content-disposition")
+      assert disposition == ~s(attachment; filename="iroh-das-lontra-otimizado.txt")
+    end
+
+    test "round-trips: what it serves, the importer reads back", %{conn: conn} do
+      deck = deck("Ida e Volta")
+
+      text = conn |> get(~p"/decks/#{deck.id}/lista.txt") |> response(200)
+
+      {:ok, reimported} = Decks.import_from_text(text, %{name: "De Volta", source: :paste})
+
+      assert Enum.sort(Enum.map(Decks.list_deck_cards(reimported), &{&1.card.name, &1.board})) ==
+               Enum.sort(Enum.map(Decks.list_deck_cards(deck), &{&1.card.name, &1.board}))
+    end
+  end
 end

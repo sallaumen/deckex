@@ -9,6 +9,8 @@ defmodule DeckexWeb.OptimizationsLive do
   """
   use DeckexWeb, :live_view
 
+  alias Deckex.Analysis
+  alias Deckex.Analysis.Report
   alias Deckex.Consults
   alias Deckex.Decks
   alias Deckex.Error
@@ -41,6 +43,34 @@ defmodule DeckexWeb.OptimizationsLive do
         {:ok, socket |> put_flash(:error, error.message) |> push_navigate(to: ~p"/")}
     end
   end
+
+  # Computed, not stored: reports are arithmetic over ~100 structs and the app
+  # never caches one. A run that changed nothing yet has nothing to say, so it
+  # says nothing rather than printing "0→0" as if that were a result.
+  defp criticals_delta(run, deck) do
+    changed = Enum.any?(run.steps, &(&1.applied != []))
+
+    if changed do
+      commanders = Optimizations.current_commanders(run)
+      baselines = Settings.baselines()
+
+      before = report_for(run.list_original, commanders, deck, baselines)
+      now = report_for(Optimizations.current_list(run), commanders, deck, baselines)
+
+      {before, now}
+    end
+  end
+
+  defp report_for(list, commanders, deck, baselines) do
+    list
+    |> Optimizations.snapshot_for(commanders, deck)
+    |> Analysis.report(baselines)
+    |> Report.critical_count()
+  end
+
+  defp delta_tone({before, now}) when now < before, do: "text-sev-healthy"
+  defp delta_tone({before, now}) when now > before, do: "text-sev-critical"
+  defp delta_tone(_unchanged), do: "text-ink-faint"
 
   @impl Phoenix.LiveView
   def handle_info({:optimization_updated, _id}, socket) do
@@ -208,11 +238,27 @@ defmodule DeckexWeb.OptimizationsLive do
                 {status_label(run.status)}{if run.outcome, do: " · #{run.outcome}"}
               </span>
             </div>
-            <p class="mt-2 text-caption text-ink-muted">
-              {done_count(run)}/{length(run.steps)} etapas · {Enum.sum(
-                Enum.map(run.steps, &length(&1.applied))
-              )} mudanças aplicadas{if stage = current_stage(run),
-                do: " · agora: #{stage.label}"}
+            <p class="mt-2 flex flex-wrap items-center gap-x-2 text-caption text-ink-muted">
+              <span>
+                {done_count(run)}/{length(run.steps)} etapas · {Enum.sum(
+                  Enum.map(run.steps, &length(&1.applied))
+                )} mudanças aplicadas{if stage = current_stage(run),
+                  do: " · agora: #{stage.label}"}
+              </span>
+
+              <%!-- The two facts that separate a run worth reading from one
+                    worth ignoring, and neither was on the row: which model
+                    answered, and whether the criticals actually moved. Without
+                    them the history is a list of timestamps. --%>
+              <span aria-hidden="true">·</span>
+              <span class="font-mono text-ink-faint">{run.contract["model"]}</span>
+
+              <span :if={delta = criticals_delta(run, @deck)}>
+                <span aria-hidden="true" class="text-ink-faint">·</span>
+                <span class={["font-mono", delta_tone(delta)]}>
+                  críticos {elem(delta, 0)}→{elem(delta, 1)}
+                </span>
+              </span>
             </p>
           </.link>
         </li>
