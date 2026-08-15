@@ -42,3 +42,10 @@ npm-debug.log
 
 # Agent worktrees (created by the Agent tool, never committed)
 /.claude/worktrees/
+
+# Secrets never belong in a public repository. The keys in config/dev.exs and
+# config/test.exs are the generator's throwaway ones and only ever sign local
+# sessions; anything real is read from the environment in config/runtime.exs.
+.env
+.env.*
+*.secret.exs

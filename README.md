@@ -27,11 +27,44 @@ entra em toda consulta seguinte, e toda resposta abre com a leitura do próprio
 modelo — instruída a discordar do dossiê em voz alta quando a lista disser outra
 coisa.
 
+**Mede o que a mesa sente, e onde o deck morre.** Duas lentes que não são sobre
+poder. *Tempo de mesa* conta as cartas que tiram turnos, ações ou destravamento
+dos outros três jogadores — turno extra, stax, taxação, roubo, sacrifício
+forçado. *Fragilidade* pergunta como o deck perde: quanto dele está no campo
+quando cai uma varredura (e se a sua mana está lá junto), quanto depende do
+cemitério, e quantos corpos estão de fato **livres** para bloquear — porque uma
+criatura que carrega o motor do deck não é um bloqueador, e contá-la mente.
+
 **Audita a resposta da IA com aritmética.** Cada sugestão é conferida contra os
 dados reais da carta: identidade de cor, singleton, legalidade em Commander,
-teto de preço e impacto no bracket. Depois aplica as mudanças limpas ao deck em
+preço e impacto no bracket. Depois aplica as mudanças limpas ao deck em
 memória, re-mede tudo, e mostra o antes→depois — o que resolve, o que persiste,
 o que quebra.
+
+**Otimiza em etapas, num sandbox.** O Otimizador roda uma fila de consultas
+sobre uma *cópia* do deck — mana, curva, interação, consistência, o deck
+inteiro, matchups, alinhamento — cada etapa vendo o que as anteriores fizeram e
+por quê, com checkpoints de estabilização no meio. A lista real nunca é tocada
+até você mandar salvar. Uma carta pode entrar e sair uma vez; na segunda o
+motor encerra o vaivém.
+
+**Ou reimagina.** O mesmo pipeline num modo que primeiro devolve **três
+direções diferentes** para o deck — arquétipo e tema, com a tese e o que se
+perde em cada uma — e para, esperando você escolher. A direção escolhida vira o
+contrato das etapas seguintes. O comandante pode mudar, desde que a identidade
+de cor seja exatamente a mesma.
+
+**Trata preço como fato, não como palpite.** O preço de uma carta é o da
+**edição mais barata** — não o da edição que a busca por nome devolveu, que
+costuma ser a mais nova e às vezes não tem preço nenhum. E como preço não diz
+se a carta é boa (a mais barata que uma IA já sugeriu aqui foi Arcane Signet, a
+3ª carta mais jogada do formato), cada sugestão mostra também **quanto do
+formato joga aquela carta** — exibido, nunca aplicado como regra.
+
+**O orçamento é uma contagem, não uma linha.** Em vez de um teto por carta, o
+deck tem uma forma: quantas cartas caras aceita, e quantas exceções acima do
+teto — porque existe a carta que vale quebrar a própria regra, e ela precisa
+caber.
 
 **Não dá nota de 1 a 10.** É recusa deliberada: um power level é um algoritmo
 que ranqueia toda carta de Magic, que é exatamente o que este projeto existe
