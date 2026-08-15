@@ -78,7 +78,11 @@ defmodule Deckex.Consults.Briefing do
   defp lens_keys(:mana_ramp), do: [:curve, :mana]
   defp lens_keys(:interaction), do: [:curve, :interaction]
   defp lens_keys(:consistency), do: [:curve, :consistency]
-  defp lens_keys(_everything_else), do: [:curve, :mana, :interaction, :consistency]
+
+  # A whole-deck question sees every section, including the two that measure
+  # what the table feels and where the deck dies.
+  defp lens_keys(_everything_else),
+    do: [:curve, :mana, :interaction, :consistency, :mesa, :fragility]
 
   # Each lens asks a different question of the same measurements. The rules
   # below the task are identical for all of them, which is deliberate: a
@@ -498,11 +502,19 @@ defmodule Deckex.Consults.Briefing do
     Enum.filter(report.findings, &(&1.code == code))
   end
 
-  defp scoped_findings(report, lens, _code) when lens in [:full, :finding], do: report.findings
+  # Only the four narrow lenses see a slice. Everything else asks a question
+  # about the whole deck and must see the whole diagnosis — this used to be
+  # inverted, and the cost was severe: `:visao`, which sets the direction nine
+  # stages then execute, was told "the deck passed every lens" about a deck
+  # with two criticals. `:upgrade`, `:budget`, `:matchup` and `:alinhamento`
+  # were blind the same way.
+  @narrow_lenses [:speed_curve, :mana_ramp, :interaction, :consistency]
 
-  defp scoped_findings(report, lens, _code) do
+  defp scoped_findings(report, lens, _code) when lens in @narrow_lenses do
     Enum.filter(report.findings, &(&1.lens == lens))
   end
+
+  defp scoped_findings(report, _lens, _code), do: report.findings
 
   defp identity(%Report{color_identity: []}), do: "colourless"
   defp identity(%Report{color_identity: colors}), do: Enum.join(colors, "")

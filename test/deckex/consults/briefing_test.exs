@@ -130,6 +130,34 @@ defmodule Deckex.Consults.BriefingTest do
     end
   end
 
+  describe "which findings a lens is shown" do
+    # This was inverted and cost a real run: :visao — the stage that sets the
+    # direction nine stages then execute — was told "the deck passed every
+    # lens" about a deck with two criticals.
+    test "a whole-deck lens sees every finding" do
+      for lens <- [:visao, :upgrade, :budget, :matchup, :alinhamento, :full] do
+        briefing = build(lens, [])
+
+        refute briefing =~ "passed every lens",
+               "#{lens} recebeu 'nenhum achado' num deck que tem achados"
+      end
+    end
+
+    test "a narrow lens still sees only its own slice" do
+      briefing = build(:mana_ramp, [])
+
+      assert briefing =~ "mana."
+      refute briefing =~ "interaction."
+    end
+
+    test "a whole-deck lens is shown the table and fragility sections" do
+      briefing = build(:visao, [])
+
+      assert briefing =~ "### mesa"
+      assert briefing =~ "### fragility"
+    end
+  end
+
   describe "the optimization block" do
     @optimization %{
       contract: %{
