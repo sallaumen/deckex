@@ -17,6 +17,7 @@ defmodule Deckex.Decks do
   alias Deckex.Decks.DeckCard
   alias Deckex.Decks.DecklistParser
   alias Deckex.Decks.DeckQuery
+  alias Deckex.Decks.Versions
   alias Deckex.Error
   alias Deckex.Events
   alias Deckex.Moxfield
@@ -208,6 +209,11 @@ defmodule Deckex.Decks do
     with {:ok, entries} <- DecklistParser.parse(text),
          {:ok, %{cards: cards, not_found: not_found}} <- resolve(entries),
          {:ok, deck} <- persist(text, attrs, entries, cards, not_found) do
+      # v1 is the deck as it arrived. Without it the history starts at whatever
+      # the owner happened to do next, and "what did the import look like"
+      # becomes unanswerable a week later.
+      {:ok, _version} = Versions.mark(deck, origin: :import, label: "Como foi importado")
+
       {:ok, classify(deck, cards)}
     end
   end
