@@ -1,5 +1,7 @@
 defmodule DeckexWeb.SettingsAndTableTest do
   use DeckexWeb.ConnCase, async: true
+  # Repricing the catalogue is enqueued, not run in the click.
+  use Oban.Testing, repo: Deckex.Repo
 
   import Phoenix.LiveViewTest
 
@@ -72,6 +74,20 @@ defmodule DeckexWeb.SettingsAndTableTest do
 
       assert Settings.baselines().land_base == 38
     end
+
+    # Repricing costs a request per card, so it queues rather than running in
+    # the click. The panel says how many are in line, because a button that
+    # appears to do nothing gets pressed again.
+    test "repricing the catalogue queues the work instead of blocking", %{conn: conn} do
+      CatalogueFixture.seed!(~w(sol_ring forest))
+
+      {:ok, live, _html} = live(conn, ~p"/ajustes")
+
+      html = live |> element("button[phx-click='reprice-catalogue']") |> render_click()
+
+      assert html =~ "2 carta(s) na fila"
+      assert_enqueued(worker: Deckex.Workers.RepriceWorker)
+    end
   end
 
   describe "the suggestion table" do
@@ -113,6 +129,18 @@ defmodule DeckexWeb.SettingsAndTableTest do
       assert html =~ "interaction.total_low"
       assert html =~ "US$"
       assert html =~ "R$"
+    end
+
+    # The column exists because reais cannot answer "is this card any good".
+    # Counterspell is rank 145 in the fixture: cheap and a staple, which is the
+    # exact pairing that made the owner distrust the cheap suggestions.
+    test "each suggestion carries how much of the format plays it",
+         %{conn: conn, deck: deck} do
+      {:ok, _live, html} = live(conn, ~p"/decks/#{deck.id}")
+
+      assert html =~ "Preço e uso"
+      assert html =~ "em uso no Commander"
+      assert html =~ "carta de base do formato"
     end
 
     test "adding a suggested card puts it in the deck", %{conn: conn, deck: deck} do

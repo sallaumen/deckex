@@ -12,6 +12,7 @@ defmodule DeckexWeb.DeckLive do
 
   alias Deckex.Analysis
   alias Deckex.Analysis.Bracket
+  alias Deckex.Cards.PlayRate
   alias Deckex.Consults
   alias Deckex.Consults.Suggestions
   alias Deckex.Decks
@@ -145,6 +146,17 @@ defmodule DeckexWeb.DeckLive do
     |> Enum.reduce(Decimal.new(0), fn {price, qty}, total ->
       Decimal.add(total, Decimal.mult(price, qty))
     end)
+  end
+
+  # How many of the proposed adds are cards almost nobody plays. The owner's
+  # worry was that cheap suggestions are weak ones; price cannot tell him, and
+  # reading twenty rows to find out defeats the purpose of a table.
+  defp rare_adds(suggestions) do
+    suggestions
+    |> List.wrap()
+    |> Enum.count(
+      &(&1.action == :add and not is_nil(&1.card) and PlayRate.worth_a_look?(&1.card))
+    )
   end
 
   # One map for the whole screen, built from the snapshot already in memory —
@@ -880,6 +892,17 @@ defmodule DeckexWeb.DeckLive do
                     <div class="mt-2 flex items-center justify-between gap-3">
                       <span class="font-mono text-micro text-ink-faint">
                         entradas: {Money.brl(Suggestions.total_usd(@suggestions[consult.id]))}
+                        <%!-- The line that answers "are these cards any good?"
+                              before you read twenty rows. It counts, it does
+                              not judge: a card nobody plays can be the right
+                              card for this deck, and the reasoning above is
+                              where that argument lives. --%>
+                        <span
+                          :if={rare_adds(@suggestions[consult.id]) > 0}
+                          class="text-sev-warning"
+                        >
+                          · {rare_adds(@suggestions[consult.id])} quase ninguém joga
+                        </span>
                       </span>
 
                       <a
