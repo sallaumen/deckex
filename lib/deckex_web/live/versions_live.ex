@@ -15,6 +15,7 @@ defmodule DeckexWeb.VersionsLive do
   alias Deckex.Decks.Versions
   alias Deckex.Error
   alias Deckex.Money
+  alias DeckexWeb.Clock
 
   @impl Phoenix.LiveView
   def mount(%{"id" => deck_id}, _session, socket) do
@@ -279,7 +280,7 @@ defmodule DeckexWeb.VersionsLive do
             </h2>
 
             <span class="font-mono text-caption text-ink-faint">
-              {origin_label(version.origin)} · {Calendar.strftime(version.inserted_at, "%d/%m %H:%M")} · {DeckVersion.size(
+              {origin_label(version.origin)} · {Clock.moment(version.inserted_at)} · {DeckVersion.size(
                 version
               )} cartas · {change_summary(version)}
             </span>

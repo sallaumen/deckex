@@ -20,6 +20,7 @@ defmodule DeckexWeb.OptimizationsLive do
   alias Deckex.Optimizations
   alias Deckex.Optimizations.Salt
   alias Deckex.Settings
+  alias DeckexWeb.Clock
 
   @impl Phoenix.LiveView
   def mount(%{"id" => deck_id}, _session, socket) do
@@ -241,7 +242,7 @@ defmodule DeckexWeb.OptimizationsLive do
             <div class="flex flex-wrap items-center justify-between gap-3">
               <span class="flex items-center gap-2">
                 <span class="font-mono text-caption text-ink">
-                  {Calendar.strftime(run.inserted_at, "%d/%m %H:%M")}
+                  {Clock.moment(run.inserted_at)}
                 </span>
                 <span class="rounded-md border border-hairline-soft px-2 py-0.5 font-mono text-micro text-ink-faint">
                   {mode_label(run.mode)}

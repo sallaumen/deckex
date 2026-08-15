@@ -138,7 +138,29 @@ defmodule DeckexWeb.DeckConsultTest do
       |> element("button[phx-click='apply-cut'][phx-value-name='Sol Ring']")
       |> render_click()
 
-    assert html =~ "1 mudança(s) soltas"
+    assert html =~ "Versões (1) · 1 soltas"
+  end
+
+  # The edits were made on this page, so the offer to keep them belongs here.
+  # Sending someone to another screen to save what they just did loses work.
+  test "loose changes are named on the deck page and can be kept there", %{conn: conn, deck: deck} do
+    {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}")
+
+    html =
+      live
+      |> element("button[phx-click='apply-cut'][phx-value-name='Sol Ring']")
+      |> render_click()
+
+    assert html =~ "1 mudança(s) fora de qualquer versão"
+    assert html =~ "−Sol Ring"
+
+    kept = live |> element("button[phx-click='marcar-versao']") |> render_click()
+
+    assert kept =~ "Guardado como v2"
+    refute kept =~ "fora de qualquer versão"
+
+    [version | _older] = Versions.list(deck)
+    assert [%{"action" => "cut", "card" => "Sol Ring"}] = DeckVersion.applied(version)
   end
 
   test "the exact prompt is available to copy", %{conn: conn, deck: deck} do

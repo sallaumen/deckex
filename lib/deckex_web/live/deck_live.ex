@@ -25,6 +25,7 @@ defmodule DeckexWeb.DeckLive do
   alias Deckex.Money
   alias Deckex.Optimizations
   alias Deckex.Settings
+  alias DeckexWeb.Clock
 
   @impl Phoenix.LiveView
   def mount(%{"id" => id}, _session, socket) do
@@ -63,7 +64,7 @@ defmodule DeckexWeb.DeckLive do
       deletion_cost: Decks.deletion_cost(deck),
       version_count: deck |> Versions.list() |> length(),
       drifted?: Versions.drifted?(deck),
-      pending_edits: Edits.count(deck),
+      pending_edits: Edits.changelog(deck),
       page_title: deck.name
     )
     |> assign_new(:renaming, fn -> false end)
@@ -200,6 +201,15 @@ defmodule DeckexWeb.DeckLive do
       )
 
     {:noreply, socket |> assign_deck(result.deck) |> put_flash(:info, applied_message(result))}
+  end
+
+  def handle_event("marcar-versao", _params, socket) do
+    {:ok, version} = Versions.mark(socket.assigns.deck)
+
+    {:noreply,
+     socket
+     |> assign_deck(socket.assigns.deck)
+     |> put_flash(:info, "Guardado como v#{version.number}.")}
   end
 
   def handle_event("apply-cut", %{"name" => name}, socket) do
@@ -417,6 +427,39 @@ defmodule DeckexWeb.DeckLive do
         ← A Mesa
       </.link>
 
+      <%!-- The edits were made here, so the offer to keep them belongs here.
+            Sending someone to another screen to save what they just did is
+            how work gets lost. --%>
+      <div
+        :if={@pending_edits != []}
+        class="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-hairline-soft bg-surface px-4 py-3"
+      >
+        <div class="min-w-0">
+          <p class="text-caption text-ink">
+            {length(@pending_edits)} mudança(s) fora de qualquer versão
+          </p>
+          <p class="mt-0.5 truncate font-mono text-micro text-ink-faint">
+            {Enum.map_join(
+              @pending_edits,
+              " · ",
+              &"#{if &1["action"] == "add", do: "+", else: "−"}#{&1["card"]}"
+            )}
+          </p>
+        </div>
+
+        <div class="flex shrink-0 items-center gap-3">
+          <.link
+            navigate={~p"/decks/#{@deck.id}/versoes"}
+            class="-my-2 inline-flex min-h-touch items-center px-1 py-2 text-caption text-ink-faint transition-colors hover:text-ink"
+          >
+            ver versões
+          </.link>
+          <.button type="button" phx-click="marcar-versao" phx-disable-with="marcando…">
+            Marcar versão
+          </.button>
+        </div>
+      </div>
+
       <header class="mt-3 mb-10 flex flex-wrap items-end justify-between gap-4">
         <div class="min-w-0">
           <%!-- The name is the one thing about a deck that is purely the
@@ -464,8 +507,8 @@ defmodule DeckexWeb.DeckLive do
               navigate={~p"/decks/#{@deck.id}/versoes"}
               class="-my-2 inline-flex min-h-touch items-center px-1 py-2 text-caption text-ink-faint transition-colors hover:text-ink motion-reduce:transition-none"
             >
-              Versões ({@version_count}){if @pending_edits > 0,
-                do: " · #{@pending_edits} mudança(s) soltas",
+              Versões ({@version_count}){if @pending_edits != [],
+                do: " · #{length(@pending_edits)} soltas",
                 else: if(@drifted?, do: " •")}
             </.link>
             <span class="text-ink-faint" aria-hidden="true">·</span>
@@ -974,9 +1017,8 @@ defmodule DeckexWeb.DeckLive do
 
                 <div class="flex flex-wrap items-center justify-between gap-3 border-t border-hairline-soft pt-4">
                   <span class="font-mono text-micro text-ink-faint">
-                    {dossier_source_label(@deck.dossier_source)} · {Calendar.strftime(
-                      @deck.dossier_updated_at,
-                      "%d/%m %H:%M"
+                    {dossier_source_label(@deck.dossier_source)} · {Clock.moment(
+                      @deck.dossier_updated_at
                     )}
                   </span>
 
