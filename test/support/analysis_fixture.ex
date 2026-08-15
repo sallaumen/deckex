@@ -25,7 +25,14 @@ defmodule Deckex.AnalysisFixture do
       oracle_text: Keyword.get(attrs, :oracle_text, ""),
       color_identity: Keyword.get(attrs, :color_identity, []),
       produced_mana: Keyword.get(attrs, :produced_mana, []),
-      game_changer: Keyword.get(attrs, :game_changer, false)
+      game_changer: Keyword.get(attrs, :game_changer, false),
+      # Legal by default, because a real card is. The schema default is `false`
+      # — right for a database column that must be filled from Scryfall, wrong
+      # for a fixture whose every card would otherwise be banned. Nothing
+      # noticed until a lens started reading the field.
+      commander_legal: Keyword.get(attrs, :commander_legal, true),
+      power: Keyword.get(attrs, :power),
+      toughness: Keyword.get(attrs, :toughness)
     }
 
     CardEntry.new(card, Keyword.get(attrs, :quantity, 1), Keyword.get(attrs, :roles, []))

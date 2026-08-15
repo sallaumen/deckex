@@ -16,6 +16,7 @@ defmodule Deckex.Analysis do
   alias Deckex.Analysis.Finding
   alias Deckex.Analysis.Fragility
   alias Deckex.Analysis.Interaction
+  alias Deckex.Analysis.Legality
   alias Deckex.Analysis.Mana
   alias Deckex.Analysis.Mesa
   alias Deckex.Analysis.Report
@@ -33,13 +34,14 @@ defmodule Deckex.Analysis do
       consistency: Consistency.measure(snapshot),
       mesa: Mesa.measure(snapshot),
       fragility: Fragility.measure(snapshot),
+      legality: Legality.measure(snapshot),
       bracket: Bracket.floor(snapshot),
       findings: findings(snapshot, baselines)
     }
   end
 
   defp findings(snapshot, baselines) do
-    [Curve, Mana, Interaction, Consistency, Mesa, Fragility]
+    [Curve, Mana, Interaction, Consistency, Mesa, Fragility, Legality]
     |> Enum.flat_map(& &1.findings(snapshot, baselines))
     |> Finding.sort()
   end

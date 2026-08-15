@@ -17,6 +17,9 @@ defmodule Deckex.Analysis.Report do
           mana: map(),
           interaction: map(),
           consistency: map(),
+          mesa: map(),
+          fragility: map(),
+          legality: map(),
           bracket: Bracket.t(),
           findings: [Finding.t()]
         }
@@ -32,6 +35,7 @@ defmodule Deckex.Analysis.Report do
     :consistency,
     :mesa,
     :fragility,
+    :legality,
     :bracket,
     :findings
   ]
@@ -45,6 +49,7 @@ defmodule Deckex.Analysis.Report do
     :consistency,
     :mesa,
     :fragility,
+    :legality,
     :bracket,
     :findings
   ]

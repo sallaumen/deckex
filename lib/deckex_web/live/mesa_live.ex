@@ -59,7 +59,11 @@ defmodule DeckexWeb.MesaLive do
         critical: Report.critical_count(report),
         bracket: report.bracket,
         findings: length(report.findings),
-        cards: Enum.sum(Enum.map(snapshot.main, & &1.quantity)),
+        # Commanders included, because 100 is the number the rule is about.
+        # Counting only the main list put "103 cartas" on the tile next to a
+        # finding that said 105, and both were honest — which is worse than
+        # one of them being wrong.
+        cards: report.legality.size,
         cost: Decks.deletion_cost(deck)
       }
     end)

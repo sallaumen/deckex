@@ -79,10 +79,12 @@ defmodule Deckex.Consults.Briefing do
   defp lens_keys(:interaction), do: [:curve, :interaction]
   defp lens_keys(:consistency), do: [:curve, :consistency]
 
-  # A whole-deck question sees every section, including the two that measure
-  # what the table feels and where the deck dies.
+  # A whole-deck question sees every section: what the table feels, where the
+  # deck dies, and whether it is a legal deck at all. The legality counts are
+  # the reason a stage can be told to go net negative — a model that cannot see
+  # the deck is at 103 cards has no way to know it must cut three.
   defp lens_keys(_everything_else),
-    do: [:curve, :mana, :interaction, :consistency, :mesa, :fragility]
+    do: [:curve, :mana, :interaction, :consistency, :mesa, :fragility, :legality]
 
   # Each lens asks a different question of the same measurements. The rules
   # below the task are identical for all of them, which is deliberate: a
