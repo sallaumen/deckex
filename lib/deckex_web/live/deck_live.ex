@@ -41,6 +41,9 @@ defmodule DeckexWeb.DeckLive do
 
   defp assign_deck(socket, deck) do
     snapshot = Decks.snapshot(deck)
+    # Read once: every `Settings.get/1` is its own query, and the policy is
+    # four of them.
+    budget_policy = Budget.policy()
 
     socket
     |> assign(
@@ -50,8 +53,8 @@ defmodule DeckexWeb.DeckLive do
       model: Settings.model(),
       card_uris: card_uris(snapshot),
       deck_value: deck_value(snapshot),
-      budget_policy: Budget.policy(),
-      budget_line: budget_line(snapshot),
+      budget_policy: budget_policy,
+      budget_line: budget_line(snapshot, budget_policy),
       running_optimization: Optimizations.running_for_deck(deck.id),
       page_title: deck.name
     )
@@ -154,8 +157,7 @@ defmodule DeckexWeb.DeckLive do
   # "3/10 caras · 1/2 exceções" — the deck's spending shape in one line, or
   # nothing at all when neither limit is switched on. Written only for the
   # tiers that exist: a line that says 0/0 is noise pretending to be data.
-  defp budget_line(snapshot) do
-    policy = Budget.policy()
+  defp budget_line(snapshot, policy) do
     occupancy = Budget.occupancy(snapshot.main ++ snapshot.commanders, policy)
 
     [
