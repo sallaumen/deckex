@@ -77,7 +77,7 @@ defmodule DeckexWeb.OptimizationLiveTest do
                    "keep" => "Sol Ring",
                    "matchups" => "um aggro rápido",
                    "notes" => "",
-                   "model" => "sonnet"
+                   "model" => "fable"
                  }
                )
                |> render_submit()
@@ -105,7 +105,7 @@ defmodule DeckexWeb.OptimizationLiveTest do
           "keep" => "",
           "matchups" => "",
           "notes" => "",
-          "model" => "sonnet"
+          "model" => "fable"
         }
       )
       |> render_submit()
@@ -219,7 +219,7 @@ defmodule DeckexWeb.OptimizationLiveTest do
                    "keep" => "",
                    "matchups" => "",
                    "notes" => "",
-                   "model" => "sonnet"
+                   "model" => "fable"
                  }
                )
                |> render_submit()
@@ -251,7 +251,7 @@ defmodule DeckexWeb.OptimizationLiveTest do
             "keep" => "",
             "matchups" => "",
             "notes" => "",
-            "model" => "sonnet"
+            "model" => "fable"
           }
         )
         |> render_submit()
@@ -279,7 +279,7 @@ defmodule DeckexWeb.OptimizationLiveTest do
                    "keep" => "",
                    "matchups" => "",
                    "notes" => "",
-                   "model" => "sonnet"
+                   "model" => "fable"
                  }
                )
                |> render_submit()

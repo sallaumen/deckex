@@ -72,6 +72,55 @@ defmodule Deckex.Consults do
   @spec models() :: [String.t()]
   def models, do: ["fable", "sonnet", "opus", "haiku"]
 
+  # Ordered by capability, not by price. An unknown alias ranks lowest so a
+  # typo can never accidentally clear the floor.
+  @model_rank %{"fable" => 4, "opus" => 3, "sonnet" => 2, "haiku" => 1}
+
+  @doc "Where a model sits on the capability ladder; an unknown one sits at the bottom."
+  @spec model_rank(String.t() | nil) :: non_neg_integer()
+  def model_rank(model), do: Map.get(@model_rank, model, 0)
+
+  # The floor is about what an answer CHANGES, not what it costs. The scout
+  # writes a dossier and the bracket lens classifies; neither proposes cutting
+  # a card from a real deck, so neither needs the expensive model. Everything
+  # else does — including `:visao`, which carries no cuts and no adds but names
+  # what the owner will buy and steers nine stages after it.
+  @reads_only [:scout, :bracket]
+
+  @doc """
+  The models allowed to propose a card change, strongest first.
+
+  The launcher offers only these: a dropdown that lists an option the app will
+  refuse is a trap with a reason attached.
+  """
+  @spec models_at_or_above(String.t()) :: [String.t()]
+  def models_at_or_above(floor) do
+    models()
+    |> Enum.filter(&(model_rank(&1) >= model_rank(floor)))
+    |> Enum.sort_by(&model_rank/1, :desc)
+  end
+
+  @doc "Whichever of the two models ranks higher — never returns below the floor."
+  @spec at_least(String.t() | nil, String.t()) :: String.t()
+  def at_least(model, floor) do
+    if model_rank(model) >= model_rank(floor), do: model, else: floor
+  end
+
+  @doc "Whether an answer from this lens can change the deck."
+  @spec changes_deck?(atom()) :: boolean()
+  def changes_deck?(lens), do: lens not in @reads_only
+
+  @doc """
+  Whether this consult proposed changes while answering below the owner's floor.
+
+  Derived, never stored: the floor is a setting and may move, and a consult
+  answered last week should be judged by the floor in force when it is read.
+  """
+  @spec below_floor?(Consult.t()) :: boolean()
+  def below_floor?(%Consult{lens: lens, model: model}) do
+    changes_deck?(lens) and model_rank(model) < model_rank(Settings.model_floor())
+  end
+
   @doc "The lenses a user can pick, with their pt-BR labels."
   @spec lens_labels() :: [{atom(), String.t()}]
   def lens_labels do

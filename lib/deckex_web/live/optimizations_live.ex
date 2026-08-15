@@ -15,6 +15,7 @@ defmodule DeckexWeb.OptimizationsLive do
   alias Deckex.Events
   alias Deckex.Optimizations
   alias Deckex.Optimizations.Salt
+  alias Deckex.Settings
 
   @impl Phoenix.LiveView
   def mount(%{"id" => deck_id}, _session, socket) do
@@ -450,7 +451,7 @@ defmodule DeckexWeb.OptimizationsLive do
                   class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-2 py-2 font-mono text-caption text-ink"
                 >
                   <option
-                    :for={model <- Consults.models()}
+                    :for={model <- Consults.models_at_or_above(Settings.model_floor())}
                     value={model}
                     selected={model == @contract["model"]}
                   >

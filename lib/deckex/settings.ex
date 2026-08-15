@@ -57,6 +57,16 @@ defmodule Deckex.Settings do
   def model, do: get(:claude_model)
 
   @doc """
+  The weakest model allowed to propose a card change, default `"fable"`.
+
+  Analysis may run on anything. A suggestion to cut a card from a real deck is
+  a different kind of answer, and the owner should not have to check which
+  model produced it.
+  """
+  @spec model_floor() :: String.t()
+  def model_floor, do: get(:model_floor)
+
+  @doc """
   The price ceilings a lens must respect, in reais, or `nil` where there is
   none.
 

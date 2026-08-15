@@ -50,7 +50,10 @@ defmodule Deckex.Optimizations do
       "keep" => [],
       "matchups" => ["um deck aggro rápido", "um deck de controle pesado"],
       "notes" => "",
-      "model" => Settings.model()
+      # Every stage of an optimization proposes cutting and adding cards, so
+      # the floor is the default here rather than the global model — the owner
+      # should not have to remember to raise it before spending ten consults.
+      "model" => Consults.at_least(Settings.model(), Settings.model_floor())
     }
   end
 
@@ -118,45 +121,62 @@ defmodule Deckex.Optimizations do
   """
   @spec start(Deck.t(), map(), [map()] | nil) :: {:ok, Optimization.t()} | {:error, Error.t()}
   def start(%Deck{} = deck, contract_attrs \\ %{}, recipe_override \\ nil) do
-    if OptimizationQuery.running_for_deck(deck.id) do
-      {:error,
-       Error.new(
-         :optimization_running,
-         "Já tem uma otimização em andamento para esse deck. Espere ou cancele antes de começar outra."
-       )}
-    else
-      %{list: list, commanders: commanders} = list_from_deck(deck)
-      {mode, contract_attrs} = Map.pop(contract_attrs, "mode", :refine)
-      recipe = recipe_override || recipe(deck, mode)
-      contract = Map.merge(default_contract(deck), contract_attrs)
+    {mode, contract_attrs} = Map.pop(contract_attrs, "mode", :refine)
+    contract = Map.merge(default_contract(deck), contract_attrs)
 
-      {:ok, optimization} =
-        Repo.transact(fn ->
-          optimization =
-            %Optimization{}
-            |> Optimization.changeset(%{
-              deck_id: deck.id,
-              mode: mode,
-              status: :running,
-              contract: contract,
-              recipe: recipe,
-              list_original: list,
-              commanders: commanders
-            })
-            |> Repo.insert!()
+    cond do
+      OptimizationQuery.running_for_deck(deck.id) ->
+        {:error,
+         Error.new(
+           :optimization_running,
+           "Já tem uma otimização em andamento para esse deck. Espere ou cancele antes de começar outra."
+         )}
 
-          recipe
-          |> Enum.with_index(1)
-          |> Enum.each(&insert_step!(optimization, &1, list))
+      Consults.model_rank(contract["model"]) < Consults.model_rank(Settings.model_floor()) ->
+        {:error,
+         Error.new(
+           :model_below_floor,
+           "Uma otimização propõe cortar e adicionar cartas do seu deck, e #{contract["model"]} " <>
+             "está abaixo do seu piso (#{Settings.model_floor()}). Suba o modelo ou o piso nos Ajustes."
+         )}
 
-          {:ok, optimization}
-        end)
-
-      {:ok, optimization} = fetch(optimization.id)
-      {:ok, _step} = run_step(hd(optimization.steps))
-
-      fetch(optimization.id)
+      true ->
+        launch(deck, mode, contract, recipe_override)
     end
+  end
+
+  # Nobody supervises a pipeline mid-flight, so the floor is a refusal here
+  # rather than the mark a single consult gets on the deck page.
+  defp launch(deck, mode, contract, recipe_override) do
+    %{list: list, commanders: commanders} = list_from_deck(deck)
+    recipe = recipe_override || recipe(deck, mode)
+
+    {:ok, optimization} =
+      Repo.transact(fn ->
+        optimization =
+          %Optimization{}
+          |> Optimization.changeset(%{
+            deck_id: deck.id,
+            mode: mode,
+            status: :running,
+            contract: contract,
+            recipe: recipe,
+            list_original: list,
+            commanders: commanders
+          })
+          |> Repo.insert!()
+
+        recipe
+        |> Enum.with_index(1)
+        |> Enum.each(&insert_step!(optimization, &1, list))
+
+        {:ok, optimization}
+      end)
+
+    {:ok, optimization} = fetch(optimization.id)
+    {:ok, _step} = run_step(hd(optimization.steps))
+
+    fetch(optimization.id)
   end
 
   @doc "Stops advancing after the consult in flight lands. Paid work is kept."

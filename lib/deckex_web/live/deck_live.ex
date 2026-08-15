@@ -726,6 +726,18 @@ defmodule DeckexWeb.DeckLive do
                     </p>
                   </div>
 
+                  <%!-- Marked, not blocked. "Comparar modelos" exists precisely
+                        to ask cheap models change questions, and someone
+                        exploring on purpose should not be argued with — but
+                        the answer should not look like the others either. --%>
+                  <p
+                    :if={Consults.below_floor?(consult) and @suggestions[consult.id] not in [nil, []]}
+                    class="mt-3 rounded-md border border-sev-warning/40 bg-sev-warning/10 px-3 py-2 text-caption text-ink"
+                  >
+                    Resposta de <span class="font-mono">{consult.model}</span>, abaixo do seu piso
+                    ({Settings.model_floor()}) para sugerir mudança de carta. Confira antes de aplicar.
+                  </p>
+
                   <div :if={@suggestions[consult.id] not in [nil, []]} class="overflow-x-auto">
                     <table class="w-full text-caption">
                       <thead>

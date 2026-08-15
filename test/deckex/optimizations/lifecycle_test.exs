@@ -30,7 +30,10 @@ defmodule Deckex.Optimizations.LifecycleTest do
       # default ceiling — is 3: optimize without changing tables.
       assert contract["bracket_max"] == 3
       assert contract["ceilings"] == %{"card" => 800, "land" => 200}
-      assert contract["model"] == Deckex.Settings.model()
+      # Never below the floor: every stage of an optimization proposes cutting
+      # and adding cards, so the owner does not have to remember to raise the
+      # model before spending ten consults on it.
+      assert contract["model"] == Deckex.Settings.model_floor()
       assert contract["keep"] == []
     end
   end

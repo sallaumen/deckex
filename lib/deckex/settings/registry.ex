@@ -29,6 +29,17 @@ defmodule Deckex.Settings.Registry do
       options: ["fable", "sonnet", "opus", "haiku"],
       group: :ai
     },
+    %{
+      key: :model_floor,
+      type: :string,
+      default: "fable",
+      label: "Modelo mínimo para mudar o deck",
+      hint:
+        "Análise pode rodar em qualquer modelo. Sugerir corte ou entrada de carta exige " <>
+          "pelo menos este. O pipeline recusa começar abaixo dele.",
+      options: ["fable", "opus", "sonnet", "haiku"],
+      group: :ai
+    },
     # Every ceiling is in reais, because that is the currency the owner thinks
     # in. Scryfall quotes USD; `Deckex.Money` converts once, at the edge.
     %{

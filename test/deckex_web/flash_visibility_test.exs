@@ -65,7 +65,7 @@ defmodule DeckexWeb.FlashVisibilityTest do
           "keep" => "",
           "matchups" => "",
           "notes" => "",
-          "model" => "sonnet"
+          "model" => "fable"
         }
       )
       |> render_submit()
