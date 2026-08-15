@@ -20,11 +20,12 @@ defmodule Deckex.Consults.Suggestions do
 
   alias Deckex.Cards.CardQuery
   alias Deckex.Cards.Name
+  alias Deckex.Cards.PlayRate
   alias Deckex.Consults.Consult
   alias Deckex.Consults.Suggestion
   alias Deckex.Money
 
-  @header "acao,carta,motivo,achado,preco_usd,preco_brl,resolvida"
+  @header "acao,carta,motivo,achado,preco_usd,preco_brl,uso_no_formato,resolvida"
 
   @doc "Every suggestion in a consult's answer, cuts first."
   @spec for_consult(Consult.t()) :: [Suggestion.t()]
@@ -111,6 +112,8 @@ defmodule Deckex.Consults.Suggestions do
       suggestion.addresses || "",
       price(suggestion.price_usd),
       price(Money.to_brl(suggestion.price_usd)),
+      # The column a price cannot fill: whether anyone plays this card.
+      if(suggestion.card, do: PlayRate.sentence(suggestion.card), else: ""),
       if(suggestion.resolved?, do: "sim", else: "nao")
     ]
     |> Enum.map_join(",", &escape/1)

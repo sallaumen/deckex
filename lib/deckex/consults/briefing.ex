@@ -301,6 +301,13 @@ defmodule Deckex.Consults.Briefing do
       number are the only exceptions — Commander is singleton.
     - Prefer changes that address a finding over changes that are merely
       upgrades.#{budget_line(opts[:ceilings])}
+    - **A price ceiling is a limit, not a target.** Do not optimise for
+      cheapness. The owner would rather pay for the card that answers the
+      finding than save money on one that half-answers it, and a deck built out
+      of the cheapest card that vaguely fits is the failure mode here. Name the
+      best card that fits under the ceiling. If that turns out to be a card
+      everyone already plays, it is not a boring suggestion — it is the answer,
+      and it is cheap because it was reprinted, not because it is weak.
     - Prefer answers that work against **anything** over answers aimed at one
       deck. This is a four-player pod where every archetype turns up; a card
       that only beats the deck you guessed is dead against the other two.

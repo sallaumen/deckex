@@ -19,6 +19,7 @@ defmodule DeckexWeb.SettingsPanel do
   alias Deckex.Cards
   alias Deckex.Settings
   alias Deckex.Settings.Registry
+  alias Deckex.Workers.RepriceWorker
 
   @groups [
     {:ai, "Inteligência artificial"},
@@ -34,6 +35,7 @@ defmodule DeckexWeb.SettingsPanel do
      |> assign(assigns)
      |> assign_new(:open, fn -> false end)
      |> assign_new(:refreshed, fn -> nil end)
+     |> assign_new(:repricing, fn -> nil end)
      |> load()}
   end
 
@@ -57,6 +59,18 @@ defmodule DeckexWeb.SettingsPanel do
     case Cards.refresh_game_changers() do
       {:ok, %{marked: marked}} -> {:noreply, assign(socket, error: nil, refreshed: marked)}
       {:error, error} -> {:noreply, assign(socket, error: error.message)}
+    end
+  end
+
+  # A price is the one card fact that goes stale on its own, and the catalogue
+  # holds the price of whichever printing a name lookup returned — a number
+  # that can be double what the card actually costs, or missing entirely. This
+  # queues the correction; the work happens on the scryfall queue, one job at a
+  # time, because it costs a request per card.
+  def handle_event("reprice-catalogue", _params, socket) do
+    case RepriceWorker.enqueue_all() do
+      {:ok, queued} -> {:noreply, assign(socket, error: nil, repricing: queued)}
+      {:error, _reason} -> {:noreply, assign(socket, error: "Não consegui enfileirar.")}
     end
   end
 
@@ -223,6 +237,25 @@ defmodule DeckexWeb.SettingsPanel do
                 </.button>
                 <span :if={@refreshed} class="font-mono text-micro text-ink-faint">
                   {@refreshed} carta(s) do catálogo estão na lista
+                </span>
+              </div>
+            </section>
+
+            <section class="space-y-2 border-t border-hairline-soft pt-4">
+              <h3 class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+                Preços do catálogo
+              </h3>
+              <p class="text-micro text-ink-muted">
+                O preço de uma carta é o da edição mais barata, não o da edição que a busca
+                por nome devolveu. Reprecificar custa uma consulta por carta e roda em
+                segundo plano.
+              </p>
+              <div class="flex items-center gap-3">
+                <.button type="button" phx-click="reprice-catalogue" phx-target={@myself}>
+                  Reprecificar tudo
+                </.button>
+                <span :if={@repricing} class="font-mono text-micro text-ink-faint">
+                  {@repricing} carta(s) na fila
                 </span>
               </div>
             </section>

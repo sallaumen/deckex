@@ -52,6 +52,29 @@ defmodule Deckex.Cards.ScryfallMapper do
     }
   end
 
+  @doc """
+  The lowest non-foil price across `printings`, or `nil` if none is priced.
+
+  What a card costs is what its cheapest printing costs. Nobody buys the
+  expensive art because the deck list asked for it, so pricing a card by the
+  one printing a name lookup happened to return answers a question no one is
+  asking — and answers it high.
+
+  Only `prices.usd` is read, which is the non-foil price. A printing with no
+  price is skipped, never counted as free: unknown and zero are different
+  facts, and only one of them is good news.
+  """
+  @spec cheapest_usd([map()]) :: Decimal.t() | nil
+  def cheapest_usd(printings) when is_list(printings) do
+    printings
+    |> Enum.map(&to_decimal(get_in(&1, ["prices", "usd"])))
+    |> Enum.reject(&is_nil/1)
+    |> case do
+      [] -> nil
+      prices -> Enum.min(prices, Decimal)
+    end
+  end
+
   # The double-faced rule: prefer the top level, fall back to the front face.
   defp front(card, face, key, default \\ nil) do
     case card[key] do

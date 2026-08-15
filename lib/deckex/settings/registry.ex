@@ -54,9 +54,11 @@ defmodule Deckex.Settings.Registry do
     %{
       key: :upgrade_max_brl,
       type: :integer,
-      default: 800,
+      default: 300,
       label: "Teto por carta — sem olhar preço (R$)",
-      hint: "\"Sem olhar preço\" ainda tem limite: acima disso não é upgrade, é outro deck.",
+      hint:
+        "\"Sem olhar preço\" ainda tem limite: acima disso não é upgrade, é outro deck. " <>
+          "É um limite, não uma meta — o motor nunca prefere a carta cara.",
       options: nil,
       group: :budget
     },
@@ -74,7 +76,9 @@ defmodule Deckex.Settings.Registry do
       type: :number,
       default: 5.4,
       label: "Dólar em reais",
-      hint: "Usado só para mostrar o preço das cartas em R$. A Scryfall cota em USD.",
+      hint:
+        "A Scryfall cota o mercado americano em dólar. Isto converte para dar escala — " <>
+          "a loja brasileira cobra o preço dela, que costuma ser maior.",
       options: nil,
       group: :analysis
     },

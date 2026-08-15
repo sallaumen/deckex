@@ -59,6 +59,7 @@ defmodule DeckexWeb.OptimizationLive do
       stage_progress: stage_progress(optimization, deck, baselines),
       visions: vision_cards(optimization, deck),
       card_uris: Cards.uris_for_names(named_cards(optimization)),
+      card_ranks: Cards.ranks_for_names(named_cards(optimization)),
       now: DateTime.utc_now(),
       report_original: Analysis.report(original, baselines),
       report_current: Analysis.report(current, baselines),
@@ -511,6 +512,7 @@ defmodule DeckexWeb.OptimizationLive do
                   art={carta.card && carta.card.image_art_crop_url}
                   uri={carta.card && carta.card.scryfall_uri}
                   note={carta.price_usd && Money.brl(carta.price_usd)}
+                  rank={carta.card && carta.card.edhrec_rank}
                 />
               </div>
             </div>
@@ -629,6 +631,7 @@ defmodule DeckexWeb.OptimizationLive do
                   {if change["action"] == "add", do: "+", else: "−"}
                 </span>
                 <.card_link name={change["card"]} uri={@card_uris[change["card"]]} class="text-ink" />
+                <.play_rate :if={change["action"] == "add"} rank={@card_ranks[change["card"]]} />
                 <span class="text-ink-muted">— {change["reason"]}</span>
               </li>
             </ul>
@@ -799,6 +802,7 @@ defmodule DeckexWeb.OptimizationLive do
               </span>
               <.card_link name={change["card"]} uri={@card_uris[change["card"]]} class="text-ink" />
               <span :if={price = add_price(change)} class="font-mono text-ink-faint">{price}</span>
+              <.play_rate :if={change["action"] == "add"} rank={@card_ranks[change["card"]]} />
               <span class="text-ink-muted">— {change["reason"]}</span>
             </li>
           </ul>

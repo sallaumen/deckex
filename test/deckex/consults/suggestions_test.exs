@@ -142,7 +142,7 @@ defmodule Deckex.Consults.SuggestionsTest do
 
       [header | rows] = csv |> String.trim() |> String.split("\n")
 
-      assert header == "acao,carta,motivo,achado,preco_usd,preco_brl,resolvida"
+      assert header == "acao,carta,motivo,achado,preco_usd,preco_brl,uso_no_formato,resolvida"
       assert length(rows) == 2
       assert Enum.any?(rows, &String.starts_with?(&1, "cortar,Sol Ring,"))
     end

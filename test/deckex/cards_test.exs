@@ -155,5 +155,132 @@ defmodule Deckex.CardsTest do
 
       assert {:error, %Error{code: :scryfall_unavailable}} = Cards.resolve_names(["Sol Ring"])
     end
+
+    # A name lookup answers with one printing, usually the newest, and a
+    # printing released this month has no market price. Steam Vents, Breeding
+    # Pool and Swiftfoot Boots all arrived here that way and stayed blank in
+    # the column the owner buys from.
+    test "a card that arrives unpriced is queued for repricing" do
+      expect(Deckex.Scryfall.Mock, :fetch_by_names, fn _names ->
+        {:ok, %{found: [ScryfallFixture.load!("steam_vents")], not_found: []}}
+      end)
+
+      assert {:ok, %{cards: [card]}} = Cards.resolve_names(["Steam Vents"])
+      assert card.price_usd == nil
+
+      assert_enqueued(worker: Deckex.Workers.RepriceWorker, args: %{card_ids: [card.id]})
+    end
+
+    test "a card that arrives priced costs no second request" do
+      expect(Deckex.Scryfall.Mock, :fetch_by_names, fn _names ->
+        {:ok, %{found: [ScryfallFixture.load!("sol_ring")], not_found: []}}
+      end)
+
+      assert {:ok, %{cards: [_card]}} = Cards.resolve_names(["Sol Ring"])
+
+      refute_enqueued(worker: Deckex.Workers.RepriceWorker)
+    end
   end
+
+  describe "reprice/1" do
+    test "takes the cheapest printing, not the one the lookup happened to return" do
+      card = insert(:card, name: "Cyclonic Rift", price_usd: Decimal.new("39.83"))
+
+      expect(Deckex.Scryfall.Mock, :printings, fn oracle_id ->
+        assert oracle_id == card.oracle_id
+
+        {:ok, [printing("83.74"), printing("28.99"), printing("35.06")]}
+      end)
+
+      assert {:ok, repriced} = Cards.reprice(card)
+      assert Decimal.equal?(repriced.price_usd, Decimal.new("28.99"))
+    end
+
+    test "prices a card the catalogue had no price for at all" do
+      card = insert(:card, name: "Steam Vents", price_usd: nil)
+
+      expect(Deckex.Scryfall.Mock, :printings, fn _oracle_id ->
+        {:ok, [printing(nil), printing("10.67")]}
+      end)
+
+      assert {:ok, repriced} = Cards.reprice(card)
+      assert Decimal.equal?(repriced.price_usd, Decimal.new("10.67"))
+    end
+
+    # Repricing may correct a number, never erase one: the price on screen is
+    # what the owner budgets from, and an em dash where there used to be a
+    # figure reads as "this card is free".
+    test "a card Scryfall cannot price keeps the price it had" do
+      card = insert(:card, name: "Sol Ring", price_usd: Decimal.new("1.50"))
+
+      expect(Deckex.Scryfall.Mock, :printings, fn _oracle_id -> {:ok, [printing(nil)]} end)
+
+      assert {:ok, repriced} = Cards.reprice(card)
+      assert Decimal.equal?(repriced.price_usd, Decimal.new("1.50"))
+    end
+
+    # The cheapest printing is a different Scryfall object from the one this
+    # row was built out of. Everything on it except the price belongs to that
+    # other printing.
+    test "nothing but the price moves" do
+      card = insert(:card, name: "Sol Ring", image_art_crop_url: "https://img/original.jpg")
+
+      expect(Deckex.Scryfall.Mock, :printings, fn _oracle_id -> {:ok, [printing("1.00")]} end)
+
+      assert {:ok, repriced} = Cards.reprice(card)
+      assert repriced.image_art_crop_url == "https://img/original.jpg"
+      assert repriced.scryfall_id == card.scryfall_id
+      assert repriced.name == card.name
+    end
+
+    test "a Scryfall failure is an error, not a wrong price" do
+      card = insert(:card, name: "Sol Ring", price_usd: Decimal.new("1.50"))
+
+      expect(Deckex.Scryfall.Mock, :printings, fn _oracle_id ->
+        {:error, Error.new(:scryfall_unavailable, "fora do ar")}
+      end)
+
+      assert {:error, %Error{code: :scryfall_unavailable}} = Cards.reprice(card)
+    end
+  end
+
+  describe "reprice_all/1" do
+    test "reports what actually moved" do
+      cheap = insert(:card, name: "Arcane Signet", price_usd: Decimal.new("0.44"))
+      rift = insert(:card, name: "Cyclonic Rift", price_usd: Decimal.new("39.83"))
+
+      stub(Deckex.Scryfall.Mock, :printings, fn oracle_id ->
+        cond do
+          oracle_id == cheap.oracle_id -> {:ok, [printing("0.44")]}
+          oracle_id == rift.oracle_id -> {:ok, [printing("28.99")]}
+        end
+      end)
+
+      assert %{checked: 2, changed: [%{name: "Cyclonic Rift", from: from, to: to}]} =
+               Cards.reprice_all([cheap, rift])
+
+      assert Decimal.equal?(from, Decimal.new("39.83"))
+      assert Decimal.equal?(to, Decimal.new("28.99"))
+    end
+
+    # A price is advisory. One 404 must not cost the other hundred and
+    # seventy-eight corrections — the first real pass over this catalogue hit
+    # exactly one transient failure and finished anyway.
+    test "one card failing does not stop the pass" do
+      broken = insert(:card, name: "Scute Swarm", price_usd: Decimal.new("5.00"))
+      fine = insert(:card, name: "Sol Ring", price_usd: Decimal.new("1.50"))
+
+      stub(Deckex.Scryfall.Mock, :printings, fn oracle_id ->
+        if oracle_id == broken.oracle_id do
+          {:error, Error.new(:scryfall_unavailable, "fora do ar")}
+        else
+          {:ok, [printing("0.99")]}
+        end
+      end)
+
+      assert %{checked: 1, changed: [%{name: "Sol Ring"}]} = Cards.reprice_all([broken, fine])
+    end
+  end
+
+  defp printing(usd), do: %{"prices" => %{"usd" => usd}}
 end

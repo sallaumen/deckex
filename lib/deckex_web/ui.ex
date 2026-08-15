@@ -13,6 +13,7 @@ defmodule DeckexWeb.UI do
   """
   use Phoenix.Component
 
+  alias Deckex.Cards.PlayRate
   alias DeckexWeb.UI.Format
 
   @identity_slots ~w(W U B R G)
@@ -335,6 +336,46 @@ defmodule DeckexWeb.UI do
   end
 
   @doc """
+  How much of Commander plays this card.
+
+  The column that answers the question a price cannot. The owner's instinct was
+  that a cheap suggestion is a weak suggestion; his own runs disagree — the
+  cheapest card any model suggested him was Arcane Signet, third most-played
+  card in the format, and one of the priciest was a card past rank five
+  thousand. This is the number that separates them.
+
+  Only the last band gets a colour, per the Quiet-Health Rule: a card everyone
+  plays is not news. A card almost nobody plays is not a verdict either — it is
+  the one worth reading the reasoning for.
+
+  ## Examples
+
+      <.play_rate card={row.card} />
+      <.play_rate rank={card.edhrec_rank} />
+  """
+  attr :card, :map, default: nil, doc: "a card struct; `rank` is read off it"
+  attr :rank, :integer, default: nil, doc: "the rank itself, when there is no card at hand"
+  attr :class, :any, default: nil
+
+  def play_rate(assigns) do
+    assigns = assign(assigns, :rank, assigns.rank || (assigns.card && assigns.card.edhrec_rank))
+
+    ~H"""
+    <span
+      :if={@rank}
+      title={PlayRate.sentence(@rank)}
+      class={[
+        "font-mono text-micro",
+        if(PlayRate.worth_a_look?(@rank), do: "text-sev-warning", else: "text-ink-faint"),
+        @class
+      ]}
+    >
+      {PlayRate.position(@rank)}
+    </span>
+    """
+  end
+
+  @doc """
   A card at a glance: its art, its name, and a way to go read it.
 
   The dense sibling of `card_tile/1`. Where a tile is the subject of its own
@@ -353,6 +394,7 @@ defmodule DeckexWeb.UI do
   attr :art, :string, default: nil
   attr :uri, :string, default: nil
   attr :note, :string, default: nil, doc: "a short line under the name, e.g. a price"
+  attr :rank, :integer, default: nil, doc: "the card's play rate, shown beside the note"
   attr :class, :any, default: nil
 
   def card_thumb(assigns) do
@@ -380,7 +422,12 @@ defmodule DeckexWeb.UI do
           {@name}
         </figcaption>
       </.thumb_frame>
-      <p :if={@note} class="font-mono text-micro leading-tight text-ink-faint">{@note}</p>
+      <p
+        :if={@note || @rank}
+        class="flex items-baseline gap-1.5 font-mono text-micro leading-tight text-ink-faint"
+      >
+        {@note}<.play_rate rank={@rank} />
+      </p>
     </figure>
     """
   end

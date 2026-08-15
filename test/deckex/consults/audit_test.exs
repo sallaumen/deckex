@@ -148,13 +148,15 @@ defmodule Deckex.Consults.AuditTest do
     end
 
     test "a card under the ceiling passes", %{snapshot: snapshot} do
+      {:ok, _v} = Settings.put(:upgrade_max_brl, 500)
+
       audit = Consults.audit(snapshot, [priced(:add, "Rhystic Study")], :upgrade)
 
       refute ceiling_verdict(audit, "Rhystic Study")
     end
 
     # The whole point of a separate land ceiling: R$ 161 is fine for a spell
-    # under the R$ 800 default and far too much for a land under R$ 200 — at
+    # under the R$ 300 default and far too much for a land under R$ 200 — at
     # a lower land ceiling it is refused while the spell ceiling is untouched.
     test "a land is judged by the land ceiling, not the card one", %{snapshot: snapshot} do
       {:ok, _v} = Settings.put(:upgrade_land_max_brl, 100)

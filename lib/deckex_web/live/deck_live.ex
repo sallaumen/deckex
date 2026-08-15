@@ -764,7 +764,7 @@ defmodule DeckexWeb.DeckLive do
                       <thead>
                         <tr class="border-b border-hairline-soft text-left text-label uppercase tracking-[0.1em] text-ink-faint">
                           <th class="py-1.5 pr-2 font-semibold">Carta</th>
-                          <th class="py-1.5 pr-2 text-right font-semibold">Preço</th>
+                          <th class="py-1.5 pr-2 text-right font-semibold">Preço e uso</th>
                           <th class="py-1.5 font-semibold"></th>
                         </tr>
                       </thead>
@@ -817,6 +817,10 @@ defmodule DeckexWeb.DeckLive do
                           <td class="py-2 pr-2 text-right font-mono text-micro whitespace-nowrap">
                             <div class="text-ink-secondary">{Money.brl(row.price_usd)}</div>
                             <div class="text-ink-muted">{Money.usd(row.price_usd)}</div>
+                            <%!-- The column price could not answer: is this
+                                  card any good? Cheap and elite look identical
+                                  in reais. --%>
+                            <.play_rate :if={row.card} card={row.card} class="block" />
                           </td>
 
                           <td class="py-2 text-right">

@@ -8,6 +8,8 @@ defmodule Deckex.Cards do
   falls towards zero as the collection grows.
   """
 
+  require Logger
+
   alias Deckex.Cards.Card
   alias Deckex.Cards.CardQuery
   alias Deckex.Cards.CardRole
@@ -19,6 +21,7 @@ defmodule Deckex.Cards do
   alias Deckex.Error
   alias Deckex.Repo
   alias Deckex.Scryfall
+  alias Deckex.Workers.RepriceWorker
 
   defdelegate get_by_name(name), to: CardQuery
   defdelegate list_by_normalized_names(names), to: CardQuery
@@ -48,7 +51,26 @@ defmodule Deckex.Cards do
 
     with {:ok, %{found: found, not_found: not_found}} <- fetch_missing(missing),
          {:ok, inserted} <- insert_all(found) do
+      reprice_unpriced(inserted)
+
       {:ok, %{cards: known ++ inserted, not_found: not_found}}
+    end
+  end
+
+  # A name lookup answers with one printing, usually the newest, and a printing
+  # released this month has no market price yet. Left alone, the card sits in
+  # the catalogue with a blank where the price goes — and blanks pass every
+  # price ceiling, so the guard the owner set stops applying to exactly the
+  # cards it cannot see. These get a follow-up pass on the scryfall queue.
+  defp reprice_unpriced(cards) do
+    case Enum.filter(cards, &is_nil(&1.price_usd)) do
+      [] ->
+        :ok
+
+      unpriced ->
+        {:ok, _job} = RepriceWorker.enqueue(Enum.map(unpriced, & &1.id))
+
+        :ok
     end
   end
 
@@ -148,21 +170,37 @@ defmodule Deckex.Cards do
   nowhere honest to link to.
   """
   @spec uris_for_names([String.t()]) :: %{String.t() => String.t()}
-  def uris_for_names([]), do: %{}
+  def uris_for_names(names) when is_list(names), do: for_names(names, & &1.scryfall_uri)
 
-  def uris_for_names(names) when is_list(names) do
+  @doc """
+  Maps each of `names` to how much of Commander plays it, for the names it
+  knows.
+
+  The other half of the price column. A number in reais cannot tell an owner
+  whether a suggestion is any good — this is the fact that can, and it costs
+  the same single query.
+  """
+  @spec ranks_for_names([String.t()]) :: %{String.t() => integer()}
+  def ranks_for_names(names) when is_list(names), do: for_names(names, & &1.edhrec_rank)
+
+  # One query for a whole screen, whichever field the screen wants. A name the
+  # catalogue has never seen is simply absent, so the UI renders it plainly
+  # instead of showing a hole where a fact should be.
+  defp for_names([], _field), do: %{}
+
+  defp for_names(names, field) do
     by_normalized =
       names
       |> Enum.map(&Name.normalize/1)
       |> CardQuery.list_by_normalized_names()
-      |> Map.new(&{&1.name_normalized, &1.scryfall_uri})
+      |> Map.new(&{&1.name_normalized, field.(&1)})
 
     names
     |> Enum.uniq()
     |> Enum.reduce(%{}, fn name, acc ->
       case Map.get(by_normalized, Name.normalize(name)) do
         nil -> acc
-        uri -> Map.put(acc, name, uri)
+        value -> Map.put(acc, name, value)
       end
     end)
   end
@@ -185,6 +223,78 @@ defmodule Deckex.Cards do
       {:ok, length(refreshed)}
     end
   end
+
+  @doc """
+  Re-prices `card` from the cheapest paper printing Scryfall lists.
+
+  The catalogue stores one representative printing per card, and its price is
+  the price of *that* printing — which is the price of a specific piece of
+  cardboard, not the answer to "what does this card cost me". A card the owner
+  would buy for eight reais can be catalogued at forty because the lookup
+  happened to return the new-set version, and a card that just got reprinted
+  can be catalogued at nothing at all.
+
+  Nothing but the price is touched, and a card Scryfall cannot price keeps what
+  it had: repricing may correct a number, never erase one.
+  """
+  @spec reprice(Card.t()) :: {:ok, Card.t()} | {:error, Error.t()}
+  def reprice(%Card{} = card) do
+    with {:ok, printings} <- Scryfall.printings(card.oracle_id) do
+      case ScryfallMapper.cheapest_usd(printings) do
+        nil -> {:ok, card}
+        price -> {:ok, card |> Card.price_changeset(price) |> Repo.update!()}
+      end
+    end
+  end
+
+  @doc """
+  Re-prices every card in `cards`, reporting what actually moved.
+
+  A card whose printings Scryfall will not serve is logged and skipped rather
+  than halting the pass: a price is advisory, and one 404 must not cost the
+  other hundred and seventy-eight corrections.
+  """
+  @spec reprice_all([Card.t()]) :: %{
+          checked: non_neg_integer(),
+          changed: [%{name: String.t(), from: Decimal.t() | nil, to: Decimal.t()}]
+        }
+  def reprice_all(cards) when is_list(cards) do
+    cards
+    |> in_lock_order()
+    |> Enum.reduce(%{checked: 0, changed: []}, &reprice_one/2)
+    |> Map.update!(:changed, &Enum.reverse/1)
+  end
+
+  @doc "Every card in the catalogue, in `oracle_id` order."
+  @spec list_all() :: [Card.t()]
+  defdelegate list_all(), to: CardQuery, as: :list_all_by_oracle_id
+
+  defp reprice_one(card, acc) do
+    case reprice(card) do
+      {:ok, repriced} ->
+        record_reprice(acc, card, repriced.price_usd)
+
+      {:error, %Error{} = error} ->
+        Logger.warning("reprice failed for #{card.name}: #{error.message}")
+
+        acc
+    end
+  end
+
+  defp record_reprice(acc, card, price) do
+    acc = %{acc | checked: acc.checked + 1}
+
+    if moved?(card.price_usd, price) do
+      %{acc | changed: [%{name: card.name, from: card.price_usd, to: price} | acc.changed]}
+    else
+      acc
+    end
+  end
+
+  defp moved?(nil, nil), do: false
+  defp moved?(nil, _new), do: true
+  defp moved?(_old, nil), do: false
+  defp moved?(old, new), do: not Decimal.equal?(old, new)
 
   @doc """
   Reclassifies the whole catalogue against today's rules, returning how many

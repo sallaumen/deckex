@@ -94,7 +94,7 @@ defmodule Deckex.ConsultModelsTest do
       assert {:ok, consult} = Consults.request(deck(), :upgrade)
 
       assert consult.briefing =~ "as strong as it can be"
-      assert consult.briefing =~ "R$ 800"
+      assert consult.briefing =~ "R$ 300"
       assert consult.briefing =~ "R$ 200"
     end
 

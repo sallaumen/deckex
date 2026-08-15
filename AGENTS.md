@@ -95,6 +95,19 @@ for *what* we are building and *why*. This file is *how*.
   invented on a bad one — verified 2026-08-13, when `fable` quoted a Cyclonic
   Rift 28% under its actual price. The briefing forbids it and
   `Deckex.Consults.Suggestions` discards any price field the model volunteers.
+- **A card costs what its CHEAPEST printing costs.** `POST /cards/collection`
+  answers a name with one printing — usually the newest, which on release day
+  has no price at all. Measured 2026-08-15 over the whole catalogue: 104 of 178
+  prices were wrong, Finale of Devastation by half, and four staples (Steam
+  Vents, Breeding Pool, Stomping Ground, Swiftfoot Boots) held no price
+  whatsoever. Unpriced is the dangerous half: the ceiling guard passes a card
+  it cannot price, so the limit silently stopped applying to exactly the cards
+  nobody could see. `Deckex.Cards.reprice/1` asks for the printings and takes
+  the minimum; a card that arrives unpriced is queued for it automatically.
+- **A price ceiling is a limit, never a target.** The engine must not prefer
+  the expensive card, and the briefing says so in as many words. Cheap is not
+  evidence of weak — the cheapest card any model ever suggested here was Arcane
+  Signet, third most-played card in the format.
 - **Building a page never reaches for the network.** Rendering a deck reads;
   fetching happens in the background job that already exists. A suggested card
   missing from the catalogue renders unresolved rather than making the page wait.
@@ -155,11 +168,18 @@ for *what* we are building and *why*. This file is *how*.
   `:rule`-sourced roles that no longer match, or a tightened rule is invisible
   and the catalogue only ever accumulates verdicts nothing would give today.
   `:ai` roles were paid for and `:manual` ones are the user's; neither is ours.
-- **We do not consume EDHREC's data.** Their terms forbid scripted requests and
-  reproduction (verified 2026-08-14). Reachable is not permitted — the Moxfield
-  law, applied to a second site. Play patterns are measured from oracle text
-  here instead, which is better anyway: a nameable list of cards beats an
-  opaque score.
+- **We never request anything from EDHREC.** Their terms forbid scripted
+  requests and reproduction (verified 2026-08-14). Reachable is not permitted —
+  the Moxfield law, applied to a second site. No scraping, no pages, no lists,
+  no synergy percentages. Play *patterns* are measured from oracle text here
+  instead: a nameable list of cards beats an opaque score.
+  The one exception is `edhrec_rank`, a single ordinal that arrives inside the
+  Scryfall card object the catalogue already fetches — no request to their site
+  and no reproduction of their content. It is **shown and never enforced**: it
+  renders next to a card so the owner can see that a two-real card is the third
+  most-played in the format, and no guard, filter or ranking reads it. The day
+  it decides something on its own it has become the power level this project
+  refuses to build.
 - **A creature that carries the engine is not a blocker.** You do not block
   with your mana or your win condition, so counting those bodies as defence
   lies. The reference deck holds eight creatures with real toughness and can

@@ -90,6 +90,29 @@ defmodule Deckex.Scryfall.Http do
     collect_pages("https://api.scryfall.com/cards/search?q=#{URI.encode(query)}", [])
   end
 
+  @doc """
+  Every paper printing of one card, for pricing.
+
+  `unique=prints` is a query *parameter*, not search syntax — the search
+  endpoint collapses to one printing per card without it, which is exactly the
+  behaviour this call exists to escape.
+
+  Two exclusions. Digital-only printings have prices in a currency you cannot
+  hand to a shop, and gold-bordered World Championship decks are cheap
+  collectibles that are not the card: counting either as "the cheapest
+  printing" would understate what buying this actually costs.
+
+  A card with no paper printing answers 404, which `collect_pages` reports as
+  an error — the caller keeps the price it already had rather than treating a
+  missing answer as free.
+  """
+  @impl Deckex.Scryfall.Client
+  def printings(oracle_id) when is_binary(oracle_id) do
+    query = URI.encode("oracleid:#{oracle_id} game:paper -border:gold")
+
+    collect_pages("https://api.scryfall.com/cards/search?q=#{query}&unique=prints", [])
+  end
+
   defp collect_pages(nil, acc), do: {:ok, acc}
 
   defp collect_pages(url, acc) do

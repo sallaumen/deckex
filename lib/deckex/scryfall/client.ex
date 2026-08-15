@@ -23,4 +23,19 @@ defmodule Deckex.Scryfall.Client do
   for rather than written down.
   """
   @callback search(String.t()) :: {:ok, [map()]} | {:error, Deckex.Error.t()}
+
+  @doc """
+  Every paper printing of the card with this `oracle_id`.
+
+  `POST /cards/collection` answers a name with **one** printing — whichever
+  Scryfall considers the default, which is usually the newest. A printing that
+  came out last month has no market price yet, and that is how this catalogue
+  ended up holding Steam Vents, Breeding Pool, Stomping Ground and Swiftfoot
+  Boots with no price at all: four staples, four blanks, in the column the
+  owner uses to decide what to buy.
+
+  What a card costs is what its cheapest printing costs, and that needs the
+  list.
+  """
+  @callback printings(String.t()) :: {:ok, [map()]} | {:error, Deckex.Error.t()}
 end

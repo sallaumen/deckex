@@ -16,4 +16,7 @@ defmodule Deckex.Scryfall do
 
   @impl Deckex.Scryfall.Client
   defdelegate search(query), to: @adapter
+
+  @impl Deckex.Scryfall.Client
+  defdelegate printings(oracle_id), to: @adapter
 end

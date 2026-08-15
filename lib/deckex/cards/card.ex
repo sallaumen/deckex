@@ -109,4 +109,21 @@ defmodule Deckex.Cards.Card do
     |> unique_constraint(:oracle_id)
     |> unique_constraint(:name_normalized)
   end
+
+  @doc """
+  Writes a fresh price and nothing else.
+
+  Repricing reads a *different* Scryfall object from the one this row was built
+  from — the cheapest printing, not the representative one — and everything on
+  that object except the price belongs to that other printing. A full changeset
+  here would quietly swap the card's art for whichever cheap edition happened
+  to be cheapest that day.
+  """
+  @spec price_changeset(t(), Decimal.t()) :: Ecto.Changeset.t()
+  def price_changeset(card, %Decimal{} = price_usd) do
+    cast(card, %{price_usd: price_usd, prices_updated_at: DateTime.utc_now(:second)}, [
+      :price_usd,
+      :prices_updated_at
+    ])
+  end
 end

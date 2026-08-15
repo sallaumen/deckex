@@ -104,5 +104,43 @@ defmodule Deckex.Cards.ScryfallMapperTest do
       assert %Decimal{} = attrs.price_usd
       assert %DateTime{} = attrs.prices_updated_at
     end
+
+    # The printing a name lookup answers with is often the newest one, which on
+    # release day has no price in any currency. Four staples sat in this
+    # catalogue with an em dash for exactly this reason.
+    test "a printing Scryfall has not priced yet maps to no price, not to zero" do
+      attrs = "steam_vents" |> ScryfallFixture.load!() |> ScryfallMapper.to_attrs()
+
+      assert attrs.price_usd == nil
+    end
+  end
+
+  describe "cheapest_usd/1" do
+    test "picks the lowest priced printing" do
+      printings = [priced("32.65"), priced("10.67"), priced("15.65")]
+
+      assert Decimal.equal?(ScryfallMapper.cheapest_usd(printings), Decimal.new("10.67"))
+    end
+
+    test "skips unpriced printings instead of counting them as free" do
+      printings = [unpriced(), priced("10.67"), unpriced()]
+
+      assert Decimal.equal?(ScryfallMapper.cheapest_usd(printings), Decimal.new("10.67"))
+    end
+
+    test "no priced printing at all is nil, which the caller reads as leave it alone" do
+      assert ScryfallMapper.cheapest_usd([unpriced(), unpriced()]) == nil
+      assert ScryfallMapper.cheapest_usd([]) == nil
+    end
+
+    test "compares by value, not by how the number was written" do
+      assert Decimal.equal?(
+               ScryfallMapper.cheapest_usd([priced("9.90"), priced("10.00")]),
+               Decimal.new("9.90")
+             )
+    end
+
+    defp priced(usd), do: %{"prices" => %{"usd" => usd, "usd_foil" => "99.00"}}
+    defp unpriced, do: %{"prices" => %{"usd" => nil, "usd_foil" => "99.00"}}
   end
 end

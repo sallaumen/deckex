@@ -141,7 +141,8 @@ defmodule Deckex.Consults.BriefingTest do
         "colour identity",
         "Commander is singleton",
         "Flexible removal, not hate cards",
-        "Never guess at legality"
+        "Never guess at legality",
+        "A price ceiling is a limit, not a target"
       ]
 
       for lens <- Consult.lenses(), Consults.changes_deck?(lens), rule <- universal do
