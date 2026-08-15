@@ -19,6 +19,7 @@ defmodule DeckexWeb.OptimizationLive do
   alias Deckex.Events
   alias Deckex.Money
   alias Deckex.Optimizations
+  alias Deckex.Optimizations.Balance
   alias Deckex.Settings
 
   @impl Phoenix.LiveView
@@ -577,8 +578,18 @@ defmodule DeckexWeb.OptimizationLive do
               <span :if={step.status == :done && step.consult} class="text-ink-faint">
                 · {duration_label(step.consult)}
               </span>
+              <%!-- The count is the one number on this line that has a right
+                    answer, so it is the one allowed to be coloured: reading
+                    105 → 103 → 101 → 100 down the timeline is the whole story
+                    of the balance walking home. --%>
               <span :if={chip = @stage_progress[step.id]} class="text-ink-faint">
-                · {chip.criticals} {if chip.criticals == 1, do: "crítico", else: "críticos"} · {chip.cards} cartas
+                · {chip.criticals} {if chip.criticals == 1, do: "crítico", else: "críticos"} ·
+                <span class={[
+                  chip.cards == Balance.target() && "text-sev-healthy",
+                  chip.cards != Balance.target() && "text-sev-warning"
+                ]}>
+                  {chip.cards} cartas
+                </span>
               </span>
             </span>
           </div>
@@ -620,6 +631,9 @@ defmodule DeckexWeb.OptimizationLive do
                 <.card_link name={change["card"]} uri={@card_uris[change["card"]]} class="text-ink" />
                 <.play_rate :if={change["action"] == "add"} rank={@card_ranks[change["card"]]} />
                 <span class="text-ink-muted">— {change["reason"]}</span>
+                <span :if={change["note"]} class="block text-micro text-ink-faint">
+                  motor: {change["note"]}
+                </span>
               </li>
             </ul>
           </div>
