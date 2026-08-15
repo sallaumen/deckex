@@ -13,7 +13,8 @@ defmodule Deckex.Consults.Vision do
 
   @type t :: %__MODULE__{
           nome: String.t(),
-          eixo: String.t(),
+          arquetipo: String.t(),
+          tema: String.t(),
           tese: String.t(),
           custo: String.t(),
           cartas: [card_row()],
@@ -24,7 +25,8 @@ defmodule Deckex.Consults.Vision do
         }
 
   defstruct nome: "",
-            eixo: "",
+            arquetipo: "",
+            tema: "",
             tese: "",
             custo: "",
             cartas: [],

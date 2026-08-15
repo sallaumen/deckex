@@ -480,11 +480,19 @@ defmodule DeckexWeb.OptimizationLive do
           >
             <div class="flex items-start justify-between gap-2">
               <h3 class="text-heading font-semibold leading-tight text-ink">{vision.nome}</h3>
-              <span
-                :if={vision.eixo != ""}
-                class="shrink-0 rounded-sm bg-chip px-2 py-0.5 font-mono text-micro text-ink-secondary"
-              >
-                {vision.eixo}
+              <span class="flex shrink-0 flex-wrap justify-end gap-1">
+                <span
+                  :if={vision.arquetipo != ""}
+                  class="rounded-sm bg-chip px-2 py-0.5 font-mono text-micro text-ink-secondary"
+                >
+                  {vision.arquetipo}
+                </span>
+                <span
+                  :if={vision.tema != ""}
+                  class="rounded-sm border border-hairline-soft px-2 py-0.5 font-mono text-micro text-ink-faint"
+                >
+                  {vision.tema}
+                </span>
               </span>
             </div>
 

@@ -140,6 +140,32 @@ for *what* we are building and *why*. This file is *how*.
   briefing, and treating it as a rule would be the same overreach as inventing
   a price.
 
+- **The model floor is drawn by what an answer CHANGES.** A lens that only
+  reads — `:scout`, `:bracket` — may use any model; one that proposes cutting a
+  card from a real deck may not, and `:visao` counts as changing the deck
+  because it names what gets bought. It **refuses** in the pipeline, where
+  nobody is supervising, and only **marks** on the deck page, where model
+  comparison is a feature. `Deckex.Consults.model_rank/1` is the one place that
+  orders models; an unknown alias ranks lowest so a typo cannot clear the floor.
+- **Redoing a stage rewinds everything after it.** Stage N's answer is the
+  input to N+1; recomputing N while keeping what was built on it would leave
+  the sandbox describing a history that never happened. The discarded consults
+  are kept — comparing what two models said is the point.
+- **A rule must be able to take a role back.** `classify_card/1` prunes
+  `:rule`-sourced roles that no longer match, or a tightened rule is invisible
+  and the catalogue only ever accumulates verdicts nothing would give today.
+  `:ai` roles were paid for and `:manual` ones are the user's; neither is ours.
+- **We do not consume EDHREC's data.** Their terms forbid scripted requests and
+  reproduction (verified 2026-08-14). Reachable is not permitted — the Moxfield
+  law, applied to a second site. Play patterns are measured from oracle text
+  here instead, which is better anyway: a nameable list of cards beats an
+  opaque score.
+- **A creature that carries the engine is not a blocker.** You do not block
+  with your mana or your win condition, so counting those bodies as defence
+  lies. The reference deck holds eight creatures with real toughness and can
+  defend with two — which is exactly what its owner reported before the engine
+  could see it.
+
 ## Quality gate
 
 `mix lint` must be green **before** every commit — not after:

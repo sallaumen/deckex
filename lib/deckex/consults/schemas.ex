@@ -90,11 +90,16 @@ defmodule Deckex.Consults.Schemas do
                 "type" => "string",
                 "description" => "pt-BR: a short name for this direction, 2-4 words."
               },
-              "eixo" => %{
+              "arquetipo" => %{
                 "type" => "string",
-                "enum" => ["consistencia", "velocidade", "resiliencia", "eixo_de_vitoria"],
+                "enum" => ~w(aggro midrange controle combo stax ramp politica grupo),
                 "description" =>
-                  "The axis this direction moves. The three visions MUST differ here."
+                  "What the deck would be TRYING TO DO. The three visions MUST differ here."
+              },
+              "tema" => %{
+                "type" => "string",
+                "description" =>
+                  "The mechanical engine, in the community's own name for it: aristocrats, landfall, blink, spellslinger, storm, reanimator, enchantress, tokens, voltron, artifacts, +1/+1 counters, typal, theft, wheels, lifegain, toolbox, and so on. Not an enum — the list grows with every set."
               },
               "tese" => %{
                 "type" => "string",
@@ -117,7 +122,7 @@ defmodule Deckex.Consults.Schemas do
                   "Optional: a different commander for this direction. It MUST have exactly the deck's colour identity. Omit to keep the current one."
               }
             },
-            "required" => ["nome", "eixo", "tese", "custo", "cartas_chave"]
+            "required" => ["nome", "arquetipo", "tema", "tese", "custo", "cartas_chave"]
           }
         }
       },

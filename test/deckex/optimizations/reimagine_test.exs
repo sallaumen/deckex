@@ -20,21 +20,24 @@ defmodule Deckex.Optimizations.ReimagineTest do
   @visoes [
     %{
       "nome" => "Mais consistente",
-      "eixo" => "consistencia",
+      "arquetipo" => "midrange",
+      "tema" => "toolbox",
       "tese" => "Menos variância.",
       "custo" => "Menos explosão.",
       "cartas_chave" => ["Counterspell"]
     },
     %{
       "nome" => "Mais rápido",
-      "eixo" => "velocidade",
+      "arquetipo" => "aggro",
+      "tema" => "tokens",
       "tese" => "Fecha antes.",
       "custo" => "Fica frágil.",
       "cartas_chave" => ["Sol Ring"]
     },
     %{
       "nome" => "Mais resiliente",
-      "eixo" => "resiliencia",
+      "arquetipo" => "controle",
+      "tema" => "enchantress",
       "tese" => "Aguenta ódio.",
       "custo" => "Fica mais lento.",
       "cartas_chave" => ["Sol Ring"]

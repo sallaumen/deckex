@@ -32,7 +32,8 @@ defmodule Deckex.Optimizations.ReimagineRegressionTest do
   @visoes [
     %{
       "nome" => "Controle azul",
-      "eixo" => "resiliencia",
+      "arquetipo" => "controle",
+      "tema" => "enchantress",
       "tese" => "Responder antes de fechar.",
       "custo" => "Perde velocidade.",
       "cartas_chave" => ["Counterspell"],
@@ -40,14 +41,16 @@ defmodule Deckex.Optimizations.ReimagineRegressionTest do
     },
     %{
       "nome" => "Mais rápido",
-      "eixo" => "velocidade",
+      "arquetipo" => "aggro",
+      "tema" => "tokens",
       "tese" => "Fecha antes.",
       "custo" => "Fica frágil.",
       "cartas_chave" => ["Sol Ring"]
     },
     %{
       "nome" => "Mais consistente",
-      "eixo" => "consistencia",
+      "arquetipo" => "midrange",
+      "tema" => "toolbox",
       "tese" => "Menos variância.",
       "custo" => "Menos explosão.",
       "cartas_chave" => ["Sol Ring"]

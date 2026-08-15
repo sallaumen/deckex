@@ -74,7 +74,8 @@ defmodule Deckex.Consults.Visions do
 
     %Vision{
       nome: row["nome"] || "",
-      eixo: row["eixo"] || "",
+      arquetipo: row["arquetipo"] || "",
+      tema: row["tema"] || "",
       tese: row["tese"] || "",
       custo: row["custo"] || "",
       cartas: cartas,

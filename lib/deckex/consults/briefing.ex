@@ -153,9 +153,18 @@ defmodule Deckex.Consults.Briefing do
     genuinely stronger. This is not a tuning pass: you are allowed to change
     what the deck *is*.
 
-    The three MUST differ in `eixo` — one may make the deck more consistent,
-    another faster, another harder to disrupt, another change how it wins.
-    Three flavours of the same plan is a failed answer.
+    Name each direction with the vocabulary players actually use, on two axes
+    the community keeps separate:
+
+    - `arquetipo` — what the deck is TRYING TO DO: aggro, midrange, controle,
+      combo, stax, ramp, politica, grupo.
+    - `tema` — the mechanical engine that does it: aristocrats, landfall,
+      blink, spellslinger, storm, reanimator, enchantress, tokens, voltron,
+      artifacts, +1/+1 counters, typal, theft, wheels, lifegain, toolbox, and
+      so on. This one is not a fixed list; use the name a player would use.
+
+    The three MUST differ in **arquetipo**, not merely in theme. Three landfall
+    decks with different card lists is a failed answer.
 
     For each direction give, in pt-BR: a short name, the thesis for why it
     makes this deck stronger, and — with the same care — what the deck

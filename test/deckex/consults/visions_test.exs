@@ -19,7 +19,8 @@ defmodule Deckex.Consults.VisionsTest do
     Map.merge(
       %{
         "nome" => "Controle de Temur",
-        "eixo" => "resiliencia",
+        "arquetipo" => "controle",
+        "tema" => "enchantress",
         "tese" => "Trocar velocidade por respostas.",
         "custo" => "Perde os turnos rápidos.",
         "cartas_chave" => []
