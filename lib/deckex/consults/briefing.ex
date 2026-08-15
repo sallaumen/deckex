@@ -16,6 +16,7 @@ defmodule Deckex.Consults.Briefing do
   alias Deckex.Analysis.Bracket
   alias Deckex.Analysis.DeckSnapshot
   alias Deckex.Analysis.Report
+  alias Deckex.Optimizations.Balance
   alias Deckex.Optimizations.Salt
 
   @spec build(Report.t(), DeckSnapshot.t(), atom(), keyword()) :: String.t()
@@ -187,6 +188,31 @@ defmodule Deckex.Consults.Briefing do
     """
   end
 
+  # The closing stage. It exists because a run may not end on a list that
+  # cannot go on a table: the ordinary stages walk the count back a card or two
+  # at a time, and whatever gap they left is this one's whole job. It is the
+  # only stage told to close the gap completely.
+  defp task_block(:balanco, opts) do
+    # Nested, like every other pipeline fact: the count travels inside the
+    # `optimization` block the run builds, not as a loose option.
+    count = get_in(opts, [:optimization, :card_count]) || Balance.target()
+    gap = abs(Balance.target() - count)
+
+    """
+    This copy has **#{count} cards** and a Commander deck has exactly
+    #{Balance.target()}. #{balance_order(count, gap)}
+
+    This is the only thing to do here. Do not propose anything else: the
+    stages before you already made the deck better, and a change that is not
+    about the count is a change nobody asked you for at this point.
+
+    Choose by the same standard the earlier stages used — the weakest cards for
+    the plan this deck is now running, or the most useful ones missing from it.
+    The engine checks the arithmetic and refuses anything that does not land on
+    exactly #{Balance.target()}.
+    """
+  end
+
   defp task_block(:scout, _opts) do
     """
     Read this deck and write its strategic dossier — nothing else.
@@ -207,6 +233,14 @@ defmodule Deckex.Consults.Briefing do
     Work the findings above. For each one, name specific cards to **cut** from
     the list and specific cards to **add**, and say why in one sentence each.
     """
+  end
+
+  defp balance_order(count, gap) when count > 100 do
+    "Cut exactly **#{gap}** card(s) and add none."
+  end
+
+  defp balance_order(_count, gap) do
+    "Add exactly **#{gap}** card(s) and cut none."
   end
 
   defp alignment_target(%{"visao" => vision}) when is_map(vision) do
@@ -382,18 +416,12 @@ defmodule Deckex.Consults.Briefing do
   # Models do not count 90-line lists reliably, and earlier stages may have
   # legitimately gone net negative — so the engine states the number and the
   # direction, every stage, until the copy closes at exactly 100.
+  # Stating the count was never enough: a stage that knows the copy is at 105
+  # and is asked for nothing in particular tends to swap card-for-card and
+  # leave it at 105. `Balance` turns the gap into a number for this stage.
   defp count_line(nil), do: ""
 
-  defp count_line(count) do
-    direction =
-      case count do
-        100 -> "Keep adds and cuts balanced to stay there."
-        n when n < 100 -> "It is #{100 - n} short — propose more adds than cuts to close the gap."
-        n -> "It is #{n - 100} over — propose more cuts than adds to close the gap."
-      end
-
-    "- The copy has **#{count} cards**; the finished deck must have exactly 100. #{direction}\n"
-  end
+  defp count_line(count), do: "\n- " <> Balance.instruction(count)
 
   # Only the avoided half is a rule; the wanted half is an invitation, and the
   # briefing says which is which so the model does not read a preference as a

@@ -277,8 +277,10 @@ defmodule Deckex.Consults.BriefingTest do
       assert briefing =~ "The copy has **98 cards**"
       assert briefing =~ "It is 2 short"
 
+      assert briefing =~ "end this stage at **100**"
+
       balanced = build(:full, optimization: %{@optimization | card_count: 100})
-      assert balanced =~ "Keep adds and cuts balanced"
+      assert balanced =~ "one card in for every card out"
 
       over = build(:full, optimization: %{@optimization | card_count: 101})
       assert over =~ "It is 1 over"

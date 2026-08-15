@@ -57,7 +57,7 @@ defmodule Deckex.Optimizations.PipelineRegressionTest do
     end)
 
     {:ok, deck} =
-      Decks.import_from_text("1 Sol Ring\n4 Forest\n1 Llanowar Elves", %{
+      Decks.import_from_text("1 Sol Ring\n98 Forest\n1 Llanowar Elves", %{
         name: "Deck Sintético",
         source: :paste
       })

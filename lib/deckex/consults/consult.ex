@@ -26,7 +26,8 @@ defmodule Deckex.Consults.Consult do
     :scout,
     :bracket,
     :alinhamento,
-    :visao
+    :visao,
+    :balanco
   ]
 
   @type t :: %__MODULE__{}

@@ -204,6 +204,25 @@ for *what* we are building and *why*. This file is *how*.
   walks `Consult.lenses()` and asserts the universal pieces reach all of them —
   guard the class, not the two instances you happened to find.
 
+- **A run may not end on a list that cannot go on a table.** Ordinary stages
+  walk the count toward 100 a card or two at a time — the owner's own
+  preference, and it means every card that leaves was the worst card left when
+  it left — but walking slowly does not guarantee arriving. When the recipe is
+  spent and the copy is off 100, the run appends a **closing stage** whose only
+  job is the count, bounded at `@max_balance_stages`. `Deckex.Optimizations.Balance`
+  holds both halves: the briefing **asks** for a direction, the engine **caps**
+  the drift, and nothing here can make a model want to cut a card — the same
+  one-way rule the salt contract follows.
+- **Balance is judged on the answer's NET, never on a running count.** Cuts
+  come first in an answer, so the count dips before it recovers: judging card
+  by card refused every cut on a deck that was short, before reaching the adds
+  that paid for them. A swap is not a drift. Ordinary stages get a card or two
+  of slack; the closing stage gets none.
+- **A test deck is 100 cards.** Five-card fixtures were a fiction that worked
+  only while nothing checked the count, and two features now do. The same
+  lesson as `commander_legal` defaulting to `false` in `AnalysisFixture`: a
+  fixture that models something impossible hides the bug it was meant to catch.
+
 ## Operating notes
 
 - **`mix run` starts Oban, and Oban consumes.** A script that enqueues a job

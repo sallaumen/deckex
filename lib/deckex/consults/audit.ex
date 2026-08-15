@@ -26,6 +26,7 @@ defmodule Deckex.Consults.Audit do
   alias Deckex.Cards.Name
   alias Deckex.Consults.Suggestion
   alias Deckex.Money
+  alias Deckex.Optimizations.Balance
 
   @type problem_key :: {:cut | :add, String.t()}
   @type t :: %__MODULE__{
@@ -74,7 +75,9 @@ defmodule Deckex.Consults.Audit do
       in_main: in_main,
       ceilings: ceilings,
       pipeline: pipeline,
-      policy: policy
+      policy: policy,
+      card_count: Keyword.get(opts, :card_count),
+      balance_mode: Keyword.get(opts, :balance_mode, :stage)
     }
 
     # A fold, not a map: the quota is a property of the whole answer. Three
@@ -82,12 +85,14 @@ defmodule Deckex.Consults.Audit do
     # would all be told yes, and applying the three would leave the deck with
     # three of the two the owner allows. Cuts come first in the list, so a cut
     # that frees a slot is already counted when the adds are judged.
-    {problems, notes, _spent} =
+    {found, notes, _spent} =
       Enum.reduce(
         suggestions,
         {%{}, %{}, Budget.occupancy(snapshot.main ++ snapshot.commanders, policy)},
         &judge(&1, &2, context)
       )
+
+    problems = Map.merge(found, balance_problems(suggestions, found, context))
 
     changes =
       suggestions
@@ -122,6 +127,39 @@ defmodule Deckex.Consults.Audit do
     else
       {Map.put(problems, key(suggestion), found), notes, occupancy}
     end
+  end
+
+  # Balance is judged on the answer's NET, in a pass of its own, and that is
+  # not a detail. Cuts come first in a consult's answer, so a running count
+  # dips before it recovers: a deck 95 cards short would have had every cut
+  # refused for "moving away from 100" before reaching the adds that pay for
+  # them. A swap is not a drift.
+  #
+  # The engine caps; it never demands. It refuses the surplus on the offending
+  # side — the last ones proposed, so the stage keeps its best-argued changes —
+  # and no rule here can make a model want to cut a card. The briefing asks for
+  # the direction; this only stops the copy drifting further from 100 than it
+  # started.
+  defp balance_problems(_suggestions, _problems, %{card_count: nil}), do: %{}
+
+  defp balance_problems(suggestions, problems, context) do
+    clean = Enum.reject(suggestions, &(&1.resolved? == false or Map.has_key?(problems, key(&1))))
+    {adds, cuts} = Enum.split_with(clean, &(&1.action == :add))
+
+    surplus =
+      Balance.surplus(length(adds) - length(cuts), context.card_count, context.balance_mode)
+
+    case surplus do
+      {:add, count} -> refuse_last(adds, count, :add)
+      {:cut, count} -> refuse_last(cuts, count, :cut)
+      :none -> %{}
+    end
+  end
+
+  defp refuse_last(suggestions, count, action) do
+    suggestions
+    |> Enum.take(-count)
+    |> Map.new(&{key(&1), [Balance.refusal(action)]})
   end
 
   defp delta(%Suggestion{action: :add}), do: 1

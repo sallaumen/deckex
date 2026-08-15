@@ -86,7 +86,7 @@ defmodule Deckex.Optimizations.ReimagineRegressionTest do
     end)
 
     {:ok, deck} =
-      Decks.import_from_text("1 Sol Ring\n4 Island", %{name: "Deck Sintético", source: :paste})
+      Decks.import_from_text("1 Sol Ring\n99 Island", %{name: "Deck Sintético", source: :paste})
 
     deck = deck |> Deck.changeset(%{color_identity: ["U"]}) |> Repo.update!()
 

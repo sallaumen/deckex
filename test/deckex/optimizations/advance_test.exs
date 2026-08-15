@@ -21,11 +21,14 @@ defmodule Deckex.Optimizations.AdvanceTest do
     %{"kind" => "lens", "lens" => "speed_curve", "label" => "Early game"}
   ]
 
+  # A hundred cards, because the pipeline now judges the count: a five-card
+  # "deck" was a fiction that only worked while nothing checked, and under the
+  # balance guard every cut in one moves further from legal.
   defp deck do
     CatalogueFixture.seed!(~w(sol_ring forest counterspell cultivate rhystic_study arid_mesa))
 
     {:ok, deck} =
-      Decks.import_from_text("1 Sol Ring\n4 Forest", %{name: "Deck do Avanço", source: :paste})
+      Decks.import_from_text("1 Sol Ring\n99 Forest", %{name: "Deck do Avanço", source: :paste})
 
     deck
     |> Deck.changeset(%{color_identity: ["G", "U"]})
@@ -161,7 +164,10 @@ defmodule Deckex.Optimizations.AdvanceTest do
     assert final.finished_at != nil
   end
 
-  test "a checkpoint after real changes runs, and completion is honest" do
+  # A run may not end on a list that cannot go on a table. The recipe here
+  # leaves the copy at 101 cards, and the run refuses to finish there: it
+  # appends a stage of its own whose only job is the count.
+  test "a run that ends off 100 buys a closing stage and lands on it" do
     stub_scryfall()
 
     recipe = [
@@ -176,10 +182,48 @@ defmodule Deckex.Optimizations.AdvanceTest do
     assert Enum.at(mid.steps, 1).status == :running
 
     expect(Deckex.AI.Mock, :complete, fn _p, _s, _o -> answer([], []) end)
+    {:ok, after_recipe} = beat(optimization.id)
+
+    # The recipe is spent, the copy is at 101, and the run is still going.
+    assert after_recipe.status == :running
+    assert closing = List.last(after_recipe.steps)
+    assert closing.kind == :balance
+    assert closing.label == "Cortar 1 para fechar 100"
+
+    expect(Deckex.AI.Mock, :complete, fn prompt, _s, _o ->
+      assert prompt =~ "Cut exactly **1** card(s) and add none"
+
+      answer(["Cultivate"], [])
+    end)
+
     {:ok, final} = beat(optimization.id)
 
     assert final.status == :done
     assert final.outcome == "completo"
+    assert Optimizations.card_count(Optimizations.current_list(final)) == 100
+  end
+
+  # The closing stage lands on 100 or it is refused: it has no slack, because
+  # landing exactly is the only thing it was bought for.
+  test "a closing answer that misses 100 is refused, and the run says where it stopped" do
+    stub_scryfall()
+
+    recipe = [%{"kind" => "lens", "lens" => "mana_ramp", "label" => "Mana"}]
+
+    {:ok, optimization} = Optimizations.start(deck(), %{}, recipe)
+
+    expect(Deckex.AI.Mock, :complete, fn _p, _s, _o -> answer([], ["Cultivate"]) end)
+    {:ok, _at_101} = beat(optimization.id)
+
+    # Two closing stages, both answering with nothing: the gap never closes and
+    # the run stops buying consults rather than looping forever.
+    expect(Deckex.AI.Mock, :complete, 2, fn _p, _s, _o -> answer([], []) end)
+    {:ok, _first_close} = beat(optimization.id)
+    {:ok, final} = beat(optimization.id)
+
+    assert final.status == :done
+    assert final.outcome == "fechou em 101 cartas, não em 100"
+    assert Enum.count(final.steps, &(&1.kind == :balance)) == 2
   end
 
   test "pause persists results and stops the advance; resume continues" do

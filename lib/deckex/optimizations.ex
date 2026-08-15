@@ -26,6 +26,7 @@ defmodule Deckex.Optimizations do
   alias Deckex.Decks.DeckQuery
   alias Deckex.Error
   alias Deckex.Events
+  alias Deckex.Optimizations.Balance
   alias Deckex.Optimizations.Optimization
   alias Deckex.Optimizations.OptimizationQuery
   alias Deckex.Optimizations.OptimizationStep
@@ -676,6 +677,10 @@ defmodule Deckex.Optimizations do
         Settings.baselines(),
         ceilings,
         budget_policy: Budget.from_contract(optimization.contract["forma_do_gasto"]),
+        # The count the stage started from. Without it the engine has no idea
+        # which direction is "further from 100", and the balance guard is off.
+        card_count: card_count(step.list_before),
+        balance_mode: if(step.kind == :balance, do: :closing, else: :stage),
         history: history(optimization, step),
         keep: (optimization.contract["keep"] || []) ++ current_commanders(optimization),
         bracket_max: optimization.contract["bracket_max"],
@@ -729,7 +734,7 @@ defmodule Deckex.Optimizations do
   defp settle(optimization, done_step) do
     case next_runnable(optimization, done_step) do
       :finished ->
-        finish(optimization)
+        close_or_finish(optimization, done_step)
 
       {:ok, next} ->
         if optimization.status == :running do
@@ -784,16 +789,69 @@ defmodule Deckex.Optimizations do
     segment != [] and Enum.all?(segment, &(&1.applied == []))
   end
 
+  # A run may not end on a list that cannot go on a table. The ordinary stages
+  # walk the count back a card or two at a time — that is the owner's own
+  # preference, and it means every card that leaves was the worst card left
+  # when it left — but walking slowly does not guarantee arriving. Whatever gap
+  # is still open when the recipe runs out becomes one more stage whose only
+  # job is closing it.
+  #
+  # Bounded, because the alternative is a run that buys consults forever. After
+  # `@max_balance_stages` the run finishes and says plainly that it did not get
+  # there, which is the honest end — inventing the last three cuts ourselves
+  # would be the engine choosing cards, and choosing cards is the one thing it
+  # does not do.
+  @max_balance_stages 2
+
+  # And a gap one answer can honestly close. "Cut exactly three" is a real
+  # instruction; "add exactly ninety-five" is not a deck being finished, it is
+  # a deck being invented, and a stage asked for it would return filler by
+  # definition. Past this the run stops and says where it landed — the ordinary
+  # stages have eight chances to walk a large gap down into reach first.
+  @max_closable_gap 10
+
+  defp close_or_finish(optimization, done_step) do
+    count = card_count(current_list(optimization))
+    spent = Enum.count(optimization.steps, &(&1.kind == :balance))
+
+    if closable?(count, spent) do
+      optimization |> append_balance_step(done_step, count) |> run_step()
+
+      :ok
+    else
+      finish(optimization)
+    end
+  end
+
+  defp closable?(count, stages_spent) do
+    gap = abs(Balance.target() - count)
+
+    gap > 0 and gap <= @max_closable_gap and stages_spent < @max_balance_stages
+  end
+
+  defp append_balance_step(optimization, done_step, count) do
+    gap = abs(Balance.target() - count)
+    verb = if count > Balance.target(), do: "Cortar", else: "Completar"
+
+    %OptimizationStep{}
+    |> OptimizationStep.changeset(%{
+      optimization_id: optimization.id,
+      position: length(optimization.steps) + 1,
+      kind: :balance,
+      lens: "balanco",
+      label: "#{verb} #{gap} para fechar 100",
+      status: :pending,
+      list_before: list_after(done_step)
+    })
+    |> Repo.insert!()
+  end
+
   defp finish(optimization) do
     # Re-read: the skip that led here was persisted after this struct was
     # loaded, and the outcome depends on seeing it.
     {:ok, optimization} = fetch(optimization.id)
 
-    outcome =
-      case List.last(optimization.steps) do
-        %{kind: :checkpoint, status: :skipped} -> "estabilizou"
-        _ran -> "completo"
-      end
+    outcome = outcome_for(optimization)
 
     optimization
     |> Optimization.changeset(%{
@@ -837,6 +895,24 @@ defmodule Deckex.Optimizations do
       list_before: if(position == 1, do: list)
     })
     |> Repo.insert!()
+  end
+
+  # The count comes first: a run that improved every measurement and left the
+  # list at 103 cards did not finish the job, and an outcome of "completo" on
+  # an illegal deck is the app lying to the person who has to shuffle it.
+  defp outcome_for(optimization) do
+    count = card_count(current_list(optimization))
+
+    cond do
+      count != Balance.target() ->
+        "fechou em #{count} cartas, não em #{Balance.target()}"
+
+      match?(%{kind: :checkpoint, status: :skipped}, List.last(optimization.steps)) ->
+        "estabilizou"
+
+      true ->
+        "completo"
+    end
   end
 
   defp fork_list(optimization, nil), do: current_list(optimization)
