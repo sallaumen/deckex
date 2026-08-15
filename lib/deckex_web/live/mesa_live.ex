@@ -12,12 +12,37 @@ defmodule DeckexWeb.MesaLive do
   alias Deckex.Analysis.Bracket
   alias Deckex.Analysis.Report
   alias Deckex.Decks
+  alias Deckex.Error
+  alias Deckex.Settings
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
     # No page_title: the root layout already suffixes " · A Mesa", and this
     # screen IS A Mesa — setting it would render "A Mesa · A Mesa".
-    {:ok, assign(socket, decks: load_decks())}
+    {:ok, assign(socket, decks: load_decks(), deck_layout: Settings.get(:deck_layout))}
+  end
+
+  # The choice is remembered, because a layout you have to re-pick on every
+  # visit is not a preference, it is a chore.
+  @impl Phoenix.LiveView
+  def handle_event("layout", %{"to" => to}, socket) do
+    {:ok, _value} = Settings.put(:deck_layout, to)
+
+    {:noreply, assign(socket, deck_layout: to)}
+  end
+
+  # Deleting takes the deck's consults and runs with it, so the confirmation
+  # says so by name and by count before the click, not after.
+  def handle_event("delete", %{"id" => id}, socket) do
+    with {:ok, deck} <- Decks.fetch_deck(id),
+         {:ok, _deleted} <- Decks.delete_deck(deck) do
+      {:noreply,
+       socket
+       |> assign(decks: load_decks())
+       |> put_flash(:info, "#{deck.name} foi apagado.")}
+    else
+      {:error, %Error{} = error} -> {:noreply, put_flash(socket, :error, error.message)}
+    end
   end
 
   # One report per deck. Building a report is arithmetic over ~100 structs, so
@@ -34,9 +59,21 @@ defmodule DeckexWeb.MesaLive do
         critical: Report.critical_count(report),
         bracket: report.bracket,
         findings: length(report.findings),
-        cards: Enum.sum(Enum.map(snapshot.main, & &1.quantity))
+        cards: Enum.sum(Enum.map(snapshot.main, & &1.quantity)),
+        cost: Decks.deletion_cost(deck)
       }
     end)
+  end
+
+  # Spelled out, with counts, because a consult cost money and a run is a
+  # record of a decision. "Tem certeza?" is not a warning, it is a speed bump.
+  defp delete_warning(%{deck: deck, cost: %{consults: 0, optimizations: 0}}) do
+    "Apagar #{deck.name}? A lista some; o catálogo de cartas fica."
+  end
+
+  defp delete_warning(%{deck: deck, cost: cost}) do
+    "Apagar #{deck.name}? Vão junto #{cost.consults} consulta(s) e " <>
+      "#{cost.optimizations} otimização(ões) — inclusive as já pagas. Não dá para desfazer."
   end
 
   @impl Phoenix.LiveView
@@ -49,7 +86,10 @@ defmodule DeckexWeb.MesaLive do
       <DeckexWeb.Layouts.flash_group flash={@flash} />
       <.live_component module={DeckexWeb.SettingsPanel} id="settings-panel" />
 
-      <header class="mb-8 flex items-end justify-between gap-4">
+      <%!-- Stacked until there is room for a row. At 320px a title, a
+            segmented control and a primary button on one line squeeze all
+            three into unreadable columns. --%>
+      <header class="mb-8 flex flex-col items-start gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 class="text-display font-semibold text-ink">A Mesa</h1>
           <p class="mt-1 text-body text-ink-muted">
@@ -57,7 +97,29 @@ defmodule DeckexWeb.MesaLive do
           </p>
         </div>
 
-        <div class="flex items-center gap-4">
+        <div class="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-end">
+          <div
+            :if={@decks != []}
+            role="group"
+            aria-label="Como listar os decks"
+            class="flex rounded-md border border-hairline-soft bg-surface-2 p-0.5"
+          >
+            <button
+              :for={{value, label} <- [{"cartoes", "Cartões"}, {"lista", "Lista"}]}
+              type="button"
+              phx-click="layout"
+              phx-value-to={value}
+              aria-pressed={to_string(@deck_layout == value)}
+              class={[
+                "inline-flex min-h-touch items-center rounded-[5px] px-3 text-caption transition-colors",
+                @deck_layout == value && "bg-surface text-ink",
+                @deck_layout != value && "text-ink-faint hover:text-ink"
+              ]}
+            >
+              {label}
+            </button>
+          </div>
+
           <.button navigate={~p"/importar"} variant="primary">Trazer um deck</.button>
         </div>
       </header>
@@ -73,18 +135,21 @@ defmodule DeckexWeb.MesaLive do
         <.button navigate={~p"/importar"} variant="primary">Trazer um deck</.button>
       </div>
 
-      <ul class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-        <li :for={row <- @decks}>
-          <.link
-            navigate={~p"/decks/#{row.deck.id}"}
-            class="group block overflow-hidden rounded-xl border border-hairline-soft bg-surface transition-colors hover:border-hairline-strong"
-          >
+      <ul
+        :if={@deck_layout == "cartoes"}
+        class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+      >
+        <li
+          :for={row <- @decks}
+          class="group flex flex-col overflow-hidden rounded-xl border border-hairline-soft bg-surface transition-colors hover:border-hairline-strong"
+        >
+          <.link navigate={~p"/decks/#{row.deck.id}"} class="block">
             <div class="aspect-[16/9] overflow-hidden bg-inlay">
               <img
                 :if={row.commander}
                 src={row.commander.card.image_art_crop_url}
                 alt={row.commander.card.name}
-                class="size-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                class="size-full object-cover transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transition-none"
               />
             </div>
 
@@ -120,11 +185,108 @@ defmodule DeckexWeb.MesaLive do
               </div>
             </div>
           </.link>
+
+          <%!-- Outside the link, not inside it: a button nested in an anchor is
+                invalid markup and a coin flip about which one the click hits.
+                Always visible, never hover-only — half this app is read on a
+                phone, where hover does not exist. --%>
+          <div class="mt-auto flex justify-end border-t border-hairline-soft px-2">
+            <.delete_deck_button row={row} />
+          </div>
+        </li>
+      </ul>
+
+      <ul
+        :if={@deck_layout == "lista"}
+        class="divide-y divide-hairline-soft rounded-xl border border-hairline-soft bg-surface"
+      >
+        <li
+          :for={row <- @decks}
+          class="flex items-center gap-3 pr-2 transition-colors hover:bg-surface-2 motion-reduce:transition-none"
+        >
+          <.link
+            navigate={~p"/decks/#{row.deck.id}"}
+            class="flex min-w-0 flex-1 items-center gap-4 p-3"
+          >
+            <div class="h-touch w-[72px] shrink-0 overflow-hidden rounded-md bg-inlay">
+              <img
+                :if={row.commander}
+                src={row.commander.card.image_art_crop_url}
+                alt=""
+                class="size-full object-cover"
+              />
+            </div>
+
+            <%!-- The name owns the leftover width and every other column is
+                  fixed, so each column that survives a narrow screen is one
+                  the name loses. Below `sm` they all fold into the block
+                  below — a row where the deck's own name got crushed to
+                  nothing is not a list of decks. --%>
+            <div class="min-w-0 flex-1">
+              <h2 class="truncate text-body font-semibold leading-tight text-ink">
+                {row.deck.name}
+              </h2>
+              <p :if={row.commander} class="truncate text-caption text-ink-muted">
+                {row.commander.card.name}
+              </p>
+              <p class="mt-0.5 flex items-center gap-2 sm:hidden">
+                <.color_identity colors={row.deck.color_identity} size={11} />
+                <span class={["font-mono text-micro", vital_tone(row)]}>{vital_sign(row)}</span>
+              </p>
+            </div>
+
+            <%!-- Wrapped rather than passed `hidden`: the component hardcodes
+                  `inline-flex`, and two display utilities on one element is a
+                  coin flip decided by Tailwind's output order, not by the one
+                  written last. --%>
+            <span class="hidden shrink-0 sm:block">
+              <.color_identity colors={row.deck.color_identity} full size={13} />
+            </span>
+
+            <span class="hidden w-16 shrink-0 rounded-md bg-inlay px-2 py-0.5 text-center font-mono text-micro text-ink-secondary sm:block">
+              B{row.bracket.floor}+
+            </span>
+
+            <span class="hidden w-20 shrink-0 text-right font-mono text-caption text-ink-faint md:block">
+              {row.cards} cartas
+            </span>
+
+            <span class={[
+              "hidden w-24 shrink-0 text-right font-mono text-caption sm:block",
+              vital_tone(row)
+            ]}>
+              {vital_sign(row)}
+            </span>
+          </.link>
+
+          <.delete_deck_button row={row} />
         </li>
       </ul>
     </div>
     """
   end
+
+  attr :row, :map, required: true
+
+  defp delete_deck_button(assigns) do
+    ~H"""
+    <button
+      type="button"
+      phx-click="delete"
+      phx-value-id={@row.deck.id}
+      data-confirm={delete_warning(@row)}
+      aria-label={"Apagar #{@row.deck.name}"}
+      class="inline-flex min-h-touch shrink-0 items-center px-3 text-caption text-ink-faint transition-colors hover:text-sev-critical motion-reduce:transition-none"
+    >
+      Apagar
+    </button>
+    """
+  end
+
+  # The Quiet-Health Rule: a deck that is fine gets the calm colour, and only a
+  # critical count is allowed to pull the eye across the room.
+  defp vital_tone(%{critical: 0}), do: "text-sev-healthy"
+  defp vital_tone(_row), do: "text-sev-critical"
 
   defp vital_sign(%{critical: 0, findings: 0}), do: "tudo certo"
   defp vital_sign(%{critical: 0, findings: n}), do: "#{n} #{pluralise(n, "aviso", "avisos")}"

@@ -28,10 +28,14 @@ defmodule Deckex.SettingsTest do
     end
 
     test "every entry carries a pt-BR label and a group" do
+      # `:view` is deliberately not one of the panel's groups: a layout you
+      # toggle on the screen itself has no business in a settings drawer. It is
+      # still declared here so the value gets validated and persisted like
+      # every other one.
       for entry <- Registry.entries() do
         assert is_binary(entry.label)
         assert entry.label != ""
-        assert entry.group in [:ai, :budget, :moxfield, :analysis]
+        assert entry.group in [:ai, :budget, :moxfield, :analysis, :view]
       end
     end
   end

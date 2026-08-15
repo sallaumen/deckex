@@ -116,10 +116,16 @@ defmodule DeckexWeb.CoreComponents do
   thing the chrome is allowed to be, because every saturated hue in this app
   already means a mana colour or a severity.
 
+  The danger variant is the one exception to that rule, and it stays an
+  *outline*: destructive actions must be recognisable before they are clicked,
+  and a filled red button competes with the critical findings — the thing on
+  screen that actually needs attention.
+
   ## Examples
 
       <.button>Colar lista</.button>
       <.button phx-click="go" variant="primary">Importar</.button>
+      <.button phx-click="delete" variant="danger" data-confirm="Apagar?">Apagar</.button>
       <.button navigate={~p"/"}>Mesa</.button>
   """
   # `type` is here so the same component can submit a form; without it a form's
@@ -128,7 +134,7 @@ defmodule DeckexWeb.CoreComponents do
     include: ~w(href navigate patch method download name value disabled type phx-disable-with)
 
   attr :class, :any, default: nil, doc: "added to the variant's classes, never replacing them"
-  attr :variant, :string, values: ~w(primary)
+  attr :variant, :string, values: ~w(primary danger)
   slot :inner_block, required: true
 
   def button(%{rest: rest} = assigns) do
@@ -140,6 +146,9 @@ defmodule DeckexWeb.CoreComponents do
 
     variants = %{
       "primary" => "bg-ink text-felt hover:bg-ink-secondary",
+      "danger" =>
+        "border border-sev-critical/50 bg-transparent text-sev-critical " <>
+          "hover:border-sev-critical hover:bg-sev-critical/10",
       nil => "border border-hairline-soft bg-surface-2 text-ink-secondary hover:text-ink"
     }
 

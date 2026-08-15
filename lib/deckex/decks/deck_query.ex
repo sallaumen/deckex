@@ -45,4 +45,22 @@ defmodule Deckex.Decks.DeckQuery do
   def list_deck_cards(%Deck{id: deck_id}) do
     Repo.all(from dc in DeckCard, where: dc.deck_id == ^deck_id, preload: [:card])
   end
+
+  @doc """
+  How many consults hang off a deck.
+
+  Counted by table name rather than by schema: `Deckex.Consults` depends on
+  decks, and a read here reaching for its schema would point the dependency
+  back the wrong way.
+  """
+  @spec count_consults(String.t()) :: non_neg_integer()
+  def count_consults(deck_id), do: count_by_deck("consults", deck_id)
+
+  @doc "How many optimization runs hang off a deck."
+  @spec count_optimizations(String.t()) :: non_neg_integer()
+  def count_optimizations(deck_id), do: count_by_deck("optimizations", deck_id)
+
+  defp count_by_deck(table, deck_id) do
+    Repo.one(from row in table, where: row.deck_id == type(^deck_id, :binary_id), select: count())
+  end
 end

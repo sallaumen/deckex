@@ -20,6 +20,7 @@ defmodule Deckex.Decks do
   alias Deckex.Error
   alias Deckex.Events
   alias Deckex.Moxfield
+  alias Deckex.Optimizations
   alias Deckex.Repo
   alias Deckex.Workers.ClassifyCardsWorker
 
@@ -27,6 +28,59 @@ defmodule Deckex.Decks do
   defdelegate get_deck(id), to: DeckQuery
   defdelegate fetch_deck(id), to: DeckQuery
   defdelegate list_deck_cards(deck), to: DeckQuery
+
+  @doc """
+  Deletes a deck and everything that belongs only to it.
+
+  The foreign keys cascade, so the cards in the list, every consult asked about
+  this deck and every optimization run over it go with it. That is the right
+  behaviour and also the reason `Deckex.Decks.deletion_cost/1` exists: those
+  consults were paid for, and an owner deleting a deck should be told what else
+  is about to go rather than discovering it afterwards.
+
+  A deck with a run still in flight is refused. The run's jobs would keep
+  executing against rows that no longer exist, and "it crashed in the
+  background" is a worse answer than "cancel it first".
+
+  The catalogue is untouched: cards are global and permanent, and `deck_cards`
+  restricts deletion of a card rather than cascading to it.
+  """
+  @spec delete_deck(Deck.t()) :: {:ok, Deck.t()} | {:error, Error.t()}
+  def delete_deck(%Deck{} = deck) do
+    if Optimizations.running_for_deck(deck.id) do
+      {:error,
+       Error.new(
+         :optimization_running,
+         "Esse deck tem uma otimização em andamento. Cancele ela antes de apagar o deck.",
+         %{deck_id: deck.id}
+       )}
+    else
+      {:ok, deleted} = Repo.delete(deck)
+
+      Events.broadcast_deck_updated(deleted)
+
+      {:ok, deleted}
+    end
+  end
+
+  @doc """
+  What else disappears with this deck: how many consults and runs hang off it.
+
+  The number the confirmation dialog says out loud. A consult cost money and a
+  finished run is a record of a decision — deleting them silently as a side
+  effect of tidying up the deck list is the kind of thing an app only gets to
+  do to someone once.
+  """
+  @spec deletion_cost(Deck.t()) :: %{
+          consults: non_neg_integer(),
+          optimizations: non_neg_integer()
+        }
+  def deletion_cost(%Deck{} = deck) do
+    %{
+      consults: DeckQuery.count_consults(deck.id),
+      optimizations: DeckQuery.count_optimizations(deck.id)
+    }
+  end
 
   @doc """
   Imports a deck from decklist text.

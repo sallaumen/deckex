@@ -114,6 +114,20 @@ defmodule Deckex.Settings.Registry do
       options: nil,
       group: :analysis
     },
+    # Group `:view` on purpose: the panel renders the groups a person goes to
+    # Ajustes to tune, and nobody opens a settings drawer to change a layout
+    # they can toggle on the screen itself. It lives in the registry anyway so
+    # the value is validated and persisted like every other one, instead of
+    # becoming the app's first untyped preference.
+    %{
+      key: :deck_layout,
+      type: :string,
+      default: "cartoes",
+      label: "Como listar os decks",
+      hint: nil,
+      options: ["cartoes", "lista"],
+      group: :view
+    },
     %{
       key: :moxfield_user_agent,
       type: :string,
