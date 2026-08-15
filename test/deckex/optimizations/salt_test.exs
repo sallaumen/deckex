@@ -18,16 +18,31 @@ defmodule Deckex.Optimizations.SaltTest do
     assert Salt.avoided(%{"counter" => "quero", "stax" => "tanto_faz"}) == %{}
   end
 
-  test "the calm-table preset avoids the tactics that make people quit" do
+  test "the vocabulary is the one the salt survey is actually made of" do
+    keys = Enum.map(Salt.tactics(), & &1.key)
+
+    for named <- ~w(taxation theft hoser forced_sacrifice free_spell chaos) do
+      assert named in keys, "faltou #{named}"
+    end
+  end
+
+  test "mill is not a salt dial — the survey does not support it" do
+    refute "mill" in Enum.map(Salt.tactics(), & &1.key)
+    # It stays a role the engine can see.
+    assert :mill in RoleMatch.kinds()
+  end
+
+  test "the calm-table preset avoids the lockout half and no more" do
     preset = Salt.preset("mesa_tranquila")
 
-    assert preset["stax"] == "evitar"
-    assert preset["mass_land_denial"] == "evitar"
-    assert preset["extra_turn"] == "evitar"
-    assert preset["mill"] == "evitar"
-    # Counters are rude to some tables and normal to others; the preset does
-    # not decide that for the owner.
-    assert preset["counter"] == "tanto_faz"
+    for avoided <- ~w(stax mass_land_denial extra_turn taxation hoser theft forced_sacrifice) do
+      assert preset[avoided] == "evitar", "#{avoided} devia estar evitado"
+    end
+
+    # Ordinary Magic at most tables; the preset does not decide these.
+    for tolerated <- ~w(counter graveyard_hate free_spell chaos) do
+      assert preset[tolerated] == "tanto_faz"
+    end
   end
 
   test "no-brakes avoids nothing" do

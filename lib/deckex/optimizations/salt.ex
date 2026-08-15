@@ -13,13 +13,24 @@ defmodule Deckex.Optimizations.Salt do
   otherwise would be the same overreach as inventing a price.
   """
 
+  # Ordered by how much a table tends to mind, which is roughly the order the
+  # salt survey's top 100 puts them in. Mill is deliberately absent: the owner
+  # named it, and the survey does not contain it — nor group slug, nor plain
+  # discard. What tables resent is lockout and time theft, not attrition. Mill
+  # remains a role the engine sees; it is simply not something people ask to
+  # be spared.
   @tactics [
-    %{key: "counter", role: :counter, label: "counters"},
-    %{key: "stax", role: :stax, label: "stax / prisão"},
     %{key: "mass_land_denial", role: :mass_land_denial, label: "destruição de terreno"},
+    %{key: "stax", role: :stax, label: "stax / prisão"},
+    %{key: "taxation", role: :taxation, label: "taxação (pague ou eu lucro)"},
+    %{key: "hoser", role: :hoser, label: "desligar jogadas inteiras"},
+    %{key: "theft", role: :theft, label: "roubo"},
+    %{key: "forced_sacrifice", role: :forced_sacrifice, label: "sacrifício forçado"},
     %{key: "extra_turn", role: :extra_turn, label: "turnos extras"},
-    %{key: "graveyard_hate", role: :graveyard_hate, label: "ódio a cemitério"},
-    %{key: "mill", role: :mill, label: "mill"}
+    %{key: "free_spell", role: :free_spell, label: "mágicas de graça"},
+    %{key: "chaos", role: :chaos, label: "caos"},
+    %{key: "counter", role: :counter, label: "counters"},
+    %{key: "graveyard_hate", role: :graveyard_hate, label: "ódio a cemitério"}
   ]
 
   # The two tactics the bracket engine reads as bracket-4 markers. Wanting
@@ -51,10 +62,13 @@ defmodule Deckex.Optimizations.Salt do
   @doc "A named preset, as a full salt map."
   @spec preset(String.t()) :: map()
   def preset("mesa_tranquila") do
-    Map.new(@tactics, fn tactic ->
-      calm = if tactic.key in ["counter", "graveyard_hate"], do: "tanto_faz", else: "evitar"
+    # What a calm table asks to be spared is the lockout half. Counters,
+    # graveyard hate, free spells and chaos are ordinary Magic to most pods —
+    # deciding those for the owner would be this module having an opinion.
+    tolerated = ~w(counter graveyard_hate free_spell chaos)
 
-      {tactic.key, calm}
+    Map.new(@tactics, fn tactic ->
+      {tactic.key, if(tactic.key in tolerated, do: "tanto_faz", else: "evitar")}
     end)
   end
 
