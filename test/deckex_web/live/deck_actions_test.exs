@@ -198,4 +198,57 @@ defmodule DeckexWeb.DeckActionsTest do
       assert flash["info"] =~ "1 cartas em vez de 100"
     end
   end
+
+  describe "editing the list" do
+    # The list is where a deck gets fixed. Told it holds 105 cards, an owner
+    # had no way to cut one without re-importing the whole thing.
+    test "a card can be taken out from its own tile", %{conn: conn} do
+      deck = deck()
+
+      {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}")
+
+      live
+      |> element("li button[phx-click='apply-cut'][phx-value-name='Sol Ring']")
+      |> render_click()
+
+      names = deck |> Decks.list_deck_cards() |> Enum.map(& &1.card.name)
+      refute "Sol Ring" in names
+    end
+
+    test "a card can be typed in by name", %{conn: conn} do
+      deck = deck()
+      {:ok, _} = Decks.remove_card(deck, "Sol Ring")
+
+      {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}")
+
+      live
+      |> form("form[phx-submit='add-card']", card: %{name: "Sol Ring"})
+      |> render_submit()
+
+      names = deck |> Decks.list_deck_cards() |> Enum.map(& &1.card.name)
+      assert "Sol Ring" in names
+    end
+
+    test "a blank name does nothing rather than erroring", %{conn: conn} do
+      deck = deck()
+      before = length(Decks.list_deck_cards(deck))
+
+      {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}")
+
+      live |> form("form[phx-submit='add-card']", card: %{name: "   "}) |> render_submit()
+
+      assert length(Decks.list_deck_cards(deck)) == before
+    end
+
+    # The section header is where the count is fixed, so it says the gap there.
+    test "the list header names the gap to 100", %{conn: conn} do
+      deck = deck()
+
+      {:ok, _live, html} = live(conn, ~p"/decks/#{deck.id}")
+
+      assert html =~ "As cartas"
+      assert html =~ "de 100"
+      assert html =~ "a menos"
+    end
+  end
 end

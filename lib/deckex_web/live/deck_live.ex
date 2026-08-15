@@ -161,6 +161,20 @@ defmodule DeckexWeb.DeckLive do
     end
   end
 
+  # Typed by hand rather than suggested by a model, so the name may be anything.
+  # `add_card/2` resolves it through the catalogue and answers with a real error
+  # when it is not a card — the flash says so instead of the page pretending.
+  def handle_event("add-card", %{"card" => %{"name" => name}}, socket) do
+    case String.trim(name) do
+      "" ->
+        {:noreply, socket}
+
+      name ->
+        {:noreply,
+         apply_edit(socket, Decks.add_card(socket.assigns.deck, name), "#{name} entrou.")}
+    end
+  end
+
   def handle_event("apply-add", %{"name" => name}, socket) do
     {:noreply, apply_edit(socket, Decks.add_card(socket.assigns.deck, name), "#{name} entrou.")}
   end
@@ -1148,10 +1162,41 @@ defmodule DeckexWeb.DeckLive do
         </div>
       </div>
 
+      <%!-- The list is where a deck gets fixed, so it is where the tools to
+            fix it belong. Until now this section could only be read: an owner
+            told by the engine that his deck holds 105 cards had no way to cut
+            one without re-importing the whole thing. --%>
       <section class="mt-12">
-        <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
-          As cartas ({Enum.sum(Enum.map(@snapshot.main, & &1.quantity))})
-        </h2>
+        <div class="mb-3 flex flex-wrap items-end justify-between gap-3">
+          <h2 class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+            As cartas — {@report.legality.size} de {@report.legality.target_size}
+            <span
+              :if={@report.legality.size != @report.legality.target_size}
+              class="text-sev-critical"
+            >
+              ({size_gap(@report.legality)})
+            </span>
+          </h2>
+
+          <.form
+            for={%{}}
+            as={:card}
+            phx-submit="add-card"
+            class="flex flex-wrap items-center gap-2"
+          >
+            <label for="add-card-name" class="sr-only">Nome da carta</label>
+            <input
+              type="text"
+              id="add-card-name"
+              name="card[name]"
+              value=""
+              placeholder="Adicionar carta pelo nome"
+              autocomplete="off"
+              class="min-h-touch w-56 rounded-md border border-hairline-soft bg-inlay px-3 text-caption text-ink placeholder:text-ink-faint focus:border-ink-faint"
+            />
+            <.button type="submit">Adicionar</.button>
+          </.form>
+        </div>
 
         <ul class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-8">
           <li :for={entry <- sorted_cards(@snapshot)}>
@@ -1161,7 +1206,29 @@ defmodule DeckexWeb.DeckLive do
               mana_cost={entry.card.mana_cost}
               type_line={entry.card.type_line}
               quantity={entry.quantity}
-            />
+            >
+              <:footer>
+                <div class="flex items-center justify-between gap-2">
+                  <span class="flex items-baseline gap-1.5 font-mono text-micro text-ink-faint">
+                    {Money.brl(entry.card.price_usd)}
+                    <.play_rate card={entry.card} />
+                  </span>
+
+                  <%!-- No data-confirm: a card is one click to put back, the
+                        engine keeps no record to lose, and a dialog on every
+                        tile would make trimming a deck feel dangerous. --%>
+                  <button
+                    type="button"
+                    phx-click="apply-cut"
+                    phx-value-name={entry.card.name}
+                    aria-label={"Tirar #{entry.card.name} do deck"}
+                    class="-my-2 inline-flex min-h-touch shrink-0 items-center px-1 py-2 text-micro text-ink-faint transition-colors hover:text-sev-critical motion-reduce:transition-none"
+                  >
+                    tirar
+                  </button>
+                </div>
+              </:footer>
+            </.card_tile>
           </li>
         </ul>
       </section>
@@ -1184,6 +1251,11 @@ defmodule DeckexWeb.DeckLive do
   defp land_tone(%{land_count: count, land_target: target}) when count < target - 1, do: :critical
   defp land_tone(%{land_count: count, land_target: target}) when count > target + 2, do: :warning
   defp land_tone(_mana), do: :healthy
+
+  defp size_gap(%{size: size, target_size: target}) when size > target,
+    do: "#{size - target} a mais"
+
+  defp size_gap(%{size: size, target_size: target}), do: "#{target - size} a menos"
 
   # Cheapest first, then alphabetical — the order a player reads their own list.
   defp sorted_cards(snapshot) do
