@@ -183,7 +183,9 @@ defmodule DeckexWeb.SettingsAndTableTest do
       {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}")
 
       live
-      |> element("button[phx-click='apply-cut'][phx-value-name='Sol Ring']")
+      # Scoped to the suggestion table: the card list now offers the same
+      # action on the card's own tile, and both are legitimate ways to cut.
+      |> element("table button[phx-click='apply-cut'][phx-value-name='Sol Ring']")
       |> render_click()
 
       refute "Sol Ring" in Enum.map(Decks.list_deck_cards(deck), & &1.card.name)
