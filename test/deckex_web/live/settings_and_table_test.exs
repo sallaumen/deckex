@@ -92,7 +92,10 @@ defmodule DeckexWeb.SettingsAndTableTest do
 
   describe "the suggestion table" do
     setup do
-      CatalogueFixture.seed!(~w(sol_ring forest counterspell))
+      # Counterspell is rank 145 and Humility past eleven thousand: one add
+      # nearly everyone plays and one almost nobody does, which is the pair the
+      # price column cannot tell apart.
+      CatalogueFixture.seed!(~w(sol_ring forest counterspell humility))
 
       {:ok, deck} =
         Decks.import_from_text("1 Sol Ring\n4 Forest", %{name: "Deck da Tabela", source: :paste})
@@ -111,7 +114,8 @@ defmodule DeckexWeb.SettingsAndTableTest do
                 "card" => "Counterspell",
                 "reason" => "interação barata",
                 "addresses" => "interaction.total_low"
-              }
+              },
+              %{"card" => "Humility", "reason" => "apaga o campo todo"}
             ]
           }
         })
@@ -141,6 +145,14 @@ defmodule DeckexWeb.SettingsAndTableTest do
       assert html =~ "Preço e uso"
       assert html =~ "em uso no Commander"
       assert html =~ "carta de base do formato"
+      assert html =~ "quase ninguém joga"
+    end
+
+    # The answer to "are these any good?" should arrive before twenty rows do.
+    test "the footer counts the adds almost nobody plays", %{conn: conn, deck: deck} do
+      {:ok, _live, html} = live(conn, ~p"/decks/#{deck.id}")
+
+      assert html =~ "1 quase ninguém joga"
     end
 
     test "adding a suggested card puts it in the deck", %{conn: conn, deck: deck} do
