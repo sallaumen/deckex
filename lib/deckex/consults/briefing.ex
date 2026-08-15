@@ -204,11 +204,6 @@ defmodule Deckex.Consults.Briefing do
     """
     Work the findings above. For each one, name specific cards to **cut** from
     the list and specific cards to **add**, and say why in one sentence each.
-
-    Prefer answers that work against **anything** over answers aimed at one
-    deck. This owner plays a four-player pod where every archetype shows up;
-    a card that only beats the deck you guessed is dead against the other two.
-    Flexible removal, not hate cards.
     """
   end
 
@@ -306,6 +301,10 @@ defmodule Deckex.Consults.Briefing do
       number are the only exceptions — Commander is singleton.
     - Prefer changes that address a finding over changes that are merely
       upgrades.#{budget_line(opts[:ceilings])}
+    - Prefer answers that work against **anything** over answers aimed at one
+      deck. This is a four-player pod where every archetype turns up; a card
+      that only beats the deck you guessed is dead against the other two.
+      Flexible removal, not hate cards.
     - **Never guess at legality or bans.** The app holds Scryfall's current
       legality for every card and checks each suggestion against it, so a card
       you are unsure about should be *suggested and verified*, not silently

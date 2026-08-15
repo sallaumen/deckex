@@ -150,6 +150,16 @@ defmodule Deckex.Consults.BriefingTest do
       refute briefing =~ "interaction."
     end
 
+    # A universal rule belongs with the universal rules. This one started in
+    # the fallback task block, so the lenses that most needed it — visao,
+    # upgrade, budget, matchup — were the ones that never saw it.
+    test "every lens is told to prefer flexible answers" do
+      for lens <- [:visao, :upgrade, :budget, :matchup, :full, :interaction] do
+        assert build(lens, []) =~ "Flexible removal, not hate cards",
+               "#{lens} não recebeu a regra"
+      end
+    end
+
     test "a whole-deck lens is shown the table and fragility sections" do
       briefing = build(:visao, [])
 
