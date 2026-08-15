@@ -74,6 +74,18 @@ defmodule DeckexWeb.SettingsPanel do
     end
   end
 
+  # The cheap half of the same button: after one full sweep almost nothing is
+  # stale, so this is usually a handful of requests instead of one per card.
+  def handle_event("reprice-stale", _params, socket) do
+    case RepriceWorker.enqueue_stale() do
+      {:ok, _job} ->
+        {:noreply, assign(socket, error: nil, repricing: length(Cards.stale_prices()))}
+
+      {:error, _reason} ->
+        {:noreply, assign(socket, error: "Não consegui enfileirar.")}
+    end
+  end
+
   def handle_event("save", %{"setting" => %{"key" => key, "value" => value}}, socket) do
     {:noreply, save(socket, String.to_existing_atom(key), cast(key, value))}
   end
@@ -248,9 +260,12 @@ defmodule DeckexWeb.SettingsPanel do
               <p class="text-micro text-ink-muted">
                 O preço de uma carta é o da edição mais barata, não o da edição que a busca
                 por nome devolveu. Reprecificar custa uma consulta por carta e roda em
-                segundo plano.
+                segundo plano. Todo dia às 6h o app relê sozinho o que passou de {Cards.price_max_age_days()} dias.
               </p>
-              <div class="flex items-center gap-3">
+              <div class="flex flex-wrap items-center gap-3">
+                <.button type="button" phx-click="reprice-stale" phx-target={@myself}>
+                  Reler os vencidos ({length(Cards.stale_prices())})
+                </.button>
                 <.button type="button" phx-click="reprice-catalogue" phx-target={@myself}>
                   Reprecificar tudo
                 </.button>

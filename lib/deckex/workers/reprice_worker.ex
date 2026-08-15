@@ -37,7 +37,25 @@ defmodule Deckex.Workers.RepriceWorker do
     end
   end
 
+  @doc """
+  Enqueues a sweep of everything whose price has gone stale.
+
+  What the daily cron runs. After the catalogue has been swept once this is
+  almost always a handful of cards or none at all, which is the point: a full
+  reprice costs one request per card, and prices do not move fast enough to
+  pay that every day.
+  """
+  @spec enqueue_stale() :: {:ok, Oban.Job.t()} | {:error, term()}
+  def enqueue_stale, do: %{stale: true} |> new() |> Oban.insert()
+
   @impl Oban.Worker
+  def perform(%Oban.Job{args: %{"stale" => true}}) do
+    case Cards.stale_prices() do
+      [] -> {:ok, %{checked: 0, changed: 0}}
+      cards -> reprice(cards)
+    end
+  end
+
   def perform(%Oban.Job{args: %{"card_ids" => card_ids}}) do
     case Cards.list_by_ids(card_ids) do
       [] -> {:cancel, "nenhuma carta encontrada"}
