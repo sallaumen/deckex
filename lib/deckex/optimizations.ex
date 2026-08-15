@@ -24,6 +24,7 @@ defmodule Deckex.Optimizations do
   alias Deckex.Decks
   alias Deckex.Decks.Deck
   alias Deckex.Decks.DeckQuery
+  alias Deckex.Decks.DeckVersion
   alias Deckex.Decks.Versions
   alias Deckex.Error
   alias Deckex.Events
@@ -154,7 +155,7 @@ defmodule Deckex.Optimizations do
   # Nobody supervises a pipeline mid-flight, so the floor is a refusal here
   # rather than the mark a single consult gets on the deck page.
   defp launch(deck, mode, contract, recipe_override) do
-    %{list: list, commanders: commanders} = list_from_deck(deck)
+    %{list: list, commanders: commanders} = starting_point(deck, contract["from_version"])
     recipe = recipe_override || recipe(deck, mode)
 
     {:ok, optimization} =
@@ -303,6 +304,30 @@ defmodule Deckex.Optimizations do
       name: "#{deck.name}#{suffix}",
       source: :paste
     })
+  end
+
+  @doc """
+  Where a run starts: a numbered version, or the deck as it stands.
+
+  A run is an argument about a list, so which list it argued about is part of
+  the record — an owner comparing two runs a week later needs to know one
+  started from v3 and the other from v7, or the comparison is between two
+  different decks.
+
+  A version number nobody can find falls back to the working state rather than
+  refusing: the deck on the table is always a legitimate starting point.
+  """
+  @spec starting_point(Deck.t(), integer() | nil) :: %{list: [map()], commanders: [String.t()]}
+  def starting_point(%Deck{} = deck, nil), do: list_from_deck(deck)
+
+  def starting_point(%Deck{} = deck, number) do
+    case Versions.fetch(deck, number) do
+      {:ok, version} ->
+        %{list: DeckVersion.rows(version), commanders: version.commanders}
+
+      {:error, _gone} ->
+        list_from_deck(deck)
+    end
   end
 
   @doc """

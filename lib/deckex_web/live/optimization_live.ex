@@ -325,6 +325,11 @@ defmodule DeckexWeb.OptimizationLive do
   defp status_label(:skipped), do: "pulada — nada mudou desde o último checkpoint"
   defp status_label(:failed), do: "falhou"
 
+  defp from_label(%{contract: %{"from_version" => number}}) when is_integer(number),
+    do: "da v#{number}"
+
+  defp from_label(_working_state), do: "da lista de então"
+
   defp run_status_label(:running), do: "rodando"
   defp run_status_label(:awaiting_choice), do: "esperando você escolher"
   defp run_status_label(:paused), do: "pausada"
@@ -417,6 +422,10 @@ defmodule DeckexWeb.OptimizationLive do
               {run_status_label(@optimization.status)}{if @optimization.status == :running,
                 do: " · etapa #{stage_counter(@optimization)}"}{if @optimization.outcome,
                 do: " · #{@optimization.outcome}"} · modelo {@optimization.contract["model"]}
+              <%!-- Which list this argued about. Two runs a week apart are not
+                    comparable unless you know one started from a v3 and the
+                    other from a v7. --%>
+              · a partir {from_label(@optimization)}
               <span :if={vision = Optimizations.chosen_vision(@optimization)}>
                 · direção: <span class="text-ink">{vision["nome"]}</span>
               </span>
