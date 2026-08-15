@@ -104,16 +104,30 @@ defmodule Deckex.Optimizations.SandboxTest do
       assert deck.id != imported.id
     end
 
-    test "commanders come first, in the section the parser reads" do
+    # This test used to look for the commander among the entries and stop
+    # there, which passes just as happily when EVERY card is a commander —
+    # and that is exactly what was happening. The board of the other cards is
+    # the assertion that matters.
+    test "the commander block is opened and closed, so the rest stays in the deck" do
       text =
         Optimizations.list_to_text([%{"name" => "Forest", "quantity" => 2}], ["Iroh, Grand Lotus"])
 
-      assert text =~ "Commander:\n1 Iroh, Grand Lotus"
+      assert text == "Commander:\n1 Iroh, Grand Lotus\n\nDeck:\n2 Forest\n"
 
       {:ok, entries} = DecklistParser.parse(text)
 
-      assert %{board: :commander, name: "Iroh, Grand Lotus"} =
-               Enum.find(entries, &(&1.board == :commander))
+      assert Enum.map(entries, &{&1.board, &1.name, &1.quantity}) == [
+               {:commander, "Iroh, Grand Lotus", 1},
+               {:main, "Forest", 2}
+             ]
+    end
+
+    test "a list with no commander is all main board" do
+      text = Optimizations.list_to_text([%{"name" => "Forest", "quantity" => 2}], [])
+
+      {:ok, entries} = DecklistParser.parse(text)
+
+      assert Enum.map(entries, & &1.board) == [:main]
     end
   end
 
@@ -141,6 +155,53 @@ defmodule Deckex.Optimizations.SandboxTest do
       run = %Optimization{commanders: [], contract: %{}}
 
       assert Optimizations.sandbox_size(run, [%{"name" => "Forest", "quantity" => 100}]) == 100
+    end
+  end
+
+  describe "saving a run as a new deck" do
+    # The bug this exists to not have, found by the owner on his own deck: the
+    # saved text opened a `Commander:` block and never closed it, so the parser
+    # — which carries the board it is currently in — filed all 100 cards as
+    # commanders. Nothing tested the boards of a saved deck, only its size.
+    test "the commander is the commander and everything else is not" do
+      CatalogueFixture.seed!(~w(sol_ring forest natures_lore cultivate))
+
+      {:ok, source} =
+        Decks.import_from_text(
+          "Commander:\n1 Nature's Lore\n\nDeck:\n1 Sol Ring\n4 Forest",
+          %{name: "Deck de Origem", source: :paste}
+        )
+
+      {:ok, run} =
+        Optimizations.start(source, %{}, [
+          %{"kind" => "lens", "lens" => "full", "label" => "Tudo"}
+        ])
+
+      {:ok, saved} = Optimizations.save_as_deck(run)
+
+      by_board = saved |> Decks.list_deck_cards() |> Enum.group_by(& &1.board)
+
+      assert [%{card: %{name: "Nature's Lore"}}] = by_board[:commander]
+      assert length(by_board[:main]) == 2
+      refute Enum.any?(by_board[:main], &(&1.card.name == "Nature's Lore"))
+    end
+
+    test "a run with no commander saves a deck with no commander" do
+      CatalogueFixture.seed!(~w(sol_ring forest))
+
+      {:ok, source} =
+        Decks.import_from_text("1 Sol Ring\n4 Forest", %{name: "Sem Comandante", source: :paste})
+
+      {:ok, run} =
+        Optimizations.start(source, %{}, [
+          %{"kind" => "lens", "lens" => "full", "label" => "Tudo"}
+        ])
+
+      {:ok, saved} = Optimizations.save_as_deck(run)
+
+      boards = saved |> Decks.list_deck_cards() |> Enum.map(& &1.board) |> Enum.uniq()
+
+      assert boards == [:main]
     end
   end
 end

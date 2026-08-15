@@ -159,20 +159,40 @@ defmodule Deckex.Decks do
   """
   @spec to_decklist_text(Deck.t()) :: String.t()
   def to_decklist_text(%Deck{} = deck) do
-    deck_cards = DeckQuery.list_deck_cards(deck)
-    {commanders, main} = Enum.split_with(deck_cards, &(&1.board == :commander))
+    {commanders, main} =
+      deck |> DeckQuery.list_deck_cards() |> Enum.split_with(&(&1.board == :commander))
 
-    commander_block =
-      case commanders do
-        [] -> ""
-        rows -> "Commander:\n" <> lines(rows) <> "\n\n"
-      end
-
-    commander_block <> "Deck:\n" <> lines(main) <> "\n"
+    decklist_text(
+      Enum.map(commanders, & &1.card.name),
+      Enum.map(main, &{&1.quantity, &1.card.name})
+    )
   end
 
-  defp lines(deck_cards) do
-    Enum.map_join(deck_cards, "\n", &"#{&1.quantity} #{&1.card.name}")
+  @doc """
+  A decklist as text, in the format `import_from_text/2` reads back.
+
+  **The `Deck:` header is not decoration.** `Deckex.Decks.DecklistParser` walks
+  the lines carrying the board it is currently in, and a `Commander:` header
+  switches it — nothing switches it back but another header or a rule of
+  dashes. A list written with a commander block and no `Deck:` header imports
+  as a hundred commanders, which is exactly what "Salvar como novo deck" did
+  until this function existed in one place instead of two.
+
+  One formatter, so a fix to the format cannot land in one caller and miss the
+  other.
+  """
+  @spec decklist_text([String.t()], [{pos_integer(), String.t()}]) :: String.t()
+  def decklist_text(commander_names, rows) do
+    commander_block =
+      case commander_names do
+        [] -> ""
+        names -> "Commander:\n" <> Enum.map_join(names, "\n", &"1 #{&1}") <> "\n\n"
+      end
+
+    commander_block <>
+      "Deck:\n" <>
+      Enum.map_join(rows, "\n", fn {quantity, name} -> "#{quantity} #{name}" end) <>
+      "\n"
   end
 
   @doc """

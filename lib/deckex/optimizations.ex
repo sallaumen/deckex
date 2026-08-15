@@ -1013,13 +1013,7 @@ defmodule Deckex.Optimizations do
   """
   @spec list_to_text([map()], [String.t()]) :: String.t()
   def list_to_text(list, commanders) do
-    commander_block =
-      case commanders do
-        [] -> ""
-        names -> "Commander:\n" <> Enum.map_join(names, "\n", &"1 #{&1}") <> "\n\n"
-      end
-
-    commander_block <> Enum.map_join(list, "\n", &"#{&1["quantity"]} #{&1["name"]}")
+    Decks.decklist_text(commanders, Enum.map(list, &{&1["quantity"], &1["name"]}))
   end
 
   defp entries(rows, by_key, roles) do
