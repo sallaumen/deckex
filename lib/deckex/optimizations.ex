@@ -699,9 +699,18 @@ defmodule Deckex.Optimizations do
           not Map.has_key?(audit.problems, {suggestion.action, suggestion.name})
       end)
 
+    # The engine's note rides along with the change it is about. A run that
+    # spent one of the two exception slots on a seven-hundred-real card said so
+    # once, in a fold that was thrown away the moment the stage was recorded —
+    # and the owner reading the run a week later had no way to know.
     applied =
       Enum.map(clean, fn s ->
-        %{"action" => to_string(s.action), "card" => s.name, "reason" => s.reason}
+        %{
+          "action" => to_string(s.action),
+          "card" => s.name,
+          "reason" => s.reason,
+          "note" => audit.notes |> Map.get({s.action, s.name}, []) |> List.first()
+        }
       end)
 
     rejected =

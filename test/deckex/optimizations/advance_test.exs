@@ -262,4 +262,31 @@ defmodule Deckex.Optimizations.AdvanceTest do
     assert after_failure.status == :paused
     assert Enum.at(after_failure.steps, 0).status == :failed
   end
+
+  # The engine's note rides along with the change it is about. A run that spent
+  # one of the two exception slots said so once, in a fold thrown away the
+  # moment the stage was recorded.
+  test "an applied change carries the engine's note about it" do
+    stub_scryfall()
+
+    {:ok, _v} = Deckex.Settings.put(:expensive_card_brl, 1)
+    {:ok, optimization} = Optimizations.start(deck(), %{}, @two_lenses)
+
+    expect(Deckex.AI.Mock, :complete, fn _p, _s, _o -> answer([], ["Cultivate"]) end)
+    {:ok, run} = beat(optimization.id)
+
+    assert [%{"card" => "Cultivate", "note" => note}] = hd(run.steps).applied
+    assert note =~ "carta cara"
+  end
+
+  test "a change the engine had nothing to say about carries no note" do
+    stub_scryfall()
+
+    {:ok, optimization} = Optimizations.start(deck(), %{}, @two_lenses)
+
+    expect(Deckex.AI.Mock, :complete, fn _p, _s, _o -> answer([], ["Cultivate"]) end)
+    {:ok, run} = beat(optimization.id)
+
+    assert [%{"card" => "Cultivate", "note" => nil}] = hd(run.steps).applied
+  end
 end
