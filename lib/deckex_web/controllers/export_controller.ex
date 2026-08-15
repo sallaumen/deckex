@@ -51,6 +51,20 @@ defmodule DeckexWeb.ExportController do
     end
   end
 
+  def deck_diff_txt(conn, %{"from" => from_id, "to" => to_id}) do
+    with {:ok, from} <- Decks.fetch_deck(from_id),
+         {:ok, to} <- Decks.fetch_deck(to_id) do
+      text = from |> Decks.compare(to) |> Versions.buy_text()
+
+      conn
+      |> put_resp_content_type("text/plain")
+      |> put_resp_header("content-disposition", ~s(attachment; filename="comprar.txt"))
+      |> send_resp(200, text)
+    else
+      {:error, error} -> conn |> put_status(:not_found) |> text(error.message)
+    end
+  end
+
   def deck_txt(conn, %{"id" => id}) do
     case Decks.fetch_deck(id) do
       {:ok, deck} -> send_decklist(conn, deck)

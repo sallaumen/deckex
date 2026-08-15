@@ -131,6 +131,16 @@ defmodule DeckexWeb.MesaLive do
             </button>
           </div>
 
+          <%!-- Forking is cheap here and duplicates pile up; a month later
+                nobody remembers what separates two of them. --%>
+          <.link
+            :if={length(@decks) > 1}
+            navigate={~p"/comparar"}
+            class="-my-2 inline-flex min-h-touch shrink-0 items-center px-1 py-2 text-caption text-ink-faint transition-colors hover:text-ink"
+          >
+            Comparar
+          </.link>
+
           <.button navigate={~p"/importar"} variant="primary">Trazer um deck</.button>
         </div>
       </header>
