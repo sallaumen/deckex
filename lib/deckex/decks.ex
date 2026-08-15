@@ -121,7 +121,34 @@ defmodule Deckex.Decks do
   """
   @spec duplicate(Deck.t()) :: {:ok, Deck.t()} | {:error, Error.t()}
   def duplicate(%Deck{} = deck) do
-    import_from_text(to_decklist_text(deck), %{name: "#{deck.name} — cópia", source: :paste})
+    with {:ok, copy} <-
+           import_from_text(to_decklist_text(deck), %{
+             name: "#{deck.name} — cópia",
+             source: :paste
+           }) do
+      {:ok, carry_over(copy, deck)}
+    end
+  end
+
+  # The dossier is the one thing on a deck that cost money: a scout consult
+  # wrote it. A copy of a list is a copy of the deck the dossier describes, so
+  # throwing it away would charge the owner again for a reading he already
+  # bought — and silently, at that.
+  #
+  # `dossier_stale` rides along rather than resetting: the copy holds the same
+  # cards, so the reading is exactly as current as it was a moment ago. Marking
+  # a fresh copy stale would be a lie in the safe direction, which is still a
+  # lie the owner pays a consult to clear.
+  defp carry_over(copy, original) do
+    copy
+    |> Deck.changeset(%{
+      dossier: original.dossier,
+      dossier_source: original.dossier_source,
+      dossier_stale: original.dossier_stale,
+      dossier_updated_at: original.dossier_updated_at,
+      notes: original.notes
+    })
+    |> Repo.update!()
   end
 
   @doc """
