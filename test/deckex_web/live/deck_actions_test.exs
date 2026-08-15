@@ -91,6 +91,44 @@ defmodule DeckexWeb.DeckActionsTest do
                copy |> Decks.list_deck_cards() |> Enum.filter(&(&1.board == :commander))
     end
 
+    # The dossier is the one thing on a deck that cost money — a scout consult
+    # wrote it. Dropping it would charge the owner again for a reading he
+    # already bought, and silently.
+    test "the dossier rides along instead of being bought twice", %{conn: conn} do
+      deck = deck("Com Dossiê")
+
+      {:ok, deck} =
+        Decks.edit_dossier(deck, %{
+          "plano" => "Lontras e feitiços.",
+          "sinergias" => "Iroh dá flashback.",
+          "linhas_de_vitoria" => "Storm.",
+          "fraquezas" => "Cemitério."
+        })
+
+      {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}")
+      live |> element("button[phx-click='duplicate']") |> render_click()
+
+      copy = Enum.find(Decks.list_decks(), &(&1.name == "Com Dossiê — cópia"))
+
+      assert copy.dossier["plano"] == "Lontras e feitiços."
+      assert copy.dossier_source == deck.dossier_source
+      # The copy holds the same cards, so the reading is exactly as current as
+      # it was a moment ago: marking it stale would be a lie the owner pays a
+      # consult to clear.
+      assert copy.dossier_stale == deck.dossier_stale
+    end
+
+    test "a deck with no dossier copies cleanly", %{conn: conn} do
+      deck = deck("Sem Dossiê")
+
+      {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}")
+      live |> element("button[phx-click='duplicate']") |> render_click()
+
+      copy = Enum.find(Decks.list_decks(), &(&1.name == "Sem Dossiê — cópia"))
+
+      assert copy.dossier == nil
+    end
+
     test "the original is untouched", %{conn: conn} do
       deck = deck("Original")
 
