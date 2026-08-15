@@ -15,6 +15,7 @@ defmodule DeckexWeb.OptimizationLive do
   alias Deckex.Consults
   alias Deckex.Consults.Visions
   alias Deckex.Decks
+  alias Deckex.Decks.Versions
   alias Deckex.Error
   alias Deckex.Events
   alias Deckex.Money
@@ -56,6 +57,7 @@ defmodule DeckexWeb.OptimizationLive do
     assign(socket,
       optimization: optimization,
       deck: deck,
+      applied_version: Versions.applied_runs(deck)[optimization.id],
       card_count:
         Optimizations.sandbox_size(optimization, Optimizations.current_list(optimization)),
       stage_progress: stage_progress(optimization, deck, baselines),
@@ -298,8 +300,12 @@ defmodule DeckexWeb.OptimizationLive do
   # Spelled out because it writes over the deck's cards: the number is the one
   # thing that decides whether this is safe to click, and the sentence after it
   # is the reason it is — the list being replaced does not disappear.
-  defp apply_warning(deck, card_count) do
-    "Aplicar esta otimização em #{deck.name}? " <>
+  defp apply_warning(deck, card_count, applied) do
+    repeat =
+      if applied, do: "Esta rodada já virou a v#{applied.number} deste deck. ", else: ""
+
+    repeat <>
+      "Aplicar esta otimização em #{deck.name}? " <>
       "O deck passa a ter #{card_count} cartas, e a lista de agora fica guardada como versão."
   end
 
@@ -454,15 +460,24 @@ defmodule DeckexWeb.OptimizationLive do
                   is work done on a deck, and the deck is where it belongs.
                   Forking stays for the case the owner wants both lists side by
                   side, which is a different intention and reads as one. --%>
+            <%!-- Said on the button, not in a footnote: "aplicar" on a run
+                  already in the deck is a second copy of the same changes. --%>
+            <.link
+              :if={@applied_version}
+              navigate={~p"/decks/#{@deck.id}/versoes"}
+              class="inline-flex min-h-touch items-center rounded-full bg-inlay px-3 font-mono text-micro text-ink-secondary transition-colors hover:text-ink"
+            >
+              já aplicada · v{@applied_version.number} →
+            </.link>
             <.button
               :if={@optimization.status == :done}
               type="button"
               phx-click="aplicar-no-deck"
               phx-disable-with="Aplicando…"
-              data-confirm={apply_warning(@deck, @card_count)}
-              variant="primary"
+              data-confirm={apply_warning(@deck, @card_count, @applied_version)}
+              variant={if @applied_version, do: nil, else: "primary"}
             >
-              Aplicar no deck
+              {if @applied_version, do: "Aplicar de novo", else: "Aplicar no deck"}
             </.button>
             <.button
               :if={@optimization.status == :done}

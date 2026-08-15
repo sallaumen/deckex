@@ -7,6 +7,8 @@ defmodule DeckexWeb.MesaLiveTest do
   alias Deckex.CatalogueFixture
   alias Deckex.Decks
   alias Deckex.Optimizations
+  alias Deckex.Optimizations.Optimization
+  alias Deckex.Repo
   alias Deckex.Settings
 
   defp deck(name \\ "Deck da Mesa") do
@@ -46,6 +48,45 @@ defmodule DeckexWeb.MesaLiveTest do
       {:ok, live, _html} = live(conn, ~p"/")
 
       refute has_element?(live, "button[phx-value-to='lista']")
+    end
+  end
+
+  # The most expensive state in the app is a run that already spent money and
+  # is now waiting on a person. Invisible from the table, it waits forever.
+  describe "a run in flight, seen from the table" do
+    test "a run waiting on a choice says so on the tile", %{conn: conn} do
+      deck = deck()
+
+      {:ok, run} =
+        Optimizations.start(deck, %{}, [
+          %{"kind" => "lens", "lens" => "visao", "label" => "Visões"}
+        ])
+
+      run |> Optimization.changeset(%{status: :awaiting_choice}) |> Repo.update!()
+
+      {:ok, _live, html} = live(conn, ~p"/")
+
+      assert html =~ "esperando você"
+    end
+
+    test "a running one says it is running", %{conn: conn} do
+      deck = deck()
+
+      {:ok, _run} =
+        Optimizations.start(deck, %{}, [%{"kind" => "lens", "lens" => "full", "label" => "Tudo"}])
+
+      {:ok, _live, html} = live(conn, ~p"/")
+
+      assert html =~ "otimizando"
+    end
+
+    test "a deck with nothing running says nothing", %{conn: conn} do
+      deck()
+
+      {:ok, _live, html} = live(conn, ~p"/")
+
+      refute html =~ "esperando você"
+      refute html =~ "otimizando"
     end
   end
 
@@ -98,7 +139,7 @@ defmodule DeckexWeb.MesaLiveTest do
       assert Decks.get_deck(deck.id)
     end
 
-    test "cancelling the run frees the deck to be deleted", %{conn: conn} do
+    test "cancelling the run frees the deck to be deleted", %{conn: _conn} do
       deck = deck()
       run = insert(:optimization, deck: deck, status: :running)
 

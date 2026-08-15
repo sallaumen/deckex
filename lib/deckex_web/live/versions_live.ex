@@ -139,7 +139,22 @@ defmodule DeckexWeb.VersionsLive do
           </p>
         </div>
 
-        <.button type="button" phx-click="marcar" variant="primary">Marcar versão agora</.button>
+        <%!-- A version identical to the one before it is a row that says
+              nothing happened. The button says why it is off instead of
+              quietly making one. --%>
+        <.button
+          type="button"
+          phx-click="marcar"
+          variant={if @drifted?, do: "primary", else: nil}
+          disabled={not @drifted?}
+          title={
+            if @drifted?,
+              do: "Guarda a lista como ela está agora",
+              else: "Nada mudou desde a última versão"
+          }
+        >
+          Marcar versão agora
+        </.button>
       </header>
 
       <%!-- Said before it is discovered: an owner who edited five cards and
@@ -269,6 +284,17 @@ defmodule DeckexWeb.VersionsLive do
               )} cartas · {change_summary(version)}
             </span>
           </div>
+
+          <%!-- The three screens are one loop: deck → versões → a rodada que
+                fez esta. Without the way back, the label "otimização" names a
+                thing you cannot open. --%>
+          <.link
+            :if={version.optimization_id}
+            navigate={~p"/otimizacoes/#{version.optimization_id}"}
+            class="-my-2 mt-1 inline-flex min-h-touch items-center py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+          >
+            ver a rodada →
+          </.link>
 
           <ul :if={DeckVersion.applied(version) != []} class="mt-3 space-y-1">
             <li
