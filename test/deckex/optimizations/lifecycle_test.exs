@@ -29,7 +29,19 @@ defmodule Deckex.Optimizations.LifecycleTest do
       # Rhystic Study is a Game Changer, so the measured floor — and thus the
       # default ceiling — is 3: optimize without changing tables.
       assert contract["bracket_max"] == 3
-      assert contract["ceilings"] == %{"card" => 300, "land" => 200}
+      # No card ceiling: the per-card line is the exception threshold, enforced
+      # as a quota rather than a wall. Lands keep a hard one.
+      assert contract["ceilings"] == %{"card" => nil, "land" => 200}
+
+      # Frozen at launch — changing Ajustes halfway through a run must not move
+      # the line a finished stage was already judged by.
+      assert contract["forma_do_gasto"] == %{
+               "cara_brl" => 400,
+               "cara_max" => 10,
+               "excecao_brl" => 600,
+               "excecao_max" => 2
+             }
+
       # Never below the floor: every stage of an optimization proposes cutting
       # and adding cards, so the owner does not have to remember to raise the
       # model before spending ten consults on it.

@@ -21,6 +21,7 @@ defmodule Deckex.Consults.Audit do
   alias Deckex.Analysis.Finding
   alias Deckex.Analysis.ReportDiff
   alias Deckex.Analysis.Simulation
+  alias Deckex.Budget
   alias Deckex.Cards.Card
   alias Deckex.Cards.Name
   alias Deckex.Consults.Suggestion
@@ -29,12 +30,19 @@ defmodule Deckex.Consults.Audit do
   @type problem_key :: {:cut | :add, String.t()}
   @type t :: %__MODULE__{
           problems: %{problem_key() => [String.t()]},
+          notes: %{problem_key() => [String.t()]},
           resolved: [Finding.t()],
           remaining: [Finding.t()],
           introduced: [Finding.t()]
         }
 
-  defstruct problems: %{}, resolved: [], remaining: [], introduced: []
+  # `notes` is deliberately a separate field from `problems`, not a severity
+  # inside it. A problem rejects the suggestion and pulls it out of the
+  # simulation; a note is the engine saying "this one spends your second
+  # exception" and changing nothing. The Game Changer headroom already taught
+  # this lesson the expensive way, by masquerading as a problem and silently
+  # rejecting every legal add.
+  defstruct problems: %{}, notes: %{}, resolved: [], remaining: [], introduced: []
 
   @doc """
   Audits `suggestions` against `snapshot`. `roles` maps card ids to the roles
@@ -59,12 +67,27 @@ defmodule Deckex.Consults.Audit do
       ) do
     in_main = MapSet.new(snapshot.main, &Name.normalize(&1.card.name))
     pipeline = opts |> pipeline_opts() |> Map.put(:roles_for_adds, roles)
+    policy = Keyword.get(opts, :budget_policy) || Budget.policy()
 
-    problems =
-      suggestions
-      |> Enum.map(&{key(&1), problems(&1, snapshot, in_main, ceilings, pipeline)})
-      |> Enum.reject(fn {_key, list} -> list == [] end)
-      |> Map.new()
+    context = %{
+      snapshot: snapshot,
+      in_main: in_main,
+      ceilings: ceilings,
+      pipeline: pipeline,
+      policy: policy
+    }
+
+    # A fold, not a map: the quota is a property of the whole answer. Three
+    # separate suggestions each asking "is there room for one more exception?"
+    # would all be told yes, and applying the three would leave the deck with
+    # three of the two the owner allows. Cuts come first in the list, so a cut
+    # that frees a slot is already counted when the adds are judged.
+    {problems, notes, _spent} =
+      Enum.reduce(
+        suggestions,
+        {%{}, %{}, Budget.occupancy(snapshot.main ++ snapshot.commanders, policy)},
+        &judge(&1, &2, context)
+      )
 
     changes =
       suggestions
@@ -77,11 +100,73 @@ defmodule Deckex.Consults.Audit do
 
     %__MODULE__{
       problems: problems,
+      notes: notes,
       resolved: diff.resolved,
       remaining: diff.remaining,
       introduced: diff.introduced
     }
   end
+
+  defp judge(suggestion, {problems, notes, occupancy}, context) do
+    tier = Budget.tier(suggestion.price_usd, context.policy)
+
+    found =
+      suggestion
+      |> problems(context.snapshot, context.in_main, context.ceilings, context.pipeline)
+      |> Enum.concat(List.wrap(quota_problem(suggestion, tier, occupancy, context.policy)))
+
+    if found == [] do
+      charged = Budget.charge(occupancy, tier, delta(suggestion))
+
+      {problems, note(notes, suggestion, tier, charged, context.policy), charged}
+    else
+      {Map.put(problems, key(suggestion), found), notes, occupancy}
+    end
+  end
+
+  defp delta(%Suggestion{action: :add}), do: 1
+  defp delta(%Suggestion{action: :cut}), do: -1
+
+  # Cutting an expensive card frees its slot; only an add can run out of room.
+  defp quota_problem(%Suggestion{action: :cut}, _tier, _occupancy, _policy), do: nil
+  defp quota_problem(_suggestion, nil, _occupancy, _policy), do: nil
+
+  defp quota_problem(suggestion, tier, occupancy, policy) do
+    if Budget.room?(occupancy, tier, policy) do
+      nil
+    else
+      full_message(tier, occupancy, policy, suggestion)
+    end
+  end
+
+  defp full_message(:exception, _occupancy, policy, suggestion) do
+    "#{Money.brl(suggestion.price_usd)} passa do teto de R$ #{policy.exception.threshold} " <>
+      "e as #{policy.exception.max} vaga(s) de exceção já estão ocupadas"
+  end
+
+  defp full_message(:expensive, _occupancy, policy, _suggestion) do
+    "o deck já tem #{policy.expensive.max} carta(s) acima de R$ " <>
+      "#{policy.expensive.threshold}, o limite que você pôs"
+  end
+
+  # What the engine wants to SAY, kept away from what it wants to refuse. An
+  # exception is the owner's own rule being broken on purpose, and the one
+  # thing he should never learn by accident is that he just spent the last one.
+  defp note(notes, _suggestion, nil, _occupancy, _policy), do: notes
+  defp note(notes, %Suggestion{action: :cut}, _tier, _occupancy, _policy), do: notes
+
+  defp note(notes, suggestion, tier, occupancy, policy) do
+    case policy[tier].max do
+      nil -> notes
+      max -> Map.put(notes, key(suggestion), [slot_message(tier, occupancy[tier], max)])
+    end
+  end
+
+  defp slot_message(:exception, used, max) do
+    "exceção #{used} de #{max} — acima do teto, e é você quem decide se compensa"
+  end
+
+  defp slot_message(:expensive, used, max), do: "carta cara #{used} de #{max}"
 
   defp key(%Suggestion{action: action, name: name}), do: {action, name}
 

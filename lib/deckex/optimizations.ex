@@ -13,6 +13,7 @@ defmodule Deckex.Optimizations do
   alias Deckex.Analysis.Bracket
   alias Deckex.Analysis.CardEntry
   alias Deckex.Analysis.DeckSnapshot
+  alias Deckex.Budget
   alias Deckex.Cards
   alias Deckex.Cards.Name
   alias Deckex.Consults
@@ -47,6 +48,9 @@ defmodule Deckex.Optimizations do
     %{
       "bracket_max" => Bracket.floor(Decks.snapshot(deck)).floor,
       "ceilings" => %{"card" => ceilings.card, "land" => ceilings.land},
+      # Frozen at launch, like every other rule here: changing Ajustes halfway
+      # through must not quietly move the line a finished stage was judged by.
+      "forma_do_gasto" => Budget.to_contract(Budget.policy()),
       "keep" => [],
       "matchups" => ["um deck aggro rápido", "um deck de controle pesado"],
       "notes" => "",
@@ -567,6 +571,7 @@ defmodule Deckex.Optimizations do
         roles,
         Settings.baselines(),
         ceilings,
+        budget_policy: Budget.from_contract(optimization.contract["forma_do_gasto"]),
         history: history(optimization, step),
         keep: (optimization.contract["keep"] || []) ++ current_commanders(optimization),
         bracket_max: optimization.contract["bracket_max"],

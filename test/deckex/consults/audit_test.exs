@@ -1,6 +1,7 @@
 defmodule Deckex.Consults.AuditTest do
   use Deckex.DataCase, async: true
 
+  alias Deckex.Analysis.CardEntry
   alias Deckex.Cards
   alias Deckex.CatalogueFixture
   alias Deckex.Consults
@@ -139,26 +140,75 @@ defmodule Deckex.Consults.AuditTest do
       audit.problems |> Map.get({:add, name}, []) |> Enum.find(&(&1 =~ "teto"))
     end
 
-    test "a card over the ceiling is named with both numbers", %{snapshot: snapshot} do
+    defp note_for(audit, name), do: audit.notes |> Map.get({:add, name}, []) |> List.first()
+
+    # The owner's rule, in his words: a card over the ceiling still gets in if
+    # it is worth breaking the rule for — there are two slots for exactly that.
+    test "a card over the ceiling spends an exception instead of being refused",
+         %{snapshot: snapshot} do
       {:ok, _v} = Settings.put(:upgrade_max_brl, 100)
 
       audit = Consults.audit(snapshot, [priced(:add, "Rhystic Study")], :upgrade)
 
-      assert ceiling_verdict(audit, "Rhystic Study") =~ "R$ 373,90 passa do teto de R$ 100"
-    end
-
-    test "a card under the ceiling passes", %{snapshot: snapshot} do
-      {:ok, _v} = Settings.put(:upgrade_max_brl, 500)
-
-      audit = Consults.audit(snapshot, [priced(:add, "Rhystic Study")], :upgrade)
-
       refute ceiling_verdict(audit, "Rhystic Study")
+      assert note_for(audit, "Rhystic Study") =~ "exceção 1 de 2"
     end
 
-    # The whole point of a separate land ceiling: R$ 161 is fine for a spell
-    # under the R$ 300 default and far too much for a land under R$ 200 — at
-    # a lower land ceiling it is refused while the spell ceiling is untouched.
-    test "a land is judged by the land ceiling, not the card one", %{snapshot: snapshot} do
+    test "with the slots full it is refused, named with both numbers", %{snapshot: snapshot} do
+      {:ok, _v} = Settings.put(:upgrade_max_brl, 100)
+      {:ok, _v} = Settings.put(:exception_card_max, 1)
+
+      audit =
+        Consults.audit(
+          snapshot,
+          [priced(:add, "Arid Mesa"), priced(:add, "Rhystic Study")],
+          :upgrade
+        )
+
+      # Arid Mesa took the only slot, so Rhystic Study finds it gone. The fold
+      # is the point: judged independently, both would have been told yes.
+      assert note_for(audit, "Arid Mesa") =~ "exceção 1 de 1"
+
+      assert ceiling_verdict(audit, "Rhystic Study") =~
+               "R$ 373,90 passa do teto de R$ 100 e as 1 vaga(s) de exceção já estão ocupadas"
+    end
+
+    test "past the limit of expensive cards the next one is refused", %{snapshot: snapshot} do
+      {:ok, _v} = Settings.put(:expensive_card_brl, 100)
+      {:ok, _v} = Settings.put(:expensive_card_max, 1)
+
+      audit =
+        Consults.audit(
+          snapshot,
+          [priced(:add, "Arid Mesa"), priced(:add, "Rhystic Study")],
+          :upgrade
+        )
+
+      assert note_for(audit, "Arid Mesa") =~ "carta cara 1 de 1"
+
+      assert [problem] = Map.get(audit.problems, {:add, "Rhystic Study"})
+      assert problem =~ "já tem 1 carta(s) acima de R$ 100"
+    end
+
+    # Cutting an expensive card and adding another has not changed the shape of
+    # the deck, and an engine that only counted upwards would say it had.
+    test "cutting an expensive card frees its slot in the same answer", %{snapshot: snapshot} do
+      {:ok, _v} = Settings.put(:expensive_card_brl, 100)
+      {:ok, _v} = Settings.put(:expensive_card_max, 1)
+
+      in_deck = %{priced(:cut, "Arid Mesa") | name: "Arid Mesa"}
+      snapshot = %{snapshot | main: snapshot.main ++ [entry_for("Arid Mesa")]}
+
+      audit = Consults.audit(snapshot, [in_deck, priced(:add, "Rhystic Study")], :upgrade)
+
+      refute Map.has_key?(audit.problems, {:add, "Rhystic Study"})
+    end
+
+    # The whole point of a separate land ceiling: a land gets a hard wall and
+    # no exception slots, because an expensive land is the easiest way to spend
+    # a lot of money and win nothing.
+    test "a land is judged by the land ceiling, and cannot buy its way past it",
+         %{snapshot: snapshot} do
       {:ok, _v} = Settings.put(:upgrade_land_max_brl, 100)
 
       audit = Consults.audit(snapshot, [priced(:add, "Arid Mesa")], :upgrade)
@@ -167,24 +217,36 @@ defmodule Deckex.Consults.AuditTest do
       assert problem =~ "teto de R$ 100"
     end
 
-    test "lenses without a ceiling do not invent one", %{snapshot: snapshot} do
-      {:ok, _v} = Settings.put(:upgrade_max_brl, 1)
+    # The quota is a fact about the list the owner owns, not about the question
+    # he happened to ask, so it holds on a lens that has no ceilings at all.
+    test "the quota holds on every lens, ceiling or not", %{snapshot: snapshot} do
+      {:ok, _v} = Settings.put(:expensive_card_brl, 100)
+      {:ok, _v} = Settings.put(:expensive_card_max, 1)
 
-      audit = Consults.audit(snapshot, [priced(:add, "Rhystic Study")], :full)
+      audit =
+        Consults.audit(
+          snapshot,
+          [priced(:add, "Arid Mesa"), priced(:add, "Rhystic Study")],
+          :full
+        )
 
-      refute ceiling_verdict(audit, "Rhystic Study")
+      assert Map.has_key?(audit.problems, {:add, "Rhystic Study"})
     end
 
     # Refusing a card because we do not know what it costs would be inventing
     # a fact about it.
     test "a card with no known price is not refused", %{snapshot: snapshot} do
       {:ok, _v} = Settings.put(:upgrade_max_brl, 1)
+      {:ok, _v} = Settings.put(:exception_card_max, 0)
       unpriced = %{priced(:add, "Rhystic Study") | price_usd: nil}
 
       audit = Consults.audit(snapshot, [unpriced], :upgrade)
 
       refute ceiling_verdict(audit, "Rhystic Study")
+      assert audit.notes == %{}
     end
+
+    defp entry_for(name), do: CardEntry.new(Cards.get_by_name(name), 1, [])
   end
 
   describe "the run's budget" do

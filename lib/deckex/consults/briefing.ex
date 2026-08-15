@@ -307,7 +307,7 @@ defmodule Deckex.Consults.Briefing do
       of the cheapest card that vaguely fits is the failure mode here. Name the
       best card that fits under the ceiling. If that turns out to be a card
       everyone already plays, it is not a boring suggestion — it is the answer,
-      and it is cheap because it was reprinted, not because it is weak.
+      and it is cheap because it was reprinted, not because it is weak.#{budget_shape_lines(opts[:budget])}
     - Prefer answers that work against **anything** over answers aimed at one
       deck. This is a four-player pod where every archetype turns up; a card
       that only beats the deck you guessed is dead against the other two.
@@ -349,7 +349,7 @@ defmodule Deckex.Consults.Briefing do
     of this deck. The contract for the whole run:
 
     - Maximum bracket: **#{contract["bracket_max"]}** — an add that moves the deck past it will be rejected by the engine.
-    - Price ceilings: R$ #{contract["ceilings"]["card"]} per card, R$ #{contract["ceilings"]["land"]} per land.
+    #{land_ceiling_line(contract["ceilings"])}
     #{salt_line(contract["salt"])}#{keep_line(contract["keep"])}#{notes_line(contract["notes"])}#{count_line(optimization[:card_count])}
     #{changelog_lines(changelog)}
     You may revert an earlier stage's change, but engage its stated reason.
@@ -560,4 +560,55 @@ defmodule Deckex.Consults.Briefing do
       max -> "\n- Keep each added card at or under R$ #{max}."
     end
   end
+
+  # The owner's limits are about the LIST, not the card, so the model is told
+  # how much of each allowance is already spent. A model that only knew the
+  # thresholds would propose four exceptions and let the engine refuse three —
+  # three wasted suggestions, and the owner reading refusals instead of ideas.
+  #
+  # Both numbers are computed by the caller: this module is pure and cannot ask
+  # Settings what the limits are or Money what a dollar is worth.
+  # A land gets a hard ceiling of its own and no exception slots: an expensive
+  # land is the easiest way to spend a lot and win nothing. The per-card
+  # ceiling is not repeated here — it is stated as the exception line, where
+  # its allowance is stated with it.
+  defp land_ceiling_line(%{"land" => land}) when is_integer(land) do
+    "- No land may cost more than R$ #{land}."
+  end
+
+  defp land_ceiling_line(_none), do: ""
+
+  defp budget_shape_lines(nil), do: ""
+
+  defp budget_shape_lines(%{policy: policy, occupancy: occupancy}) do
+    [
+      expensive_line(policy.expensive, occupancy.expensive),
+      exception_line(policy.exception, occupancy.exception)
+    ]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.map_join("", &("\n" <> &1))
+  end
+
+  defp expensive_line(%{threshold: nil}, _used), do: nil
+  defp expensive_line(%{max: nil}, _used), do: nil
+
+  defp expensive_line(%{threshold: threshold, max: max}, used) do
+    "- A card over **R$ #{threshold}** counts as expensive, and this deck may hold " <>
+      "#{max} of them. It already holds **#{used}**, so #{room_phrase(max - used)}."
+  end
+
+  defp exception_line(%{threshold: nil}, _used), do: nil
+  defp exception_line(%{max: nil}, _used), do: nil
+
+  defp exception_line(%{threshold: threshold, max: max}, used) do
+    "- Over **R$ #{threshold}** is an *exception*: the deck allows #{max}, and " <>
+      "#{used} are spent. There is no ceiling above that — the slots are the ceiling — " <>
+      "so an exception may cost anything, and must be worth it. Spend one only on a card " <>
+      "that is decisively better than everything under the line, and say in its reason " <>
+      "why nothing cheaper does the job. If none is, propose none."
+  end
+
+  defp room_phrase(room) when room <= 0, do: "there is no room for another"
+  defp room_phrase(1), do: "there is room for one more"
+  defp room_phrase(room), do: "there is room for #{room} more"
 end

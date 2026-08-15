@@ -108,6 +108,15 @@ for *what* we are building and *why*. This file is *how*.
   the expensive card, and the briefing says so in as many words. Cheap is not
   evidence of weak — the cheapest card any model ever suggested here was Arcane
   Signet, third most-played card in the format.
+- **The price rule is a count, not a line.** A per-card ceiling answers "is
+  this card too expensive" and gets the real question wrong: the owner will
+  own a few cards at four hundred reais and not twelve, and wants room for the
+  two that are worth breaking his own rule for. `Deckex.Budget` holds both
+  tiers; the ceiling is the exception threshold and the slots above it are the
+  only roof. **The audit folds rather than maps** — three suggestions each
+  asking "is there room for one more?" would all be told yes, and applying the
+  three leaves the deck with three of the two allowed. Cuts come first in the
+  list, so a cut that frees a slot is counted before the adds are judged.
 - **Building a page never reaches for the network.** Rendering a deck reads;
   fetching happens in the background job that already exists. A suggested card
   missing from the catalogue renders unresolved rather than making the page wait.

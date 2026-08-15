@@ -13,6 +13,7 @@ defmodule Deckex.Consults do
   alias Deckex.AI
   alias Deckex.Analysis
   alias Deckex.Analysis.DeckSnapshot
+  alias Deckex.Budget
   alias Deckex.Cards
   alias Deckex.Consults.Audit
   alias Deckex.Consults.Briefing
@@ -143,7 +144,7 @@ defmodule Deckex.Consults do
     # it built. Everything downstream — report, briefing, freeze — is shared.
     snapshot = opts[:snapshot] || Decks.snapshot(deck)
     report = Analysis.report(snapshot, Settings.baselines())
-    briefing = Briefing.build(report, snapshot, lens, briefing_opts(deck, lens, opts))
+    briefing = Briefing.build(report, snapshot, lens, briefing_opts(deck, lens, snapshot, opts))
     frozen = freeze(report)
 
     Enum.map(models, fn model ->
@@ -156,11 +157,24 @@ defmodule Deckex.Consults do
     end)
   end
 
-  defp briefing_opts(deck, lens, opts) do
+  defp briefing_opts(deck, lens, snapshot, opts) do
     opts
     |> Keyword.put_new(:ceilings, Settings.ceilings(lens))
+    |> Keyword.put_new(:budget, budget_state(snapshot, opts))
     |> Keyword.put(:dossier, deck.dossier)
     |> Keyword.put(:dossier_stale, deck.dossier_stale)
+  end
+
+  # The briefing is pure and cannot ask Settings what the owner's limits are,
+  # nor Money what a dollar is worth. Both are read here and handed over as
+  # facts — the same reason baselines are passed rather than fetched.
+  defp budget_state(snapshot, opts) do
+    policy = Budget.from_contract(get_in(opts, [:optimization, :contract, "forma_do_gasto"]))
+
+    %{
+      policy: policy,
+      occupancy: Budget.occupancy(snapshot.main ++ snapshot.commanders, policy)
+    }
   end
 
   @doc "Sends a consult's stored briefing to the model and records the answer."

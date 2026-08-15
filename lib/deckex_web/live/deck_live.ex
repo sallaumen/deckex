@@ -12,6 +12,7 @@ defmodule DeckexWeb.DeckLive do
 
   alias Deckex.Analysis
   alias Deckex.Analysis.Bracket
+  alias Deckex.Budget
   alias Deckex.Cards.PlayRate
   alias Deckex.Consults
   alias Deckex.Consults.Suggestions
@@ -49,6 +50,8 @@ defmodule DeckexWeb.DeckLive do
       model: Settings.model(),
       card_uris: card_uris(snapshot),
       deck_value: deck_value(snapshot),
+      budget_policy: Budget.policy(),
+      budget_line: budget_line(snapshot),
       running_optimization: Optimizations.running_for_deck(deck.id),
       page_title: deck.name
     )
@@ -148,6 +151,24 @@ defmodule DeckexWeb.DeckLive do
     end)
   end
 
+  # "3/10 caras · 1/2 exceções" — the deck's spending shape in one line, or
+  # nothing at all when neither limit is switched on. Written only for the
+  # tiers that exist: a line that says 0/0 is noise pretending to be data.
+  defp budget_line(snapshot) do
+    policy = Budget.policy()
+    occupancy = Budget.occupancy(snapshot.main ++ snapshot.commanders, policy)
+
+    [
+      policy.expensive.max && "#{occupancy.expensive}/#{policy.expensive.max} caras",
+      policy.exception.max && "#{occupancy.exception}/#{policy.exception.max} exceções"
+    ]
+    |> Enum.reject(&is_nil/1)
+    |> case do
+      [] -> nil
+      parts -> Enum.join(parts, " · ")
+    end
+  end
+
   # How many of the proposed adds are cards almost nobody plays. The owner's
   # worry was that cheap suggestions are weak ones; price cannot tell him, and
   # reading twenty rows to find out defeats the purpose of a table.
@@ -203,6 +224,13 @@ defmodule DeckexWeb.DeckLive do
 
   defp problems_for(nil, _action, _name), do: []
   defp problems_for(audit, action, name), do: Map.get(audit.problems, {action, name}, [])
+
+  # What the engine allowed but wants said out loud — a card spending one of
+  # the exception slots, say. Kept apart from the problems on purpose: this
+  # rejects nothing, and reading it as a refusal is the exact mistake the Game
+  # Changer note once made.
+  defp notes_for(nil, _action, _name), do: []
+  defp notes_for(audit, action, name), do: Map.get(audit.notes, {action, name}, [])
 
   defp dossier_label("plano"), do: "Plano"
   defp dossier_label("sinergias"), do: "Sinergias"
@@ -271,6 +299,17 @@ defmodule DeckexWeb.DeckLive do
             </p>
             <p class="font-mono text-numeral-sm font-semibold leading-none text-ink">
               {Money.brl(@deck_value)}
+            </p>
+            <%!-- The total says what the deck cost; this says what its shape
+                  is. Ten cards at four hundred and two above the ceiling is a
+                  policy about the list, and the owner cannot hold it in his
+                  head while reading suggestions. --%>
+            <p
+              :if={@budget_line}
+              title={"Limite: #{@budget_policy.expensive.max} cartas acima de R$ #{@budget_policy.expensive.threshold} e #{@budget_policy.exception.max} exceções acima de R$ #{@budget_policy.exception.threshold}"}
+              class="mt-1 font-mono text-micro text-ink-faint"
+            >
+              {@budget_line}
             </p>
           </div>
 
@@ -823,6 +862,13 @@ defmodule DeckexWeb.DeckLive do
                               class="mt-0.5 text-micro text-sev-critical"
                             >
                               motor: {problem}
+                            </p>
+
+                            <p
+                              :for={note <- notes_for(@audits[consult.id], row.action, row.name)}
+                              class="mt-0.5 text-micro text-ink-faint"
+                            >
+                              motor: {note}
                             </p>
                           </td>
 

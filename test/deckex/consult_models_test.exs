@@ -88,13 +88,19 @@ defmodule Deckex.ConsultModelsTest do
       assert consult.briefing =~ "15"
     end
 
-    # "Sem olhar preço" still has a ceiling — past a number a suggestion is a
-    # different deck, not an upgrade to this one.
-    test "upgrade chases power but states its ceilings" do
+    # "Sem olhar preço" still has a shape: how many expensive cards the deck
+    # may hold, and how many may break the ceiling outright.
+    test "upgrade chases power but states what the list can hold" do
       assert {:ok, consult} = Consults.request(deck(), :upgrade)
 
       assert consult.briefing =~ "as strong as it can be"
-      assert consult.briefing =~ "R$ 300"
+      assert consult.briefing =~ "over **R$ 400** counts as expensive"
+      assert consult.briefing =~ "may hold 10 of them"
+      assert consult.briefing =~ "Over **R$ 600** is an *exception*"
+      # The empty deck has spent none of either allowance.
+      assert consult.briefing =~ "It already holds **0**"
+      assert consult.briefing =~ "0 are spent"
+      # A land still gets a hard wall, and no exception can buy past it.
       assert consult.briefing =~ "R$ 200"
     end
 

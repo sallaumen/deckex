@@ -54,11 +54,43 @@ defmodule Deckex.Settings.Registry do
     %{
       key: :upgrade_max_brl,
       type: :integer,
-      default: 300,
-      label: "Teto por carta — sem olhar preço (R$)",
+      default: 600,
+      label: "Teto por carta (R$)",
       hint:
-        "\"Sem olhar preço\" ainda tem limite: acima disso não é upgrade, é outro deck. " <>
-          "É um limite, não uma meta — o motor nunca prefere a carta cara.",
+        "Uma carta acima disso ainda pode entrar — gasta uma das vagas de exceção. " <>
+          "É um limite, não uma meta: o motor nunca prefere a carta cara.",
+      options: nil,
+      group: :budget
+    },
+    # The owner's real constraint is about the LIST, not the card: a few cards
+    # at four hundred reais are fine and twelve are not, and there has to be
+    # room for the one card worth breaking the rule for.
+    %{
+      key: :expensive_card_brl,
+      type: :integer,
+      default: 400,
+      label: "A partir de quanto a carta é cara (R$)",
+      hint: "Não recusa nada sozinho — serve para contar quantas caras o deck já tem.",
+      options: nil,
+      group: :budget
+    },
+    %{
+      key: :expensive_card_max,
+      type: :integer,
+      default: 10,
+      label: "Quantas cartas caras o deck aceita",
+      hint: "Passando disso, o motor recusa a próxima carta acima da linha. Zero é sem limite.",
+      options: nil,
+      group: :budget
+    },
+    %{
+      key: :exception_card_max,
+      type: :integer,
+      default: 2,
+      label: "Quantas exceções acima do teto",
+      hint:
+        "As vagas para a carta absurda que compensa. Não existe teto acima disso: " <>
+          "as vagas são o limite, e quando acabam o motor recusa.",
       options: nil,
       group: :budget
     },
