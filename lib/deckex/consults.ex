@@ -139,6 +139,15 @@ defmodule Deckex.Consults do
     ]
   end
 
+  @doc "One lens's pt-BR label — the same words the picker offers."
+  @spec lens_label(atom()) :: String.t()
+  def lens_label(lens) do
+    case List.keyfind(lens_labels(), lens, 0) do
+      {^lens, label} -> label
+      nil -> to_string(lens)
+    end
+  end
+
   defp start(deck, lens, models, opts) do
     # The pipeline analyses its sandbox, not the deck: it passes the snapshot
     # it built. Everything downstream — report, briefing, freeze — is shared.

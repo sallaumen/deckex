@@ -24,6 +24,7 @@ defmodule Deckex.Decks.Versions do
   alias Deckex.Decks.DeckCard
   alias Deckex.Decks.DeckQuery
   alias Deckex.Decks.DeckVersion
+  alias Deckex.Decks.Edits
   alias Deckex.Error
   alias Deckex.Events
   alias Deckex.Money
@@ -66,7 +67,9 @@ defmodule Deckex.Decks.Versions do
     previous = latest(deck)
 
     changes =
-      Keyword.get_lazy(opts, :changes, fn -> %{"applied" => drift(previous, rows)} end)
+      Keyword.get_lazy(opts, :changes, fn ->
+        %{"applied" => recorded_or_drift(deck, previous, rows)}
+      end)
 
     version =
       %DeckVersion{}
@@ -76,15 +79,27 @@ defmodule Deckex.Decks.Versions do
         origin: Keyword.get(opts, :origin, :manual),
         label: Keyword.get(opts, :label),
         optimization_id: Keyword.get(opts, :optimization_id),
+        consult_id: Keyword.get(opts, :consult_id),
         list: %{"rows" => rows},
         commanders: commanders,
         changes: changes
       })
       |> Repo.insert!()
 
+    :ok = Edits.clear(deck)
+
     Events.broadcast_deck_updated(deck)
 
     {:ok, version}
+  end
+
+  # What the deck itself recorded beats what two lists can be made to confess.
+  # An edit knows why it happened; a diff can only ever say that it did.
+  defp recorded_or_drift(deck, previous, rows) do
+    case Edits.changelog(deck) do
+      [] -> drift(previous, rows)
+      recorded -> recorded
+    end
   end
 
   defp next_number(nil), do: 1
@@ -196,6 +211,8 @@ defmodule Deckex.Decks.Versions do
 
         {:ok, :written}
       end)
+
+    :ok = Edits.clear(deck)
 
     {:ok, restored} = DeckQuery.fetch_deck(deck.id)
 
