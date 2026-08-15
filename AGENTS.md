@@ -166,6 +166,15 @@ for *what* we are building and *why*. This file is *how*.
   defend with two — which is exactly what its owner reported before the engine
   could see it.
 
+- **A rule for every lens goes in `rules_block/3`, never in a task block.**
+  Twice in one afternoon a universal rule was written into one branch, and both
+  times the lenses that needed it most were the ones that missed it: the
+  findings scope left `:visao`, `:upgrade`, `:budget` and `:matchup` being told
+  a deck with two criticals "passed every lens", and the flexible-answers rule
+  reached only the lenses without a task block of their own. `BriefingTest`
+  walks `Consult.lenses()` and asserts the universal pieces reach all of them —
+  guard the class, not the two instances you happened to find.
+
 ## Quality gate
 
 `mix lint` must be green **before** every commit — not after:

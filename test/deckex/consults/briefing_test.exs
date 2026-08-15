@@ -3,7 +3,9 @@ defmodule Deckex.Consults.BriefingTest do
 
   alias Deckex.Analysis
   alias Deckex.AnalysisFixture
+  alias Deckex.Consults
   alias Deckex.Consults.Briefing
+  alias Deckex.Consults.Consult
 
   @dossier %{
     "plano" => "Spellslinger Temur com Iroh.",
@@ -127,6 +129,34 @@ defmodule Deckex.Consults.BriefingTest do
 
       assert briefing =~ "Never guess at legality or bans"
       assert briefing =~ "suggested and verified"
+    end
+  end
+
+  # Twice in one afternoon a rule meant for everyone was written into one
+  # branch, and both times the lenses that needed it most were the ones that
+  # missed it. Walking every lens is cheaper than remembering.
+  describe "what every lens must carry" do
+    test "the universal rules reach every lens that proposes changes" do
+      universal = [
+        "colour identity",
+        "Commander is singleton",
+        "Flexible removal, not hate cards",
+        "Never guess at legality"
+      ]
+
+      for lens <- Consult.lenses(), Consults.changes_deck?(lens), rule <- universal do
+        assert build(lens, []) =~ rule, "#{lens} não recebeu: #{rule}"
+      end
+    end
+
+    test "every lens is shown the deck, its measurements and its list" do
+      for lens <- Consult.lenses() do
+        briefing = build(lens, [])
+
+        assert briefing =~ "## The deck", "#{lens} sem o bloco do deck"
+        assert briefing =~ "## Measurements", "#{lens} sem medições"
+        assert briefing =~ "## The full decklist", "#{lens} sem a decklist"
+      end
     end
   end
 
