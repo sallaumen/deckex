@@ -158,4 +158,44 @@ defmodule DeckexWeb.DeckActionsTest do
                Enum.sort(Enum.map(Decks.list_deck_cards(deck), &{&1.card.name, &1.board}))
     end
   end
+
+  describe "the card count" do
+    # Shown always, not only when it is wrong: a number that appears only when
+    # broken cannot be used to check that things are fine.
+    test "is on the header with its target", %{conn: conn} do
+      deck = deck()
+
+      {:ok, _live, html} = live(conn, ~p"/decks/#{deck.id}")
+
+      assert html =~ "Cartas"
+      assert html =~ "de 100"
+    end
+
+    test "an off-100 deck raises the legality finding too", %{conn: conn} do
+      deck = deck()
+
+      {:ok, _live, html} = live(conn, ~p"/decks/#{deck.id}")
+
+      # The fixture deck is 6 cards, so the finding must be there.
+      assert html =~ "O deck não tem 100 cartas"
+      assert html =~ "legality.deck_size"
+    end
+  end
+
+  describe "importing" do
+    # Caught at the door, instead of after the round trip of importing,
+    # reading the finding, and coming back to fix the paste.
+    test "a paste that does not total 100 says so on arrival", %{conn: conn} do
+      CatalogueFixture.seed!(~w(sol_ring forest))
+
+      {:ok, live, _html} = live(conn, ~p"/importar")
+
+      live
+      |> form("form[phx-submit='paste']", paste: %{name: "Curto", decklist: "1 Sol Ring"})
+      |> render_submit()
+
+      assert {_path, flash} = assert_redirect(live)
+      assert flash["info"] =~ "1 cartas em vez de 100"
+    end
+  end
 end

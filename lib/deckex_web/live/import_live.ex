@@ -10,6 +10,7 @@ defmodule DeckexWeb.ImportLive do
   """
   use DeckexWeb, :live_view
 
+  alias Deckex.Analysis.Legality
   alias Deckex.Decks
   alias Deckex.Error
 
@@ -41,12 +42,28 @@ defmodule DeckexWeb.ImportLive do
   defp finish(socket, {:ok, deck}) do
     {:noreply,
      socket
-     |> put_flash(:info, "#{deck.name} está na mesa.")
+     |> put_flash(:info, arrival_message(deck))
      |> push_navigate(to: ~p"/decks/#{deck.id}")}
   end
 
   defp finish(socket, {:error, %Error{} = error}) do
     {:noreply, assign(socket, importing: nil, error: error)}
+  end
+
+  # Caught at the door. A list that does not total 100 is the most common thing
+  # wrong with a paste — a section header the parser ignored, a maybeboard
+  # pasted along with the deck — and the deck page's own finding says it too.
+  # Saying it here as well costs one sentence and saves the round trip of
+  # importing, reading, and coming back to fix the paste.
+  defp arrival_message(deck) do
+    %{size: size, target_size: target} = deck |> Decks.snapshot() |> Legality.measure()
+
+    if size == target do
+      "#{deck.name} está na mesa."
+    else
+      "#{deck.name} está na mesa, com #{size} cartas em vez de #{target}. " <>
+        "Confere se a lista colada trouxe sideboard junto."
+    end
   end
 
   defp blank_to_default(""), do: "Deck sem nome"

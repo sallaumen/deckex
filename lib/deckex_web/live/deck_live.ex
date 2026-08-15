@@ -401,7 +401,10 @@ defmodule DeckexWeb.DeckLive do
             </button>
           </div>
         </div>
-        <div class="flex items-center gap-4">
+        <%!-- Wraps as a row of whole stats rather than squeezing four of them
+              into columns one word wide. Each number keeps its line: at 320px
+              "0/10 caras · 0/2 exceções" broke across three. --%>
+        <div class="flex flex-wrap items-end gap-x-6 gap-y-4">
           <.button
             :if={@running_optimization}
             navigate={~p"/otimizacoes/#{@running_optimization.id}"}
@@ -421,7 +424,7 @@ defmodule DeckexWeb.DeckLive do
             Otimizar
           </.button>
 
-          <div class="text-right">
+          <div class="text-right whitespace-nowrap">
             <p class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
               Valor do deck
             </p>
@@ -441,7 +444,27 @@ defmodule DeckexWeb.DeckLive do
             </p>
           </div>
 
-          <div class="text-right">
+          <%!-- Shown always, not only when it is wrong. The legality lens
+                raises a finding at 105 cards, but a deck being at exactly 100
+                is a fact the owner checks constantly while editing — and a
+                number that only appears when broken cannot be checked. --%>
+          <div class="text-right whitespace-nowrap">
+            <p class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+              Cartas
+            </p>
+            <p class={[
+              "font-mono text-numeral-sm font-semibold leading-none",
+              @report.legality.size == @report.legality.target_size && "text-ink",
+              @report.legality.size != @report.legality.target_size && "text-sev-critical"
+            ]}>
+              {@report.legality.size}
+            </p>
+            <p class="mt-1 font-mono text-micro text-ink-faint">
+              de {@report.legality.target_size}
+            </p>
+          </div>
+
+          <div class="text-right whitespace-nowrap">
             <p class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
               Bracket (piso)
             </p>
