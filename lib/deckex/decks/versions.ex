@@ -121,8 +121,47 @@ defmodule Deckex.Decks.Versions do
   """
   @spec restore(Deck.t(), DeckVersion.t()) :: {:ok, Deck.t()} | {:error, Error.t()}
   def restore(%Deck{} = deck, %DeckVersion{} = version) do
-    rows = DeckVersion.rows(version)
-    names = Enum.map(rows, & &1["name"]) ++ version.commanders
+    write_list(deck, version.commanders, DeckVersion.rows(version))
+  end
+
+  @doc """
+  Writes a list over the deck and marks it as the next version, in one move.
+
+  This is how an optimization stops being a sandbox: the run's final list
+  becomes the deck's cards and the same act becomes the version that says what
+  it did. `opts` are `mark/2`'s — `:origin`, `:label`, `:optimization_id` and
+  `:changes`, which the optimizer passes straight from its own changelog.
+
+  Nothing is written if a card in the list is not in the catalogue: a deck half
+  applied is worse than one not applied.
+
+  What is being written over is photographed first when it has drifted from the
+  last version. Overwriting a list nobody had saved would destroy it, and an
+  owner who edited five cards by hand before running the optimizer should be
+  able to go back to those five cards.
+  """
+  @spec apply_list(Deck.t(), [String.t()], [map()], keyword()) ::
+          {:ok, Deck.t(), DeckVersion.t()} | {:error, Error.t()}
+  def apply_list(%Deck{} = deck, commanders, rows, opts \\ []) do
+    with {:ok, applied} <- write_list(keep_current(deck), commanders, rows) do
+      {:ok, version} = mark(applied, opts)
+
+      {:ok, applied, version}
+    end
+  end
+
+  defp keep_current(%Deck{} = deck) do
+    # A deck with no version at all is the same case as a drifted one: what is
+    # on the table right now has never been saved.
+    if is_nil(latest(deck)) or drifted?(deck) do
+      {:ok, _kept} = mark(deck, label: "Antes de aplicar")
+    end
+
+    deck
+  end
+
+  defp write_list(%Deck{} = deck, commanders, rows) do
+    names = Enum.map(rows, & &1["name"]) ++ commanders
 
     by_key =
       names
@@ -131,7 +170,7 @@ defmodule Deckex.Decks.Versions do
       |> Map.new(&{&1.name_normalized, &1})
 
     case Enum.reject(names, &Map.has_key?(by_key, Name.normalize(&1))) do
-      [] -> write_back(deck, rows, version.commanders, by_key)
+      [] -> write_back(deck, rows, commanders, by_key)
       missing -> {:error, missing_error(missing)}
     end
   end

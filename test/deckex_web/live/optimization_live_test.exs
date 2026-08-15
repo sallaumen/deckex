@@ -9,6 +9,7 @@ defmodule DeckexWeb.OptimizationLiveTest do
   alias Deckex.Consults
   alias Deckex.Decks
   alias Deckex.Decks.Deck
+  alias Deckex.Decks.Versions
   alias Deckex.Optimizations
   alias Deckex.Workers.ConsultWorker
   alias Deckex.Workers.OptimizationAdvanceWorker
@@ -179,6 +180,29 @@ defmodule DeckexWeb.OptimizationLiveTest do
       # The original deck was never written.
       original_names = deck |> Decks.snapshot() |> Map.get(:main) |> Enum.map(& &1.card.name)
       refute "Cultivate" in original_names
+    end
+
+    # What the owner asked for: an applied optimization is a version of the same
+    # deck, not a second deck beside it.
+    test "aplicar até aqui writes the stage's list onto the deck itself", %{conn: conn} do
+      deck = deck()
+      {:ok, optimization} = Optimizations.start(deck, %{}, @two_lenses)
+      {:ok, done} = run_first_stage(optimization, [], ["Cultivate"])
+      step = hd(done.steps)
+
+      {:ok, live, _html} = live(conn, ~p"/otimizacoes/#{optimization.id}")
+
+      live
+      |> element("button[phx-click='aplicar-no-deck'][phx-value-step='#{step.id}']")
+      |> render_click()
+
+      assert length(Decks.list_decks()) == 1
+
+      names = deck |> Decks.snapshot() |> Map.get(:main) |> Enum.map(& &1.card.name)
+      assert "Cultivate" in names
+
+      [latest | _older] = Versions.list(deck)
+      assert latest.origin == :optimization
     end
 
     test "pause and resume drive the run from the page", %{conn: conn} do

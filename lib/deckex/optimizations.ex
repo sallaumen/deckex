@@ -24,6 +24,7 @@ defmodule Deckex.Optimizations do
   alias Deckex.Decks
   alias Deckex.Decks.Deck
   alias Deckex.Decks.DeckQuery
+  alias Deckex.Decks.Versions
   alias Deckex.Error
   alias Deckex.Events
   alias Deckex.Optimizations.Balance
@@ -305,6 +306,41 @@ defmodule Deckex.Optimizations do
   end
 
   @doc """
+  Applies a run to the deck it came from, as that deck's next version.
+
+  The sandbox stops being a sandbox here: the list becomes the deck's cards and
+  the same act writes the version that says what it did. The changelog carried
+  into the version is the consolidated one — a card added by one stage and cut
+  by a later one nets to nothing, and the history reads as what happened to the
+  deck rather than as a transcript of the run.
+
+  From one stage, or from the run's latest state when no stage is given.
+  """
+  @spec apply_to_deck(Optimization.t(), OptimizationStep.t() | nil) ::
+          {:ok, Deck.t()} | {:error, Error.t()}
+  def apply_to_deck(%Optimization{} = optimization, step \\ nil) do
+    {:ok, deck} = Decks.fetch_deck(optimization.deck_id)
+    rows = Enum.map(fork_list(optimization, step), &Map.take(&1, ["name", "quantity"]))
+
+    case Versions.apply_list(deck, current_commanders(optimization), rows,
+           origin: :optimization,
+           optimization_id: optimization.id,
+           label: version_label(optimization, step),
+           changes: %{"applied" => consolidated_diff(optimization, step)}
+         ) do
+      {:ok, applied, _version} -> {:ok, applied}
+      {:error, %Error{} = error} -> {:error, error}
+    end
+  end
+
+  defp version_label(optimization, nil), do: "Otimização de #{model_of(optimization)}"
+
+  defp version_label(optimization, step),
+    do: "Otimização de #{model_of(optimization)} — até a etapa #{step.position}"
+
+  defp model_of(%Optimization{contract: contract}), do: contract["model"]
+
+  @doc """
   What actually changed between the original list and the final one.
 
   A card added by one stage and cut by a later one nets to nothing, so it does
@@ -319,14 +355,20 @@ defmodule Deckex.Optimizations do
   Mountains were cut for related but different arguments, and the second one is
   not an echo of the first.
   """
-  @spec consolidated_diff(Optimization.t()) :: [map()]
-  def consolidated_diff(%Optimization{} = optimization) do
+  @spec consolidated_diff(Optimization.t(), OptimizationStep.t() | nil) :: [map()]
+  def consolidated_diff(%Optimization{} = optimization, step \\ nil) do
     optimization.steps
+    |> up_to(step)
     |> Enum.flat_map(& &1.applied)
     |> Enum.group_by(& &1["card"])
     |> Enum.flat_map(fn {_card, touches} -> surviving(touches) end)
     |> Enum.sort_by(&{&1["action"], &1["card"]})
   end
+
+  defp up_to(steps, nil), do: steps
+
+  defp up_to(steps, %OptimizationStep{position: position}),
+    do: Enum.filter(steps, &(&1.position <= position))
 
   defp surviving(touches) do
     {adds, cuts} = Enum.split_with(touches, &(&1["action"] == "add"))
