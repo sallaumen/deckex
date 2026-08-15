@@ -16,6 +16,7 @@ defmodule Deckex.Analysis do
   alias Deckex.Analysis.Finding
   alias Deckex.Analysis.Interaction
   alias Deckex.Analysis.Mana
+  alias Deckex.Analysis.Mesa
   alias Deckex.Analysis.Report
 
   @doc "Measures `snapshot` against `baselines`."
@@ -29,13 +30,14 @@ defmodule Deckex.Analysis do
       mana: Mana.measure(snapshot, baselines),
       interaction: Interaction.measure(snapshot),
       consistency: Consistency.measure(snapshot),
+      mesa: Mesa.measure(snapshot),
       bracket: Bracket.floor(snapshot),
       findings: findings(snapshot, baselines)
     }
   end
 
   defp findings(snapshot, baselines) do
-    [Curve, Mana, Interaction, Consistency]
+    [Curve, Mana, Interaction, Consistency, Mesa]
     |> Enum.flat_map(& &1.findings(snapshot, baselines))
     |> Finding.sort()
   end

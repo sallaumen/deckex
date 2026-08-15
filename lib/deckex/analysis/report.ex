@@ -30,6 +30,7 @@ defmodule Deckex.Analysis.Report do
     :mana,
     :interaction,
     :consistency,
+    :mesa,
     :bracket,
     :findings
   ]
@@ -41,6 +42,7 @@ defmodule Deckex.Analysis.Report do
     :mana,
     :interaction,
     :consistency,
+    :mesa,
     :bracket,
     :findings
   ]

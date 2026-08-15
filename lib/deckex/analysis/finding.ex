@@ -9,7 +9,7 @@ defmodule Deckex.Analysis.Finding do
   """
 
   @type severity :: :critical | :warning | :info
-  @type lens :: :speed_curve | :mana_ramp | :interaction | :consistency
+  @type lens :: :speed_curve | :mana_ramp | :interaction | :consistency | :mesa | :fragility
 
   @type t :: %__MODULE__{
           code: String.t(),
@@ -30,7 +30,7 @@ defmodule Deckex.Analysis.Finding do
   @spec new(String.t(), severity(), lens(), String.t(), String.t(), keyword()) :: t()
   def new(code, severity, lens, title, detail, opts \\ [])
       when severity in [:critical, :warning, :info] and
-             lens in [:speed_curve, :mana_ramp, :interaction, :consistency] do
+             lens in [:speed_curve, :mana_ramp, :interaction, :consistency, :mesa, :fragility] do
     %__MODULE__{
       code: code,
       severity: severity,

@@ -11,6 +11,16 @@ defmodule Deckex.Analysis.Baselines do
   31 for a triple.
   """
 
+  @typedoc """
+  `table_close_turn` is a fact about the owner's pod, not about Magic: the turn
+  their games actually end. A deck that does nothing before turn five is in
+  trouble where games close on seven and perfectly fine where they run to
+  twelve. The engine cannot measure someone else's table, so the owner states
+  it and every lens gets to use it.
+
+  `table_time_max` is how many time-taking effects a deck may hold before the
+  other three players start spending the evening watching.
+  """
   @type t :: %__MODULE__{}
 
   defstruct avg_cmc_low: 2.4,
@@ -31,7 +41,9 @@ defmodule Deckex.Analysis.Baselines do
             sources_single_pip: 19,
             sources_double_pip: 25,
             sources_triple_pip: 31,
-            tapland_share_max: 0.25
+            tapland_share_max: 0.25,
+            table_time_max: 4,
+            table_close_turn: 8
 
   @doc "The documented Commander defaults."
   @spec default() :: t()
