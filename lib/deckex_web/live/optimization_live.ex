@@ -55,7 +55,8 @@ defmodule DeckexWeb.OptimizationLive do
     assign(socket,
       optimization: optimization,
       deck: deck,
-      card_count: Optimizations.card_count(Optimizations.current_list(optimization)),
+      card_count:
+        Optimizations.sandbox_size(optimization, Optimizations.current_list(optimization)),
       stage_progress: stage_progress(optimization, deck, baselines),
       visions: vision_cards(optimization, deck),
       card_uris: Cards.uris_for_names(named_cards(optimization)),
@@ -107,7 +108,10 @@ defmodule DeckexWeb.OptimizationLive do
       report = Analysis.report(snapshot, baselines)
 
       {step.id,
-       %{criticals: Report.critical_count(report), cards: Optimizations.card_count(list)}}
+       %{
+         criticals: Report.critical_count(report),
+         cards: Optimizations.sandbox_size(optimization, list)
+       }}
     end)
   end
 

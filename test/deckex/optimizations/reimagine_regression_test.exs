@@ -85,8 +85,11 @@ defmodule Deckex.Optimizations.ReimagineRegressionTest do
       {:ok, %{found: [], not_found: names}}
     end)
 
+    # 99 in the main plus the commander this run swaps in makes exactly 100:
+    # the sandbox size counts commanders, so a run that ends at 101 buys a
+    # closing stage instead of finishing.
     {:ok, deck} =
-      Decks.import_from_text("1 Sol Ring\n99 Island", %{name: "Deck Sintético", source: :paste})
+      Decks.import_from_text("1 Sol Ring\n98 Island", %{name: "Deck Sintético", source: :paste})
 
     deck = deck |> Deck.changeset(%{color_identity: ["U"]}) |> Repo.update!()
 

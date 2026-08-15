@@ -204,6 +204,12 @@ for *what* we are building and *why*. This file is *how*.
   walks `Consult.lenses()` and asserts the universal pieces reach all of them —
   guard the class, not the two instances you happened to find.
 
+- **The sandbox list is the main board; the commanders are not in it.** The
+  hundred-card rule is about the deck, so the pipeline measures
+  `Optimizations.sandbox_size/2` and never `card_count/1`. Confusing the two
+  meant every "Cartas 100/100" the run page printed described a deck of 101,
+  and the reference deck finished an entire eight-stage run one card over
+  legal with nothing anywhere saying so.
 - **A run may not end on a list that cannot go on a table.** Ordinary stages
   walk the count toward 100 a card or two at a time — the owner's own
   preference, and it means every card that leaves was the worst card left when

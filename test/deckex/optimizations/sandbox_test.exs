@@ -5,6 +5,7 @@ defmodule Deckex.Optimizations.SandboxTest do
   alias Deckex.Decks
   alias Deckex.Decks.DecklistParser
   alias Deckex.Optimizations
+  alias Deckex.Optimizations.Optimization
 
   defp deck do
     CatalogueFixture.seed!(~w(sol_ring forest counterspell cultivate))
@@ -113,6 +114,33 @@ defmodule Deckex.Optimizations.SandboxTest do
 
       assert %{board: :commander, name: "Iroh, Grand Lotus"} =
                Enum.find(entries, &(&1.board == :commander))
+    end
+  end
+
+  describe "sandbox_size/2" do
+    # The bug this exists to not have: the sandbox list is the main board and
+    # commanders live in their own field, so every "Cartas 100/100" the run
+    # page printed meant a deck of 101. The reference deck finished a whole
+    # eight-stage run one card over legal, and nothing anywhere said so.
+    test "counts the commanders, because the hundred-card rule does" do
+      run = %Optimization{commanders: ["Iroh, Grand Lotus"], contract: %{}}
+      list = [%{"name" => "Forest", "quantity" => 99}]
+
+      assert Optimizations.card_count(list) == 99
+      assert Optimizations.sandbox_size(run, list) == 100
+    end
+
+    test "a partner pair counts as two" do
+      run = %Optimization{commanders: ["Frodo, Adventurous Hobbit", "Sam"], contract: %{}}
+      list = [%{"name" => "Forest", "quantity" => 98}]
+
+      assert Optimizations.sandbox_size(run, list) == 100
+    end
+
+    test "a list with no commander is its own size" do
+      run = %Optimization{commanders: [], contract: %{}}
+
+      assert Optimizations.sandbox_size(run, [%{"name" => "Forest", "quantity" => 100}]) == 100
     end
   end
 end

@@ -471,7 +471,7 @@ defmodule Deckex.Optimizations do
           contract: optimization.contract,
           changelog: changelog(optimization, step),
           stage_kind: step.kind,
-          card_count: card_count(step.list_before)
+          card_count: sandbox_size(optimization, step.list_before)
         }
       )
 
@@ -679,7 +679,7 @@ defmodule Deckex.Optimizations do
         budget_policy: Budget.from_contract(optimization.contract["forma_do_gasto"]),
         # The count the stage started from. Without it the engine has no idea
         # which direction is "further from 100", and the balance guard is off.
-        card_count: card_count(step.list_before),
+        card_count: sandbox_size(optimization, step.list_before),
         balance_mode: if(step.kind == :balance, do: :closing, else: :stage),
         history: history(optimization, step),
         keep: (optimization.contract["keep"] || []) ++ current_commanders(optimization),
@@ -811,7 +811,7 @@ defmodule Deckex.Optimizations do
   @max_closable_gap 10
 
   defp close_or_finish(optimization, done_step) do
-    count = card_count(current_list(optimization))
+    count = sandbox_size(optimization, current_list(optimization))
     spent = Enum.count(optimization.steps, &(&1.kind == :balance))
 
     if closable?(count, spent) do
@@ -901,7 +901,7 @@ defmodule Deckex.Optimizations do
   # list at 103 cards did not finish the job, and an outcome of "completo" on
   # an illegal deck is the app lying to the person who has to shuffle it.
   defp outcome_for(optimization) do
-    count = card_count(current_list(optimization))
+    count = sandbox_size(optimization, current_list(optimization))
 
     cond do
       count != Balance.target() ->
@@ -1059,10 +1059,30 @@ defmodule Deckex.Optimizations do
     end
   end
 
-  @doc "How many cards a sandbox list holds — quantities summed, not rows."
+  @doc """
+  How many cards a sandbox list holds — quantities summed, not rows.
+
+  The **main list only**. Commanders live in their own field, so this is not
+  the number the hundred-card rule is about: use `sandbox_size/2` for that.
+  """
   @spec card_count([map()]) :: non_neg_integer()
   def card_count(list) when is_list(list) do
     list |> Enum.map(&(&1["quantity"] || 0)) |> Enum.sum()
+  end
+
+  @doc """
+  The size of the deck this sandbox would produce — commanders included.
+
+  The one number the hundred-card rule is about, and for a long time nothing
+  computed it. The sandbox list is the main board; commanders are a separate
+  field, so every "Cartas 100/100" the run page printed meant a deck of 101
+  cards, and a pipeline driving the main list to 100 was driving the deck to
+  one card over legal. Found on the reference deck, which finished a whole
+  eight-stage run at 101.
+  """
+  @spec sandbox_size(Optimization.t(), [map()]) :: non_neg_integer()
+  def sandbox_size(%Optimization{} = optimization, list) do
+    card_count(list) + length(current_commanders(optimization))
   end
 
   defdelegate list_for_deck(deck_id), to: OptimizationQuery
