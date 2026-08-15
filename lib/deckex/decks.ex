@@ -13,10 +13,13 @@ defmodule Deckex.Decks do
   alias Deckex.Cards
   alias Deckex.Cards.Card
   alias Deckex.Cards.Name
+  alias Deckex.Consults.Suggestion
   alias Deckex.Decks.Deck
   alias Deckex.Decks.DeckCard
   alias Deckex.Decks.DecklistParser
   alias Deckex.Decks.DeckQuery
+  alias Deckex.Decks.DeckVersion
+  alias Deckex.Decks.Edits
   alias Deckex.Decks.Versions
   alias Deckex.Error
   alias Deckex.Events
@@ -291,6 +294,7 @@ defmodule Deckex.Decks do
       # which is precisely the feedback the button exists to give.
       {:ok, _roles} = Cards.classify_card(card)
       :ok = mark_dossier_stale(deck)
+      :ok = Edits.log(deck, :add, card.name, opts)
 
       {:ok, upsert_deck_card!(deck, card, board, quantity)}
     end
@@ -317,18 +321,88 @@ defmodule Deckex.Decks do
   end
 
   @doc "Removes one copy of a card, deleting the row when the last copy goes."
-  @spec remove_card(Deck.t(), String.t()) :: {:ok, :removed} | {:error, Error.t()}
-  def remove_card(%Deck{} = deck, name) do
+  @spec remove_card(Deck.t(), String.t(), keyword()) :: {:ok, :removed} | {:error, Error.t()}
+  def remove_card(%Deck{} = deck, name, opts \\ []) do
     with {:ok, card} <- resolve_one(name),
          %DeckCard{} = deck_card <- find_any_board(deck, card) do
       drop_one!(deck_card)
       :ok = mark_dossier_stale(deck)
+      :ok = Edits.log(deck, :cut, card.name, opts)
 
       {:ok, :removed}
     else
       nil -> {:error, not_in_deck(name)}
       {:error, _reason} = error -> error
     end
+  end
+
+  @doc """
+  Applies a consult's suggestions in one act, and marks the version that says
+  what they were.
+
+  The punctual consult is an optimization too — a small one, with the owner
+  reading every row instead of an engine auditing them — so it ends where the
+  Otimizador ends: in the deck's own history, with each card carrying the
+  sentence that argued for it.
+
+  A suggestion that cannot be applied does not stop the others. A model asking
+  to cut a card the deck does not hold is wrong about one row, not about the
+  answer, and refusing all twenty because of it would be the app being pedantic
+  with the owner's money. The refusals come back named.
+  """
+  @spec apply_suggestions(Deck.t(), [Suggestion.t()], keyword()) ::
+          {:ok,
+           %{
+             deck: Deck.t(),
+             version: DeckVersion.t() | nil,
+             applied: [String.t()],
+             failed: [{String.t(), String.t()}]
+           }}
+  def apply_suggestions(%Deck{} = deck, suggestions, opts \\ []) do
+    consult_id = Keyword.get(opts, :consult_id)
+
+    {applied, failed} =
+      suggestions
+      |> Enum.filter(& &1.resolved?)
+      |> Enum.reduce({[], []}, fn suggestion, {applied, failed} ->
+        case apply_one(deck, suggestion, consult_id) do
+          {:ok, _result} -> {[suggestion.name | applied], failed}
+          {:error, error} -> {applied, [{suggestion.name, error.message} | failed]}
+        end
+      end)
+
+    {:ok, fresh} = fetch_deck(deck.id)
+
+    {:ok,
+     %{
+       deck: fresh,
+       version: version_for(fresh, applied, opts),
+       applied: Enum.reverse(applied),
+       failed: Enum.reverse(failed)
+     }}
+  end
+
+  defp apply_one(deck, %Suggestion{action: :cut} = suggestion, consult_id) do
+    remove_card(deck, suggestion.name, reason: suggestion.reason, consult_id: consult_id)
+  end
+
+  defp apply_one(deck, %Suggestion{action: :add} = suggestion, consult_id) do
+    add_card(deck, suggestion.name, reason: suggestion.reason, consult_id: consult_id)
+  end
+
+  # Nothing applied is nothing to record: a version identical to the one before
+  # it would be a row that says "this is where I clicked and it did not work".
+  defp version_for(_deck, [], _opts), do: nil
+
+  defp version_for(deck, _applied, opts) do
+    {:ok, version} =
+      Versions.mark(deck,
+        origin: :consult,
+        consult_id: Keyword.get(opts, :consult_id),
+        label: Keyword.get(opts, :label, "Consulta aplicada")
+      )
+
+    version
   end
 
   @doc """

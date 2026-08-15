@@ -237,6 +237,17 @@ for *what* we are building and *why*. This file is *how*.
   photographs the working state first when it has drifted from the last
   version, or when there is no version at all. The five cards someone edited by
   hand before running the optimizer are theirs to go back to.
+- **A change records why it happened, at the moment it happens.** Comparing
+  two lists recovers *what* changed and can never recover *why*, so every add
+  and every cut writes a `deck_edits` row carrying the consult's own sentence —
+  and the next version consumes those rows instead of diffing. The diff is
+  still there as the fallback, and it is the right fallback: always correct
+  about what, silent about why.
+- **A punctual consult ends where the Otimizador ends.** Applying an answer is
+  one act — `Decks.apply_suggestions/3` — that writes the cards and marks the
+  version, origin `:consult`, pointing at the consult. The engine's refusals
+  are excluded from it: overriding the audit is something the owner does one
+  click at a time, with the reason printed beside the row, never in bulk.
 - **A version's changelog is the net, not the transcript.** A card added by one
   stage and cut by a later one nets to nothing, and the history reads as what
   happened to the deck rather than as a diary of the run — the same fold

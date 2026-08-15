@@ -7,6 +7,10 @@ defmodule DeckexWeb.DeckConsultTest do
   alias Deckex.CatalogueFixture
   alias Deckex.Consults
   alias Deckex.Decks
+  alias Deckex.Decks.Deck
+  alias Deckex.Decks.DeckVersion
+  alias Deckex.Decks.Versions
+  alias Deckex.Repo
 
   setup :verify_on_exit!
 
@@ -75,6 +79,66 @@ defmodule DeckexWeb.DeckConsultTest do
     assert html =~ "Falta interação nesse deck."
     assert html =~ "Cultivate"
     assert html =~ "remoção barata"
+  end
+
+  # The punctual consult is a small optimization, and it ends where the big one
+  # ends: in the deck's own history, with the model's own sentences.
+  test "applying a whole answer writes a version", %{conn: conn, deck: deck} do
+    # A pasted list with no commander has an empty colour identity, and the
+    # engine correctly refuses a green add into it — that is its own test.
+    deck =
+      deck |> Deck.changeset(%{color_identity: ["G", "U"]}) |> Repo.update!()
+
+    {:ok, consult} = Consults.request(deck, :full)
+
+    stub(Deckex.Scryfall.Mock, :fetch_by_names, fn _names ->
+      {:ok, %{found: [Deckex.ScryfallFixture.load!("cultivate")], not_found: []}}
+    end)
+
+    expect(Deckex.AI.Mock, :complete, fn _prompt, _schema, _opts ->
+      {:ok,
+       %{
+         "diagnosis" => "Falta rampa.",
+         "cuts" => [%{"card" => "Sol Ring", "reason" => "exemplo de corte"}],
+         "adds" => [%{"card" => "Cultivate", "reason" => "remoção barata"}]
+       }}
+    end)
+
+    {:ok, _done} = Consults.run(consult)
+
+    {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}")
+
+    html =
+      live
+      |> element("button[phx-click='aplicar-consulta'][phx-value-consult='#{consult.id}']")
+      |> render_click()
+
+    assert html =~ "virou a v2 do deck"
+
+    names = deck |> Decks.list_deck_cards() |> Enum.map(& &1.card.name) |> Enum.sort()
+    assert names == ["Counterspell", "Cultivate", "Forest"]
+
+    [version | _older] = Versions.list(deck)
+    assert version.origin == :consult
+    assert version.consult_id == consult.id
+
+    # Each card carries the sentence that argued for it — the reason the log
+    # exists at all.
+    assert Enum.map(DeckVersion.applied(version), & &1["reason"]) == [
+             "remoção barata",
+             "exemplo de corte"
+           ]
+  end
+
+  test "a hand edit shows up as a change waiting to be marked", %{conn: conn, deck: deck} do
+    {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}")
+
+    html =
+      live
+      |> element("button[phx-click='apply-cut'][phx-value-name='Sol Ring']")
+      |> render_click()
+
+    assert html =~ "1 mudança(s) soltas"
   end
 
   test "the exact prompt is available to copy", %{conn: conn, deck: deck} do

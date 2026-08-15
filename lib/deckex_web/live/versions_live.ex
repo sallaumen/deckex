@@ -104,6 +104,7 @@ defmodule DeckexWeb.VersionsLive do
 
   defp origin_label(:import), do: "importado"
   defp origin_label(:optimization), do: "otimização"
+  defp origin_label(:consult), do: "consulta"
   defp origin_label(:manual), do: "marcada por você"
 
   # A version that changed nothing is worth saying so out loud: it means the

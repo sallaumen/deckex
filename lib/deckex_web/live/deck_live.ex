@@ -18,6 +18,7 @@ defmodule DeckexWeb.DeckLive do
   alias Deckex.Consults
   alias Deckex.Consults.Suggestions
   alias Deckex.Decks
+  alias Deckex.Decks.Edits
   alias Deckex.Decks.Versions
   alias Deckex.Error
   alias Deckex.Events
@@ -62,6 +63,7 @@ defmodule DeckexWeb.DeckLive do
       deletion_cost: Decks.deletion_cost(deck),
       version_count: deck |> Versions.list() |> length(),
       drifted?: Versions.drifted?(deck),
+      pending_edits: Edits.count(deck),
       page_title: deck.name
     )
     |> assign_new(:renaming, fn -> false end)
@@ -182,6 +184,22 @@ defmodule DeckexWeb.DeckLive do
 
   def handle_event("apply-add", %{"name" => name}, socket) do
     {:noreply, apply_edit(socket, Decks.add_card(socket.assigns.deck, name), "#{name} entrou.")}
+  end
+
+  # The whole answer in one act, and the version that says what it was. The
+  # engine's refusals are left where they are: a row the audit flagged is
+  # exactly the row nobody should apply by accident.
+  def handle_event("aplicar-consulta", %{"consult" => consult_id}, socket) do
+    consult = Enum.find(socket.assigns.consults, &(&1.id == consult_id))
+    rows = applicable(socket.assigns.suggestions[consult_id], socket.assigns.audits[consult_id])
+
+    {:ok, result} =
+      Decks.apply_suggestions(socket.assigns.deck, rows,
+        consult_id: consult_id,
+        label: "Consulta: #{Consults.lens_label(consult.lens)}"
+      )
+
+    {:noreply, socket |> assign_deck(result.deck) |> put_flash(:info, applied_message(result))}
   end
 
   def handle_event("apply-cut", %{"name" => name}, socket) do
@@ -321,6 +339,45 @@ defmodule DeckexWeb.DeckLive do
     |> Map.new(fn {id, rows} -> {id, Consults.audit(snapshot, rows, lenses[id])} end)
   end
 
+  # Resolved, and not flagged by the engine. A suggestion the audit rejected is
+  # still on the page with its reason printed — this button is not where the
+  # owner overrides the engine, one click at a time is.
+  defp applicable(nil, _audit), do: []
+
+  defp applicable(rows, audit) do
+    Enum.filter(rows, &(&1.resolved? and problems_for(audit, &1.action, &1.name) == []))
+  end
+
+  defp consult_apply_warning(deck, rows, audit) do
+    {adds, cuts} = Enum.split_with(applicable(rows, audit), &(&1.action == :add))
+    refused = length(rows) - length(adds) - length(cuts)
+
+    "Aplicar #{length(adds)} entrada(s) e #{length(cuts)} corte(s) em #{deck.name}?" <>
+      if(refused > 0, do: " #{refused} recusada(s) pelo motor ficam de fora.", else: "") <>
+      " A lista de agora fica guardada como versão."
+  end
+
+  defp applied_summary(rows, audit) do
+    {adds, cuts} = Enum.split_with(applicable(rows, audit), &(&1.action == :add))
+
+    "+#{length(adds)} / −#{length(cuts)}"
+  end
+
+  defp applied_message(%{applied: [], failed: []}), do: "Nada para aplicar nessa resposta."
+
+  defp applied_message(%{applied: [], failed: failed}) do
+    "Nenhuma mudança entrou: #{Enum.map_join(failed, "; ", fn {name, reason} -> "#{name} — #{reason}" end)}"
+  end
+
+  defp applied_message(%{applied: applied, failed: failed, version: version}) do
+    base = "#{length(applied)} mudança(s) aplicada(s) — virou a v#{version.number} do deck."
+
+    case failed do
+      [] -> base
+      some -> base <> " #{length(some)} não deu: #{Enum.map_join(some, "; ", &elem(&1, 0))}"
+    end
+  end
+
   defp problems_for(nil, _action, _name), do: []
   defp problems_for(audit, action, name), do: Map.get(audit.problems, {action, name}, [])
 
@@ -407,7 +464,9 @@ defmodule DeckexWeb.DeckLive do
               navigate={~p"/decks/#{@deck.id}/versoes"}
               class="-my-2 inline-flex min-h-touch items-center px-1 py-2 text-caption text-ink-faint transition-colors hover:text-ink motion-reduce:transition-none"
             >
-              Versões ({@version_count}){if @drifted?, do: " •"}
+              Versões ({@version_count}){if @pending_edits > 0,
+                do: " · #{@pending_edits} mudança(s) soltas",
+                else: if(@drifted?, do: " •")}
             </.link>
             <span class="text-ink-faint" aria-hidden="true">·</span>
             <button
@@ -1184,6 +1243,30 @@ defmodule DeckexWeb.DeckLive do
                           nenhum achado muda — as trocas são laterais pela régua do motor
                         </p>
                       </div>
+                    </div>
+
+                    <%!-- The answer is a small optimization, and it ends where
+                          the big one ends: in the deck's own history, with each
+                          card carrying the sentence that argued for it. --%>
+                    <div
+                      :if={applicable(@suggestions[consult.id], @audits[consult.id]) != []}
+                      class="mt-3 flex flex-wrap items-center gap-2"
+                    >
+                      <.button
+                        type="button"
+                        phx-click="aplicar-consulta"
+                        phx-value-consult={consult.id}
+                        phx-disable-with="aplicando…"
+                        data-confirm={
+                          consult_apply_warning(@deck, @suggestions[consult.id], @audits[consult.id])
+                        }
+                      >
+                        Aplicar tudo e marcar versão
+                      </.button>
+
+                      <span class="font-mono text-micro text-ink-faint">
+                        {applied_summary(@suggestions[consult.id], @audits[consult.id])}
+                      </span>
                     </div>
 
                     <div class="mt-2 flex items-center justify-between gap-3">

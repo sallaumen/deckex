@@ -17,7 +17,7 @@ defmodule Deckex.Decks.DeckVersion do
 
   alias Deckex.Decks.Deck
 
-  @fields ~w(deck_id number origin label optimization_id list commanders changes)a
+  @fields ~w(deck_id number origin label optimization_id consult_id list commanders changes)a
   @required ~w(deck_id number origin list)a
 
   @type t :: %__MODULE__{}
@@ -28,11 +28,12 @@ defmodule Deckex.Decks.DeckVersion do
     field :number, :integer
 
     # Where this version came from, which is what the history reads as: the
-    # import it arrived in, a run that was applied, or the owner marking a
-    # moment worth returning to.
-    field :origin, Ecto.Enum, values: [:import, :optimization, :manual]
+    # import it arrived in, a run that was applied, a single consult whose
+    # answer was applied, or the owner marking a moment worth returning to.
+    field :origin, Ecto.Enum, values: [:import, :optimization, :consult, :manual]
     field :label, :string
     field :optimization_id, Ecto.UUID
+    field :consult_id, Ecto.UUID
 
     # `%{"rows" => [%{"name", "quantity"}]}` — wrapped in a map because the
     # column is jsonb and a bare array is a different beast to migrate later.
