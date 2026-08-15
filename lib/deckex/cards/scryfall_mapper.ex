@@ -30,6 +30,8 @@ defmodule Deckex.Cards.ScryfallMapper do
       mana_cost: blank_to_nil(front(card, face, "mana_cost")),
       cmc: to_decimal(card["cmc"]),
       type_line: front(card, face, "type_line"),
+      power: front(card, face, "power"),
+      toughness: front(card, face, "toughness"),
       oracle_text: front(card, face, "oracle_text"),
       colors: front(card, face, "colors", []),
       color_identity: list(card, "color_identity"),

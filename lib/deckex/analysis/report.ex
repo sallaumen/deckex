@@ -31,6 +31,7 @@ defmodule Deckex.Analysis.Report do
     :interaction,
     :consistency,
     :mesa,
+    :fragility,
     :bracket,
     :findings
   ]
@@ -43,6 +44,7 @@ defmodule Deckex.Analysis.Report do
     :interaction,
     :consistency,
     :mesa,
+    :fragility,
     :bracket,
     :findings
   ]

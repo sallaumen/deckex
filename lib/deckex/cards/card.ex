@@ -14,7 +14,7 @@ defmodule Deckex.Cards.Card do
 
   import Ecto.Changeset
 
-  @fields ~w(oracle_id scryfall_id name name_normalized mana_cost cmc type_line
+  @fields ~w(oracle_id scryfall_id name name_normalized mana_cost cmc type_line power toughness
              oracle_text colors color_identity produced_mana keywords edhrec_rank
              rarity layout card_faces image_normal_url image_art_crop_url
              commander_legal game_changer price_usd prices_updated_at scryfall_uri
@@ -33,6 +33,8 @@ defmodule Deckex.Cards.Card do
     field :mana_cost, :string
     field :cmc, :decimal
     field :type_line, :string
+    field :power, :string
+    field :toughness, :string
     field :oracle_text, :string
     field :colors, {:array, :string}, default: []
     field :color_identity, {:array, :string}, default: []

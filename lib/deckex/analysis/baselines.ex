@@ -43,6 +43,9 @@ defmodule Deckex.Analysis.Baselines do
             sources_triple_pip: 31,
             tapland_share_max: 0.25,
             table_time_max: 4,
+            blockers_target: 6,
+            board_exposure_floor: 12,
+            graveyard_exposure_floor: 8,
             table_close_turn: 8
 
   @doc "The documented Commander defaults."

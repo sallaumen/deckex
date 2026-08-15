@@ -92,7 +92,9 @@ defmodule Deckex.Cards do
     # generated client-side, so a skipped insert still returns a struct carrying
     # an id that was never written, and the caller would hold a phantom card.
     |> Repo.insert(
-      on_conflict: {:replace, [:price_usd, :prices_updated_at, :edhrec_rank, :updated_at]},
+      on_conflict:
+        {:replace,
+         [:price_usd, :prices_updated_at, :edhrec_rank, :power, :toughness, :updated_at]},
       conflict_target: :oracle_id,
       returning: true
     )
@@ -163,6 +165,25 @@ defmodule Deckex.Cards do
         uri -> Map.put(acc, name, uri)
       end
     end)
+  end
+
+  @doc """
+  Re-fetches every card in the catalogue, refreshing the fields a re-fetch is
+  allowed to change.
+
+  Cards are immutable, so this exists for one situation: the app learned to
+  store a field it never stored before, and 159 rows have a hole where the
+  data should be. Goes through the same chunked, throttled port as every other
+  fetch — the Scryfall budget law does not have an exception for backfills.
+  """
+  @spec refresh_all!() :: {:ok, non_neg_integer()} | {:error, Error.t()}
+  def refresh_all! do
+    names = CardQuery.list_all_by_oracle_id() |> Enum.map(& &1.name)
+
+    with {:ok, %{found: found}} <- Scryfall.fetch_by_names(names),
+         {:ok, refreshed} <- insert_all(found) do
+      {:ok, length(refreshed)}
+    end
   end
 
   @doc """
