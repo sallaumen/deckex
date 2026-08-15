@@ -204,6 +204,19 @@ for *what* we are building and *why*. This file is *how*.
   walks `Consult.lenses()` and asserts the universal pieces reach all of them —
   guard the class, not the two instances you happened to find.
 
+## Operating notes
+
+- **`mix run` starts Oban, and Oban consumes.** A script that enqueues a job
+  will often be the process that *picks it up*, and when the script ends the
+  VM dies mid-job: the row sits in `executing` with no producer until the
+  Lifeline plugin rescues it, up to half an hour later. Launching the first
+  real Fable run cost exactly that. Enqueue from the running app, or hand the
+  job back with
+  `docker exec deckex-db-1 psql -U postgres -d deckex_dev -c "UPDATE oban_jobs
+  SET state='available', attempted_at=NULL, attempt=0 WHERE id=<id>"` — and
+  inspect through `psql` rather than `mix run` while a run is in flight, so a
+  throwaway instance cannot steal the next stage.
+
 ## Quality gate
 
 `mix lint` must be green **before** every commit — not after:
