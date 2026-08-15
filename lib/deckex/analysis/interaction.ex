@@ -40,6 +40,7 @@ defmodule Deckex.Analysis.Interaction do
 
     Enum.concat([
       total_low(measured, nonlands, baselines),
+      total_high(measured, nonlands, baselines),
       board_wipes(measured, nonlands, baselines),
       sorcery_heavy(measured, baselines),
       no_protection(measured)
@@ -69,6 +70,29 @@ defmodule Deckex.Analysis.Interaction do
   end
 
   defp total_low(_measured, _nonlands, _baselines), do: []
+
+  # The band's ceiling. No source argues more interaction is always better, and
+  # the failure at the top end is documented: a table where nobody can keep a
+  # permanent is a table where nobody gets to play. It is the same complaint
+  # people make about stax, arrived at from the other direction.
+  defp total_high(%{counters: counters, answers: answers}, nonlands, b)
+       when counters + answers > b.interaction_max do
+    [
+      Finding.new(
+        "interaction.too_much",
+        :warning,
+        :interaction,
+        "Interação demais para a mesa respirar",
+        "#{counters + answers} peças de interação (a faixa vai até #{b.interaction_max}). " <>
+          "Passando disso o deck deixa de ter plano próprio e passa a impedir o dos outros " <>
+          "— é a reclamação que se faz de stax, chegando pelo outro lado.",
+        evidence: %{total: counters + answers, max: b.interaction_max},
+        card_names: nonlands |> Enum.filter(&interactive?/1) |> DeckSnapshot.names()
+      )
+    ]
+  end
+
+  defp total_high(_measured, _nonlands, _baselines), do: []
 
   defp board_wipes(%{board_wipes: 0}, _nonlands, _baselines) do
     [

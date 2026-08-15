@@ -9,7 +9,28 @@ defmodule Deckex.Analysis.Baselines do
   The colour-source targets follow the commonly cited Karsten-style framework:
   roughly 19 sources for a single coloured pip on curve, 25 for a double pip,
   31 for a triple.
+
+  **The shipped numbers now say who wrote them.** They previously did not, and
+  a number presented without provenance reads as a fact — ours were one
+  anonymous opinion, and behind the published revisions. `source/0` names the
+  framework the defaults follow so the Ajustes panel can show it, and the owner
+  can disagree with a named author instead of with the app.
+
+  The draw and interaction targets were raised from 8 to 10 to match the
+  Command Zone's 2025 revision, whose stated reason was that the format got
+  faster and more threat-dense.
+
+  `interaction_max` is the other half of a band nothing here modelled. No
+  published source argues that more interaction is always better; the failure
+  mode at the top end is documented and compared directly to stax — if nobody
+  can keep a permanent on the board, nobody gets to play.
   """
+
+  @source "Command Zone, revisão de 2025 (ep. 658), adaptado onde este motor conta diferente"
+
+  @doc "The framework the shipped defaults follow, for the Ajustes panel."
+  @spec source() :: String.t()
+  def source, do: @source
 
   @typedoc """
   `table_close_turn` is a fact about the owner's pod, not about Magic: the turn
@@ -34,10 +55,11 @@ defmodule Deckex.Analysis.Baselines do
             early_play_target: 12,
             late_game_floor: 5,
             top_heavy_share: 0.20,
-            interaction_target: 8,
+            interaction_target: 10,
             interaction_floor: 5,
+            interaction_max: 16,
             board_wipe_target: 2,
-            draw_target: 8,
+            draw_target: 10,
             sources_single_pip: 19,
             sources_double_pip: 25,
             sources_triple_pip: 31,

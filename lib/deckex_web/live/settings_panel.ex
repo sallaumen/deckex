@@ -233,7 +233,9 @@ defmodule DeckexWeb.SettingsPanel do
               </summary>
 
               <p class="mt-3 text-micro text-ink-muted">
-                Heurísticas de Commander de 99 cartas. São chutes calibrados, não leis.
+                Heurísticas de Commander de 99 cartas. São chutes calibrados, não leis —
+                e agora dizem de quem são: <span class="text-ink-secondary">{Baselines.source()}</span>.
+                Discorde à vontade; é para isso que os campos são editáveis.
               </p>
 
               <div class="mt-3 grid gap-3 sm:grid-cols-2">
