@@ -337,6 +337,25 @@ defmodule Deckex.Decks do
   end
 
   @doc """
+  What separates two decks, and what closing the gap costs.
+
+  The question a person asks with two lists in front of them — "tenho este,
+  quero aquele, o que preciso comprar" — does not care whether the two lists
+  are versions of one deck or two decks that forked a month ago. Same
+  arithmetic, same answer, and the same shape the versions screen already
+  reads.
+  """
+  @spec compare(Deck.t(), Deck.t()) :: %{
+          buy: [map()],
+          drop: [map()],
+          total_usd: Decimal.t(),
+          unpriced: non_neg_integer()
+        }
+  def compare(%Deck{} = from, %Deck{} = to) do
+    Versions.diff_of(Versions.as_list(from), Versions.as_list(to))
+  end
+
+  @doc """
   Applies a consult's suggestions in one act, and marks the version that says
   what they were.
 

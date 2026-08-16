@@ -49,12 +49,14 @@ defmodule DeckexWeb.Router do
     live "/decks/:id/otimizacoes", OptimizationsLive, :index
     live "/decks/:id/versoes", VersionsLive, :index
     live "/otimizacoes/:id", OptimizationLive, :show
+    live "/comparar", CompareLive, :index
 
     get "/consultas/:id/csv", ExportController, :consult_csv
     get "/decks/:id/lista.txt", ExportController, :deck_txt
     get "/otimizacoes/:id/compras.txt", ExportController, :optimization_shopping_txt
 
     get "/decks/:id/versoes/:from/para/:to/compras.txt", ExportController, :version_diff_txt
+    get "/comparar/:from/para/:to/compras.txt", ExportController, :deck_diff_txt
   end
 
   # Other scopes may use custom stacks.

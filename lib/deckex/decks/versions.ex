@@ -272,6 +272,27 @@ defmodule Deckex.Decks.Versions do
           unpriced: non_neg_integer()
         }
   def diff(%DeckVersion{} = from, %DeckVersion{} = to) do
+    diff_of(as_list(from), as_list(to))
+  end
+
+  @doc """
+  The same question asked of two plain lists: what to buy to turn one into the
+  other.
+
+  Two versions of one deck and two different decks are the same arithmetic —
+  a person holding one list and wanting another does not care which of the two
+  the app happens to call a version.
+  """
+  @spec diff_of(%{commanders: [String.t()], rows: [map()]}, %{
+          commanders: [String.t()],
+          rows: [map()]
+        }) :: %{
+          buy: [map()],
+          drop: [map()],
+          total_usd: Decimal.t(),
+          unpriced: non_neg_integer()
+        }
+  def diff_of(from, to) do
     here = counts(from)
     there = counts(to)
 
@@ -295,12 +316,25 @@ defmodule Deckex.Decks.Versions do
     Enum.map_join(buy, "\n", &"#{&1.quantity} #{&1.name}") <> "\n"
   end
 
-  # Commanders count: a version that swapped the commander has to say so, and
-  # the new one is a card the owner may well have to buy.
-  defp counts(%DeckVersion{} = version) do
-    from_rows = Map.new(DeckVersion.rows(version), &{&1["name"], &1["quantity"] || 1})
+  @doc """
+  A version or a deck's working state, in the shape `diff_of/2` compares.
+  """
+  @spec as_list(DeckVersion.t() | Deck.t()) :: %{commanders: [String.t()], rows: [map()]}
+  def as_list(%DeckVersion{} = version),
+    do: %{commanders: version.commanders, rows: DeckVersion.rows(version)}
 
-    Enum.reduce(version.commanders, from_rows, &Map.update(&2, &1, 1, fn n -> n + 1 end))
+  def as_list(%Deck{} = deck) do
+    {commanders, rows} = working_state(deck)
+
+    %{commanders: commanders, rows: rows}
+  end
+
+  # Commanders count: a list that swapped the commander has to say so, and the
+  # new one is a card the owner may well have to buy.
+  defp counts(%{commanders: commanders, rows: rows}) do
+    from_rows = Map.new(rows, &{&1["name"], &1["quantity"] || 1})
+
+    Enum.reduce(commanders, from_rows, &Map.update(&2, &1, 1, fn n -> n + 1 end))
   end
 
   defp difference(target, source) do
