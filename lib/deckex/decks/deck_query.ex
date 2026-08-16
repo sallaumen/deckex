@@ -6,6 +6,7 @@ defmodule Deckex.Decks.DeckQuery do
 
   import Ecto.Query
 
+  alias Deckex.Decks.CardNote
   alias Deckex.Decks.Deck
   alias Deckex.Decks.DeckCard
   alias Deckex.Error
@@ -15,6 +16,22 @@ defmodule Deckex.Decks.DeckQuery do
   @spec list_decks() :: [Deck.t()]
   def list_decks do
     Repo.all(from d in Deck, where: is_nil(d.archived_at), order_by: [desc: d.inserted_at])
+  end
+
+  @doc "What the owner has said about cards in this deck, by card name."
+  @spec card_notes(String.t()) :: [CardNote.t()]
+  def card_notes(deck_id) do
+    Repo.all(from n in CardNote, where: n.deck_id == ^deck_id, order_by: [asc: n.card_name])
+  end
+
+  @doc "Forgets what was said about one card in one deck."
+  @spec delete_card_note(String.t(), String.t()) :: :ok
+  def delete_card_note(deck_id, card_name) do
+    Repo.delete_all(
+      from n in CardNote, where: n.deck_id == ^deck_id and n.card_name == ^card_name
+    )
+
+    :ok
   end
 
   @doc "Fetches a deck by id, or nil."

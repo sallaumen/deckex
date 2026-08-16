@@ -172,6 +172,7 @@ defmodule Deckex.Consults do
     |> Keyword.put_new(:budget, budget_state(snapshot, opts))
     |> Keyword.put(:dossier, deck.dossier)
     |> Keyword.put(:dossier_stale, deck.dossier_stale)
+    |> Keyword.put(:card_notes, Decks.card_notes(deck))
   end
 
   # The briefing is pure and cannot ask Settings what the owner's limits are,

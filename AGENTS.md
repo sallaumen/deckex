@@ -238,6 +238,14 @@ for *what* we are building and *why*. This file is *how*.
   the churn guard exists to stop two models arguing in circles, and a person
   with new information is not churn. Everything else still applies: the engine
   audits, the budget holds, the count lands on a hundred.
+- **A correction is knowledge about the deck, not about the run.** The note he
+  writes in a review is upserted onto the deck as a `deck_card_note` and
+  injected into **every future briefing for that deck** — with the instruction
+  that where it contradicts the model's reading, his reading wins. It cost a
+  run to notice and a review to say; making him say it again next month would
+  be the app forgetting on purpose. Editable and forgettable on the deck page,
+  beside the dossier, because both are what the owner knows that no number
+  shows.
 - **A mark is a bookmark, not a verdict.** Marking costs one click in the
   middle of reading and says only "come back to this"; the note is written at
   the end, against a list, when the run has stopped moving. A stage that costs
