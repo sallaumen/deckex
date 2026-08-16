@@ -214,6 +214,10 @@ defmodule Deckex.Consults.Audit do
     %{
       flips:
         opts |> Keyword.get(:history, []) |> Enum.frequencies_by(&Name.normalize(&1["card"])),
+      # Cards the owner named himself. The churn guard exists to stop two
+      # models arguing in circles; a person who says "you misread this card"
+      # is not churn, and the guard was never about him.
+      exempt: opts |> Keyword.get(:exempt, []) |> MapSet.new(&Name.normalize/1),
       keep: opts |> Keyword.get(:keep, []) |> MapSet.new(&Name.normalize/1),
       bracket_max: Keyword.get(opts, :bracket_max),
       avoid: Keyword.get(opts, :avoid, %{}),
@@ -225,8 +229,10 @@ defmodule Deckex.Consults.Audit do
   # Ping-pong is chained critics' known failure mode, and it is countable.
   # One appearance in the history is a change; a second is the revert — the
   # legitimate disagreement. A third touch is churn, and the engine ends it.
-  defp flip_flop_problem(%{flips: flips}, name) do
-    if Map.get(flips, Name.normalize(name), 0) >= 2 do
+  defp flip_flop_problem(%{flips: flips, exempt: exempt}, name) do
+    key = Name.normalize(name)
+
+    if Map.get(flips, key, 0) >= 2 and not MapSet.member?(exempt, key) do
       "já entrou e saiu nesta otimização — o vaivém para aqui"
     end
   end

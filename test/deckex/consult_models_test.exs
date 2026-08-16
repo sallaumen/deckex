@@ -111,7 +111,7 @@ defmodule Deckex.ConsultModelsTest do
       labels = Map.new(Consults.lens_labels())
 
       for lens <- Consult.lenses(),
-          lens not in [:finding, :scout, :alinhamento, :visao, :balanco] do
+          lens not in [:finding, :scout, :alinhamento, :visao, :balanco, :revisao] do
         assert Map.has_key?(labels, lens), "sem rótulo para #{lens}"
       end
     end

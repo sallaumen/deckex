@@ -58,6 +58,7 @@ defmodule DeckexWeb.OptimizationLive do
       optimization: optimization,
       deck: deck,
       applied_version: Versions.applied_runs(deck)[optimization.id],
+      marks: Map.new(Optimizations.marks(optimization), &{&1.card_name, &1}),
       card_count:
         Optimizations.sandbox_size(optimization, Optimizations.current_list(optimization)),
       stage_progress: stage_progress(optimization, deck, baselines),
@@ -244,6 +245,32 @@ defmodule DeckexWeb.OptimizationLive do
     fork(socket, nil)
   end
 
+  def handle_event("marcar", %{"card" => card} = params, socket) do
+    {:ok, _state} =
+      Optimizations.toggle_mark(socket.assigns.optimization, card, action_of(params["action"]))
+
+    {:noreply, load(socket, socket.assigns.optimization)}
+  end
+
+  def handle_event("anotar", %{"card" => card, "nota" => note}, socket) do
+    Optimizations.note_mark(socket.assigns.optimization, card, note)
+
+    {:noreply, load(socket, socket.assigns.optimization)}
+  end
+
+  def handle_event("revisar", %{"revisao" => %{"geral" => general}}, socket) do
+    case Optimizations.review(socket.assigns.optimization, general) do
+      {:ok, optimization} ->
+        {:noreply,
+         socket
+         |> load(optimization)
+         |> put_flash(:info, "Revisão na fila. A última etapa responde ao que você escreveu.")}
+
+      {:error, %Error{} = error} ->
+        {:noreply, put_flash(socket, :error, error.message)}
+    end
+  end
+
   def handle_event("aplicar-no-deck", %{"step" => step_id}, socket) do
     apply_run(socket, find_step(socket, step_id))
   end
@@ -251,6 +278,16 @@ defmodule DeckexWeb.OptimizationLive do
   def handle_event("aplicar-no-deck", _params, socket) do
     apply_run(socket, nil)
   end
+
+  defp mark_action(:add), do: "a rodada colocou"
+  defp mark_action(:cut), do: "a rodada tirou"
+  defp mark_action(:rejected), do: "o motor recusou"
+  defp mark_action(_none), do: "marcada por você"
+
+  defp action_of(action) when action in ["add", "cut", "rejected"],
+    do: String.to_existing_atom(action)
+
+  defp action_of(_none), do: nil
 
   defp apply_run(socket, step) do
     case Optimizations.apply_to_deck(socket.assigns.optimization, step) do
@@ -396,6 +433,33 @@ defmodule DeckexWeb.OptimizationLive do
   # What actually changed, net of a card that entered and left. The arithmetic
   # is the domain's — an edge translates and delegates.
   defdelegate consolidated_diff(optimization), to: Optimizations
+
+  attr :card, :string, required: true
+  attr :action, :string, default: nil
+  attr :marked?, :boolean, default: false
+
+  # A bookmark, not a verdict: it costs one click in the middle of reading and
+  # says only "come back to this". What he thinks about it comes at the end,
+  # when the run has stopped moving and there is a list to write against.
+  defp mark_toggle(assigns) do
+    ~H"""
+    <button
+      type="button"
+      phx-click="marcar"
+      phx-value-card={@card}
+      phx-value-action={@action}
+      aria-pressed={to_string(@marked?)}
+      aria-label={if @marked?, do: "Desmarcar #{@card}", else: "Marcar #{@card} para comentar"}
+      class={[
+        "-my-1 inline-flex size-6 items-center justify-center rounded transition-colors align-middle",
+        @marked? && "text-sev-warning",
+        not @marked? && "text-hairline-strong hover:text-ink-faint"
+      ]}
+    >
+      <.icon name={if @marked?, do: "hero-bookmark-solid", else: "hero-bookmark"} class="size-3.5" />
+    </button>
+    """
+  end
 
   @impl Phoenix.LiveView
   def render(assigns) do
@@ -687,6 +751,11 @@ defmodule DeckexWeb.OptimizationLive do
             </h3>
             <ul class="space-y-1">
               <li :for={change <- step.applied} class="text-caption text-ink-secondary">
+                <.mark_toggle
+                  card={change["card"]}
+                  action={change["action"]}
+                  marked?={Map.has_key?(@marks, change["card"])}
+                />
                 <span class={[
                   "font-mono",
                   change["action"] == "add" && "text-sev-healthy",
@@ -710,6 +779,11 @@ defmodule DeckexWeb.OptimizationLive do
             </h3>
             <ul class="space-y-1">
               <li :for={change <- step.rejected} class="text-caption">
+                <.mark_toggle
+                  card={change["card"]}
+                  action="rejected"
+                  marked?={Map.has_key?(@marks, change["card"])}
+                />
                 <.card_link
                   name={change["card"]}
                   uri={@card_uris[change["card"]]}
@@ -854,6 +928,78 @@ defmodule DeckexWeb.OptimizationLive do
       <%!-- Before the changelog, because this is the one the owner acts on.
             It is not the same list: a card he already applied to the real deck
             is a change he made, not a card he still needs to buy. --%>
+      <%!-- The stage that exists because a pipeline cannot read a card as well
+            as the person who plays it. Jaheira turns Food into creatures that
+            tap for mana; a stage cut her for "só dá mana a tokens de criatura",
+            and there was nowhere to say so. --%>
+      <section :if={@optimization.status == :done} class="mt-10">
+        <h2 class="mb-1 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+          Sua revisão
+        </h2>
+        <p class="mb-3 text-caption text-ink-muted">
+          Uma última etapa, contra o que você escrever. Ela pode desfazer o que as outras fizeram —
+          você joga esse deck, o modelo só leu as cartas.
+        </p>
+
+        <div class="rounded-xl border border-hairline-soft bg-surface p-6">
+          <p :if={@marks == %{}} class="text-caption text-ink-muted">
+            Nenhuma carta marcada. Durante a rodada, o marcador ao lado de cada carta guarda ela
+            para você comentar aqui — e o campo abaixo vale para a rodada inteira.
+          </p>
+
+          <ul :if={@marks != %{}} class="mb-4 space-y-3">
+            <li :for={{card, mark} <- Enum.sort_by(@marks, &elem(&1, 0))}>
+              <div class="flex flex-wrap items-baseline gap-2">
+                <.mark_toggle card={card} marked?={true} />
+                <.card_link name={card} uri={@card_uris[card]} class="text-ink" />
+                <span class="font-mono text-micro text-ink-faint">{mark_action(mark.action)}</span>
+              </div>
+
+              <.form
+                for={%{}}
+                id={"nota-carta-#{mark.id}"}
+                phx-change="anotar"
+                phx-submit="anotar"
+                class="mt-1"
+              >
+                <input type="hidden" name="card" value={card} />
+                <label for={"nota-#{mark.id}"} class="sr-only">O que você acha de {card}</label>
+                <textarea
+                  id={"nota-#{mark.id}"}
+                  name="nota"
+                  rows="2"
+                  phx-debounce="blur"
+                  placeholder={"o que o motor errou sobre #{card}, ou por que ela fica"}
+                  class="w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-caption text-ink"
+                >{mark.note}</textarea>
+              </.form>
+            </li>
+          </ul>
+
+          <.form for={%{}} id="revisao" phx-submit="revisar" class="space-y-2">
+            <label for="revisao-geral" class="block text-caption font-semibold text-ink-secondary">
+              E da rodada inteira
+            </label>
+            <textarea
+              id="revisao-geral"
+              name="revisao[geral]"
+              rows="3"
+              placeholder="ex.: ficou lento demais; cortou cartas do tema; quero mais remoção barata"
+              class="w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-caption text-ink"
+            >{@optimization.contract["revisao_geral"]}</textarea>
+
+            <div class="flex flex-wrap items-center gap-3">
+              <.button type="submit" phx-disable-with="mandando…" variant="primary">
+                Rodar a revisão
+              </.button>
+              <span class="text-micro text-ink-faint">
+                Uma consulta a mais, com o motor conferindo como em qualquer etapa.
+              </span>
+            </div>
+          </.form>
+        </div>
+      </section>
+
       <section :if={@optimization.status == :done and @shopping.cards != []} class="mt-10">
         <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
           O que comprar

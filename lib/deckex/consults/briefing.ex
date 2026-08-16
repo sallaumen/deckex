@@ -213,6 +213,41 @@ defmodule Deckex.Consults.Briefing do
     """
   end
 
+  # The one stage where a person outranks the pipeline. Everything else here
+  # is arithmetic and a model's reading of card text; this is the person who
+  # actually plays the deck saying the reading was wrong.
+  defp task_block(:revisao, opts) do
+    """
+    The owner of this deck read the whole run and wrote back. **This stage is
+    his.**
+
+    #{owner_review(opts[:optimization])}
+
+    ## How to treat what he said
+
+    He plays this deck. When he says a card does something the earlier stages
+    got wrong — its text, its role, what it actually enables in *this* list —
+    **he is right and the run was wrong**. Do not argue the reading back at
+    him; act on it.
+
+    - A card he defends that an earlier stage cut: **propose adding it back**,
+      and cut whatever is now weakest to pay for it.
+    - A card he dislikes that an earlier stage added: **propose cutting it**,
+      and add what the deck actually needed instead.
+    - A card he asks about without a verdict: answer him in `leitura` and
+      propose a change only if his point implies one.
+    - Something he said about the deck as a whole: apply it as far as it
+      reaches, and say in `leitura` what you did not do and why.
+
+    Change **only** what his notes reach. Everything else in this deck was
+    already argued over for several stages; a change he did not ask for is a
+    change nobody asked you for.
+
+    The deck must still end at exactly #{Balance.target()} cards, so every card
+    that comes back has to be paid for by one that leaves.
+    """
+  end
+
   defp task_block(:scout, _opts) do
     """
     Read this deck and write its strategic dossier — nothing else.
@@ -394,6 +429,38 @@ defmodule Deckex.Consults.Briefing do
     #{vision_line(contract["visao"])}#{stage_kind_line(stage_kind)}
     """
   end
+
+  defp owner_review(nil), do: ""
+
+  defp owner_review(optimization) do
+    cards = optimization[:marks] || []
+    general = get_in(optimization, [:contract, "revisao_geral"])
+
+    [marked_cards(cards), general_note(general)]
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.join("\n\n")
+  end
+
+  defp marked_cards([]), do: ""
+
+  defp marked_cards(marks) do
+    lines =
+      Enum.map_join(marks, "\n\n", fn mark ->
+        "- **#{mark.card_name}** — the run #{did(mark.action)}. He says: \"#{mark.note}\""
+      end)
+
+    "### As cartas que ele marcou\n\n#{lines}"
+  end
+
+  defp did(:add), do: "added it"
+  defp did(:cut), do: "cut it"
+  defp did(:rejected), do: "had it suggested and the engine refused it"
+  defp did(_unknown), do: "touched it"
+
+  defp general_note(nil), do: ""
+  defp general_note(""), do: ""
+
+  defp general_note(note), do: "### O que ele achou da rodada inteira\n\n#{note}"
 
   # Once a direction is chosen it is the target, and the deck's old dossier —
   # which may still be injected above — becomes context rather than the goal.

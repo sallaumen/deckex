@@ -29,6 +29,7 @@ defmodule Deckex.Optimizations do
   alias Deckex.Error
   alias Deckex.Events
   alias Deckex.Optimizations.Balance
+  alias Deckex.Optimizations.Mark
   alias Deckex.Optimizations.Optimization
   alias Deckex.Optimizations.OptimizationQuery
   alias Deckex.Optimizations.OptimizationStep
@@ -274,6 +275,113 @@ defmodule Deckex.Optimizations do
 
         fetch(optimization.id)
     end
+  end
+
+  @doc """
+  Flags a card while the run is going, or unflags it.
+
+  Marking is a toggle and costs nothing: it happens at the speed of reading,
+  in the middle of a stage, when something catches the eye. What the card is
+  worth saying about comes later.
+  """
+  @spec toggle_mark(Optimization.t(), String.t(), atom() | nil) :: {:ok, :marked | :unmarked}
+  def toggle_mark(%Optimization{} = optimization, card_name, action \\ nil) do
+    case Repo.get_by(Mark, optimization_id: optimization.id, card_name: card_name) do
+      nil ->
+        %Mark{}
+        |> Mark.changeset(%{
+          optimization_id: optimization.id,
+          card_name: card_name,
+          action: action
+        })
+        |> Repo.insert!()
+
+        {:ok, :marked}
+
+      mark ->
+        Repo.delete!(mark)
+
+        {:ok, :unmarked}
+    end
+  end
+
+  @doc "Writes (or clears) what the owner has to say about a marked card."
+  @spec note_mark(Optimization.t(), String.t(), String.t()) :: {:ok, Mark.t()} | :error
+  def note_mark(%Optimization{} = optimization, card_name, note) do
+    case Repo.get_by(Mark, optimization_id: optimization.id, card_name: card_name) do
+      nil -> :error
+      mark -> {:ok, mark |> Mark.changeset(%{note: note}) |> Repo.update!()}
+    end
+  end
+
+  @doc "Every card flagged in this run, in the order they were flagged."
+  @spec marks(Optimization.t()) :: [Mark.t()]
+  def marks(%Optimization{id: id}), do: OptimizationQuery.marks_for(id)
+
+  @doc """
+  Runs one last stage against what the owner said.
+
+  The pipeline is arithmetic and a model's reading; the owner is the person
+  who plays the deck. When he says a card was cut on a misreading — Jaheira
+  turns Food into creatures that tap for mana, she does not "only make mana
+  for creature tokens" — he is right and the run is wrong, and there was
+  nowhere to say so until now.
+
+  The stage is appended like any other, so everything downstream applies to it
+  unchanged: the engine still audits, the budget still holds, and the count
+  still has to land on a hundred.
+  """
+  @spec review(Optimization.t(), String.t()) :: {:ok, Optimization.t()} | {:error, Error.t()}
+  def review(%Optimization{} = optimization, general_note \\ "") do
+    said = Enum.filter(marks(optimization), &Mark.said?/1)
+    general = String.trim(general_note || "")
+
+    cond do
+      optimization.status != :done ->
+        {:error,
+         Error.new(:optimization_not_done, "A revisão é a última etapa: espere a rodada acabar.")}
+
+      said == [] and general == "" ->
+        {:error,
+         Error.new(
+           :nothing_to_review,
+           "Escreva o que você achou — de alguma carta marcada ou do conjunto. Sem isso não há o que revisar."
+         )}
+
+      true ->
+        append_review_step(optimization, general)
+        {:ok, resumed} = fetch(optimization.id)
+
+        do_resume(resumed)
+    end
+  end
+
+  # Only in the review stage, and only the cards he wrote about: his word
+  # outranks the churn guard for those and nothing else.
+  defp exempt_for(optimization, %OptimizationStep{kind: :revisao}) do
+    optimization |> marks() |> Enum.filter(&Mark.said?/1) |> Enum.map(& &1.card_name)
+  end
+
+  defp exempt_for(_optimization, _other_stage), do: []
+
+  defp append_review_step(optimization, general) do
+    %OptimizationStep{}
+    |> OptimizationStep.changeset(%{
+      optimization_id: optimization.id,
+      position: length(optimization.steps) + 1,
+      kind: :revisao,
+      lens: "revisao",
+      label: "Revisão do dono",
+      status: :pending,
+      list_before: current_list(optimization)
+    })
+    |> Repo.insert!()
+
+    optimization
+    |> Optimization.changeset(%{
+      contract: Map.put(optimization.contract, "revisao_geral", general)
+    })
+    |> Repo.update!()
   end
 
   @doc "Cancels a run. Everything already done stays readable."
@@ -538,7 +646,10 @@ defmodule Deckex.Optimizations do
           contract: optimization.contract,
           changelog: changelog(optimization, step),
           stage_kind: step.kind,
-          card_count: sandbox_size(optimization, step.list_before)
+          card_count: sandbox_size(optimization, step.list_before),
+          # Only the ones he actually wrote on: a card marked and left without
+          # a word is a card he read twice and had nothing to say about.
+          marks: Enum.filter(marks(optimization), &Mark.said?/1)
         }
       )
 
@@ -749,6 +860,7 @@ defmodule Deckex.Optimizations do
         card_count: sandbox_size(optimization, step.list_before),
         balance_mode: if(step.kind == :balance, do: :closing, else: :stage),
         history: history(optimization, step),
+        exempt: exempt_for(optimization, step),
         keep: (optimization.contract["keep"] || []) ++ current_commanders(optimization),
         bracket_max: optimization.contract["bracket_max"],
         avoid: Salt.avoided(optimization.contract["salt"]),
