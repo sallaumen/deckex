@@ -91,6 +91,20 @@ defmodule Deckex.Optimizations.ReviewTest do
       assert %{kind: :revisao, label: "Revisão do dono"} = List.last(reviewing.steps)
     end
 
+    # The correction cost a run to notice and a review to say. It belongs to the
+    # deck now, and the next run will carry it without being asked.
+    test "what he said about a card becomes the deck's memory" do
+      deck = deck()
+      run = finished_run(deck)
+      {:ok, :marked} = Optimizations.toggle_mark(run, "Cultivate", :cut)
+      {:ok, _mark} = Optimizations.note_mark(run, "Cultivate", "ela fixa cor, não é só rampa")
+
+      {:ok, _reviewing} = Optimizations.review(run, "")
+
+      assert [%{card_name: "Cultivate", note: "ela fixa cor, não é só rampa", source: :review}] =
+               Decks.card_notes(deck)
+    end
+
     test "the general note alone is enough" do
       run = finished_run(deck())
 

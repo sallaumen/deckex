@@ -65,6 +65,7 @@ defmodule DeckexWeb.DeckLive do
       version_count: deck |> Versions.list() |> length(),
       drifted?: Versions.drifted?(deck),
       pending_edits: Edits.changelog(deck),
+      card_notes: Decks.card_notes(deck),
       page_title: deck.name
     )
     |> assign_new(:renaming, fn -> false end)
@@ -201,6 +202,21 @@ defmodule DeckexWeb.DeckLive do
       )
 
     {:noreply, socket |> assign_deck(result.deck) |> put_flash(:info, applied_message(result))}
+  end
+
+  def handle_event("nota-de-carta", %{"card" => card, "nota" => note}, socket) do
+    {:ok, _result} = Decks.put_card_note(socket.assigns.deck, card, note)
+
+    {:noreply, assign_deck(socket, socket.assigns.deck)}
+  end
+
+  def handle_event("esquecer-nota", %{"card" => card}, socket) do
+    {:ok, :removed} = Decks.delete_card_note(socket.assigns.deck, card)
+
+    {:noreply,
+     socket
+     |> assign_deck(socket.assigns.deck)
+     |> put_flash(:info, "Esqueci o que você disse sobre #{card}.")}
   end
 
   def handle_event("marcar-versao", _params, socket) do
@@ -970,6 +986,53 @@ defmodule DeckexWeb.DeckLive do
                 </ul>
               </div>
             </div>
+          </section>
+
+          <%!-- Beside the dossier because they are the same kind of thing: what
+                the owner knows that no number shows. The dossier is about the
+                deck; these are about single cards, and they cost a whole run
+                to learn — a stage misread a card, he caught it, and this is
+                where that stops happening again. --%>
+          <section :if={@card_notes != []}>
+            <div class="mb-3 flex items-center gap-3">
+              <h2 class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+                O que você já disse sobre cartas
+              </h2>
+              <span class="font-mono text-micro text-ink-faint">
+                entra em toda consulta deste deck
+              </span>
+            </div>
+
+            <ul class="space-y-3 rounded-xl border border-hairline-soft bg-surface p-6">
+              <li :for={note <- @card_notes}>
+                <div class="flex flex-wrap items-baseline justify-between gap-2">
+                  <.card_link name={note.card_name} uri={@card_uris[note.card_name]} class="text-ink" />
+                  <button
+                    type="button"
+                    phx-click="esquecer-nota"
+                    phx-value-card={note.card_name}
+                    data-confirm={"Esquecer o que você disse sobre #{note.card_name}?"}
+                    class="-my-2 inline-flex min-h-touch items-center px-1 py-2 text-micro text-ink-faint transition-colors hover:text-sev-critical"
+                  >
+                    esquecer
+                  </button>
+                </div>
+
+                <.form for={%{}} id={"nota-carta-#{note.id}"} phx-change="nota-de-carta" class="mt-1">
+                  <input type="hidden" name="card" value={note.card_name} />
+                  <label for={"nota-deck-#{note.id}"} class="sr-only">
+                    O que você diz sobre {note.card_name}
+                  </label>
+                  <textarea
+                    id={"nota-deck-#{note.id}"}
+                    name="nota"
+                    rows="2"
+                    phx-debounce="blur"
+                    class="w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-caption text-ink"
+                  >{note.note}</textarea>
+                </.form>
+              </li>
+            </ul>
           </section>
 
           <section>

@@ -349,6 +349,11 @@ defmodule Deckex.Optimizations do
          )}
 
       true ->
+        # Said once, kept forever: the correction is a fact about the deck, not
+        # about this half-hour. Every future briefing carries it, and he never
+        # has to explain the same card twice.
+        remember(optimization, said)
+
         append_review_step(optimization, general)
         {:ok, resumed} = fetch(optimization.id)
 
@@ -363,6 +368,12 @@ defmodule Deckex.Optimizations do
   end
 
   defp exempt_for(_optimization, _other_stage), do: []
+
+  defp remember(optimization, said) do
+    {:ok, deck} = Decks.fetch_deck(optimization.deck_id)
+
+    Enum.each(said, &Decks.put_card_note(deck, &1.card_name, &1.note, :review))
+  end
 
   defp append_review_step(optimization, general) do
     %OptimizationStep{}

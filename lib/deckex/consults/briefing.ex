@@ -36,6 +36,8 @@ defmodule Deckex.Consults.Briefing do
 
     #{dossier_block(lens, opts)}
 
+    #{card_notes_block(opts[:card_notes])}
+
     #{optimization_block(opts[:optimization])}
 
     #{decklist_block(snapshot)}
@@ -341,6 +343,29 @@ defmodule Deckex.Consults.Briefing do
     This dossier is the owner's current understanding of the deck. Trust it as
     context — and when the list itself says otherwise, contradict it explicitly
     in `leitura`.
+    """
+  end
+
+  # The owner correcting a card is the most expensive knowledge this app holds
+  # — it cost him a run to notice and a review to say. It goes in every
+  # briefing about this deck, above every measurement, because a model that
+  # misreads a card will misread it the same way next time.
+  defp card_notes_block(nil), do: ""
+  defp card_notes_block([]), do: ""
+
+  defp card_notes_block(notes) do
+    lines = Enum.map_join(notes, "\n", &"- **#{&1.card_name}**: #{&1.note}")
+
+    """
+    ## O que o dono já disse sobre cartas deste deck
+
+    #{lines}
+
+    These are his words about his own list, from earlier rounds. Where one of
+    them contradicts your reading of a card, **his reading wins** — he plays
+    the deck and he wrote this down precisely because a stage got it wrong
+    once. Do not propose a change that a note above argues against without
+    engaging the note by name.
     """
   end
 

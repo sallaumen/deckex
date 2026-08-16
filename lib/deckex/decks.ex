@@ -14,6 +14,7 @@ defmodule Deckex.Decks do
   alias Deckex.Cards.Card
   alias Deckex.Cards.Name
   alias Deckex.Consults.Suggestion
+  alias Deckex.Decks.CardNote
   alias Deckex.Decks.Deck
   alias Deckex.Decks.DeckCard
   alias Deckex.Decks.DecklistParser
@@ -423,6 +424,55 @@ defmodule Deckex.Decks do
 
     version
   end
+
+  @doc """
+  Records what the owner says about one card in this deck.
+
+  Upserted by name: he corrects himself, he does not accumulate contradictory
+  notes about the same card. An empty note removes it — the way to unsay
+  something is to erase it, not to write "ignore what I said".
+  """
+  @spec put_card_note(Deck.t(), String.t(), String.t(), atom()) ::
+          {:ok, CardNote.t()} | {:ok, :removed} | {:error, Error.t()}
+  def put_card_note(%Deck{} = deck, card_name, note, source \\ :manual) do
+    case String.trim(note || "") do
+      "" ->
+        delete_card_note(deck, card_name)
+
+      text ->
+        %CardNote{}
+        |> CardNote.changeset(%{
+          deck_id: deck.id,
+          card_name: card_name,
+          note: text,
+          source: source
+        })
+        |> Repo.insert(
+          on_conflict: {:replace, [:note, :source, :updated_at]},
+          conflict_target: [:deck_id, :card_name],
+          returning: true
+        )
+        |> case do
+          {:ok, saved} ->
+            {:ok, saved}
+
+          {:error, _changeset} ->
+            {:error, Error.new(:invalid_note, "Não consegui guardar a nota.")}
+        end
+    end
+  end
+
+  @doc "Forgets what was said about a card."
+  @spec delete_card_note(Deck.t(), String.t()) :: {:ok, :removed}
+  def delete_card_note(%Deck{} = deck, card_name) do
+    :ok = DeckQuery.delete_card_note(deck.id, card_name)
+
+    {:ok, :removed}
+  end
+
+  @doc "Everything the owner has said about cards in this deck."
+  @spec card_notes(Deck.t()) :: [CardNote.t()]
+  def card_notes(%Deck{id: id}), do: DeckQuery.card_notes(id)
 
   @doc """
   Stores the scout's reading of the deck.
