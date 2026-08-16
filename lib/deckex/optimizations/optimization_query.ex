@@ -7,6 +7,7 @@ defmodule Deckex.Optimizations.OptimizationQuery do
 
   import Ecto.Query
 
+  alias Deckex.Optimizations.Mark
   alias Deckex.Optimizations.Optimization
   alias Deckex.Optimizations.OptimizationStep
   alias Deckex.Repo
@@ -57,6 +58,16 @@ defmodule Deckex.Optimizations.OptimizationQuery do
         order_by: [desc: o.inserted_at]
     )
     |> Map.new(&{&1.deck_id, &1})
+  end
+
+  @doc "Every card the owner flagged in a run, in the order they were flagged."
+  @spec marks_for(String.t()) :: [Mark.t()]
+  def marks_for(optimization_id) do
+    Repo.all(
+      from m in Mark,
+        where: m.optimization_id == ^optimization_id,
+        order_by: [asc: m.inserted_at]
+    )
   end
 
   @doc "The step that owns a consult, with its optimization."

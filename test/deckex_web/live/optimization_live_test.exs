@@ -283,6 +283,61 @@ defmodule DeckexWeb.OptimizationLiveTest do
       assert history_html =~ "aplicada · v2"
     end
 
+    # The whole point: a card cut on a misreading — Jaheira turns Food into
+    # creatures that tap for mana — had nowhere to be argued with.
+    test "marking a card while reading, and saying why at the end", %{conn: conn} do
+      deck = deck()
+      {:ok, optimization} = Optimizations.start(deck, %{}, @two_lenses)
+      {:ok, _done} = run_first_stage(optimization, [], ["Cultivate"])
+
+      {:ok, live, _html} = live(conn, ~p"/otimizacoes/#{optimization.id}")
+
+      marked =
+        live
+        |> element("button[phx-click='marcar'][phx-value-card='Cultivate']")
+        |> render_click()
+
+      assert marked =~ "Desmarcar Cultivate"
+      assert [%{card_name: "Cultivate", action: :add}] = Optimizations.marks(optimization)
+
+      # The note comes at the end, when the run has stopped moving — so the
+      # form for it does not exist yet, on purpose.
+      refute marked =~ "Sua revisão"
+
+      {:ok, _second} = run_first_stage(optimization, [], [])
+
+      {:ok, ended, html} = live(conn, ~p"/otimizacoes/#{optimization.id}")
+      assert html =~ "Sua revisão"
+
+      [mark] = Optimizations.marks(optimization)
+
+      ended
+      |> form("#nota-carta-#{mark.id}", %{card: "Cultivate", nota: "essa eu não quero"})
+      |> render_change()
+
+      assert [%{note: "essa eu não quero"}] = Optimizations.marks(optimization)
+    end
+
+    test "the review runs as one last stage", %{conn: conn} do
+      deck = deck()
+      {:ok, optimization} = Optimizations.start(deck, %{}, @two_lenses)
+      {:ok, _first} = run_first_stage(optimization, [], ["Cultivate"])
+      {:ok, second} = run_first_stage(optimization, [], [])
+
+      assert second.status == :done
+
+      {:ok, live, _html} = live(conn, ~p"/otimizacoes/#{optimization.id}")
+
+      live
+      |> form("#revisao", revisao: %{geral: "cortou coisa do tema"})
+      |> render_submit()
+
+      {:ok, reviewing} = Optimizations.fetch(optimization.id)
+
+      assert %{kind: :revisao, label: "Revisão do dono"} = List.last(reviewing.steps)
+      assert reviewing.contract["revisao_geral"] == "cortou coisa do tema"
+    end
+
     test "pause and resume drive the run from the page", %{conn: conn} do
       deck = deck()
       {:ok, optimization} = Optimizations.start(deck, %{}, @two_lenses)

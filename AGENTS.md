@@ -228,6 +228,20 @@ for *what* we are building and *why*. This file is *how*.
   only while nothing checked the count, and two features now do. The same
   lesson as `commander_legal` defaulting to `false` in `AnalysisFixture`: a
   fixture that models something impossible hides the bug it was meant to catch.
+- **The owner outranks the pipeline about his own cards.** Every stage is
+  arithmetic plus a model's reading of card text, and a misreading is a real
+  failure mode — Jaheira turns Food into creatures that tap for mana, and a
+  stage cut her for "só dá mana a tokens de criatura". So a run ends with an
+  optional **review stage** built from cards the owner bookmarked while
+  reading and what he wrote about each. In that stage his word beats the
+  model's reading, and it beats the flip-flop guard for the cards he named —
+  the churn guard exists to stop two models arguing in circles, and a person
+  with new information is not churn. Everything else still applies: the engine
+  audits, the budget holds, the count lands on a hundred.
+- **A mark is a bookmark, not a verdict.** Marking costs one click in the
+  middle of reading and says only "come back to this"; the note is written at
+  the end, against a list, when the run has stopped moving. A stage that costs
+  a consult and has nothing to answer is refused rather than run.
 - **An applied optimization is a version of the deck it came from.** A run is
   work done on a deck, so applying it writes the deck's own cards and marks the
   version that says what it did — `Versions.apply_list/4`, never a second deck
