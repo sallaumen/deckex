@@ -331,6 +331,11 @@ defmodule Deckex.Optimizations do
   unchanged: the engine still audits, the budget still holds, and the count
   still has to land on a hundred.
   """
+  # Bounded like the closing stages, and for the same reason: every one is a
+  # paid consult. Three rounds of "não é bem isso" is a conversation; the
+  # fourth is a new optimization wearing the old one's clothes.
+  @max_reviews 3
+
   @spec review(Optimization.t(), String.t()) :: {:ok, Optimization.t()} | {:error, Error.t()}
   def review(%Optimization{} = optimization, general_note \\ "") do
     said = Enum.filter(marks(optimization), &Mark.said?/1)
@@ -340,6 +345,14 @@ defmodule Deckex.Optimizations do
       optimization.status != :done ->
         {:error,
          Error.new(:optimization_not_done, "A revisão é a última etapa: espere a rodada acabar.")}
+
+      reviews_spent(optimization) >= @max_reviews ->
+        {:error,
+         Error.new(
+           :review_limit_reached,
+           "Esta rodada já teve #{@max_reviews} revisões. Aplique o que ficou bom e comece outra — " <>
+             "cada revisão é uma consulta paga, e a quarta discussão sobre a mesma lista não é mais sobre a lista."
+         )}
 
       said == [] and general == "" ->
         {:error,
@@ -368,6 +381,14 @@ defmodule Deckex.Optimizations do
   end
 
   defp exempt_for(_optimization, _other_stage), do: []
+
+  @doc "How many review stages this run has already spent."
+  @spec reviews_spent(Optimization.t()) :: non_neg_integer()
+  def reviews_spent(%Optimization{steps: steps}), do: Enum.count(steps, &(&1.kind == :revisao))
+
+  @doc "Whether another review is still allowed on this run."
+  @spec reviewable?(Optimization.t()) :: boolean()
+  def reviewable?(%Optimization{} = optimization), do: reviews_spent(optimization) < @max_reviews
 
   defp remember(optimization, said) do
     {:ok, deck} = Decks.fetch_deck(optimization.deck_id)

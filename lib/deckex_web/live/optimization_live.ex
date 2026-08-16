@@ -490,6 +490,12 @@ defmodule DeckexWeb.OptimizationLive do
                     comparable unless you know one started from a v3 and the
                     other from a v7. --%>
               · a partir {from_label(@optimization)}
+              <%!-- On a ten-stage run nobody remembers what they marked in
+                    stage two. The count says the review has something waiting
+                    in it, before the review section exists. --%>
+              <span :if={@marks != %{}} class="text-sev-warning">
+                · {map_size(@marks)} carta(s) marcada(s)
+              </span>
               <span :if={vision = Optimizations.chosen_vision(@optimization)}>
                 · direção: <span class="text-ink">{vision["nome"]}</span>
               </span>
@@ -989,11 +995,19 @@ defmodule DeckexWeb.OptimizationLive do
             >{@optimization.contract["revisao_geral"]}</textarea>
 
             <div class="flex flex-wrap items-center gap-3">
-              <.button type="submit" phx-disable-with="mandando…" variant="primary">
+              <.button
+                type="submit"
+                phx-disable-with="mandando…"
+                variant={if Optimizations.reviewable?(@optimization), do: "primary", else: nil}
+                disabled={not Optimizations.reviewable?(@optimization)}
+              >
                 Rodar a revisão
               </.button>
               <span class="text-micro text-ink-faint">
-                Uma consulta a mais, com o motor conferindo como em qualquer etapa.
+                {if Optimizations.reviewable?(@optimization),
+                  do: "Uma consulta a mais, com o motor conferindo como em qualquer etapa.",
+                  else:
+                    "Esta rodada já teve as revisões que cabem. Aplique o que ficou bom e comece outra."}
               </span>
             </div>
           </.form>

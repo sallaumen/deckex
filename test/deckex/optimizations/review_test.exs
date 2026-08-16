@@ -123,6 +123,30 @@ defmodule Deckex.Optimizations.ReviewTest do
       assert {:error, %Error{code: :nothing_to_review}} = Optimizations.review(run, "   ")
     end
 
+    # Every review is a paid consult. Three rounds of "não é bem isso" is a
+    # conversation; the fourth is a new optimization wearing the old one's
+    # clothes.
+    test "the loop is bounded" do
+      run = finished_run(deck())
+
+      run =
+        Enum.reduce(1..3, run, fn _round, run ->
+          {:ok, reviewing} = Optimizations.review(run, "de novo")
+
+          # The stage it just queued would land and finish the run; here it is
+          # settled by hand so the next round can ask for another review.
+          reviewing |> Optimization.changeset(%{status: :done}) |> Repo.update!()
+
+          {:ok, refreshed} = Optimizations.fetch(run.id)
+          refreshed
+        end)
+
+      assert Optimizations.reviews_spent(run) == 3
+      refute Optimizations.reviewable?(run)
+
+      assert {:error, %Error{code: :review_limit_reached}} = Optimizations.review(run, "mais uma")
+    end
+
     test "the review is the last stage, not a stage in the middle" do
       deck = deck()
 
