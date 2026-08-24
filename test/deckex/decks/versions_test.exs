@@ -90,6 +90,65 @@ defmodule Deckex.Decks.VersionsTest do
     end
   end
 
+  # A stage opened a run by spending its first paragraph explaining that eight
+  # cards the dossier calls the plan are not in the deck. It was right: the
+  # deck had taken two applied optimizations since the dossier was written, and
+  # neither of them flagged it, because staleness was only ever flagged in
+  # `add_card/3` and `remove_card/3` — the one-card-at-a-time path. Worse, the
+  # scout stage is scheduled off this same flag, so the dossier could not fix
+  # itself either.
+  describe "a dossier written for a list that has been replaced" do
+    defp with_dossier(deck) do
+      {:ok, deck} = Decks.put_dossier(deck, %{"plano" => "ganhar com o Sol Ring"})
+
+      deck
+    end
+
+    test "goes stale when an optimization's list is applied over the deck" do
+      deck = with_dossier(deck())
+      refute deck.dossier_stale
+
+      {:ok, applied, _version} =
+        Versions.apply_list(deck, ["Nature's Lore"], [
+          %{"name" => "Cultivate", "quantity" => 1},
+          %{"name" => "Forest", "quantity" => 4}
+        ])
+
+      assert applied.dossier_stale
+    end
+
+    test "goes stale when the deck is put back to an older version" do
+      deck = with_dossier(deck())
+      {:ok, v1} = Versions.fetch(deck, 1)
+      {:ok, _cut} = Decks.remove_card(deck, "Sol Ring")
+      {:ok, fresh} = Decks.put_dossier(deck, %{"plano" => "escrito depois do corte"})
+
+      {:ok, restored} = Versions.restore(fresh, v1)
+
+      assert restored.dossier_stale
+    end
+
+    # Saying a dossier is stale when nothing moved sends the owner to
+    # regenerate one that is still correct — and a regeneration costs a consult.
+    test "survives a restore that lands on the identical list" do
+      deck = with_dossier(deck())
+      {:ok, v1} = Versions.fetch(deck, 1)
+
+      {:ok, restored} = Versions.restore(deck, v1)
+
+      refute restored.dossier_stale
+    end
+
+    test "a deck with no dossier has nothing to go stale" do
+      deck = deck()
+
+      {:ok, applied, _version} =
+        Versions.apply_list(deck, ["Nature's Lore"], [%{"name" => "Cultivate", "quantity" => 1}])
+
+      refute applied.dossier_stale
+    end
+  end
+
   describe "restore/2" do
     test "puts the cards back exactly as the version held them" do
       deck = deck()

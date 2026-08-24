@@ -867,7 +867,18 @@ defmodule DeckexWeb.DeckLive do
                   />
                   <.stat label="Ramp" value={to_string(@report.mana.ramp_total)} unit="peças" />
                   <.stat label="Ramp barato" value={to_string(@report.mana.ramp_cheap)} unit="até 2" />
-                  <.stat label="Entram virados" value={to_string(@report.mana.taplands)} />
+                  <%!-- Só os incondicionais no numeral. Um fastland e um
+                        terreno de battlebond não são a mesma coisa que um
+                        Triome, e o número que somava os três dizia que esta
+                        base era lenta quando ela não é. --%>
+                  <.stat
+                    label="Entram virados"
+                    value={to_string(@report.mana.taplands)}
+                    target={
+                      if @report.mana.taplands_conditional > 0,
+                        do: "+#{@report.mana.taplands_conditional} condicionais"
+                    }
+                  />
                 </div>
 
                 <div class="mt-6 grid grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-3 border-t border-hairline-soft pt-5">

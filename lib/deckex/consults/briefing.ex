@@ -471,8 +471,24 @@ defmodule Deckex.Consults.Briefing do
   defp rule_line(%{card_name: name, note: nil}), do: "- **#{name}**"
   defp rule_line(%{card_name: name, note: note}), do: "- **#{name}**: #{note}"
 
+  # "Weigh it accordingly" was too soft to act on. A stage that opened on a
+  # dossier three versions old spent its whole first paragraph listing the
+  # eight cards the dossier calls the plan and the deck no longer has — correct,
+  # useful once, and paid for by an owner who wanted the stage to work the
+  # findings. Now the prompt says which of the two documents wins and what to
+  # do about the gap, in one sentence, rather than leaving the stage to invent
+  # a policy.
   defp stale_line(true) do
-    "\nCaution: the deck has changed since this dossier was written — weigh it accordingly.\n"
+    """
+
+    **This dossier is out of date: the deck's list has changed since it was
+    written.** The decklist below is the deck; the dossier is a description of
+    what it used to be. Where the two disagree — a card named here that is not
+    in the list, a plan the current cards no longer support — the list wins,
+    without argument. Say what changed in **one sentence** in `leitura` and
+    spend the rest of your answer on the deck as it is now. Cataloguing
+    everything the dossier gets wrong is not the work.
+    """
   end
 
   defp stale_line(_fresh), do: ""

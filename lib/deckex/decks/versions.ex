@@ -208,6 +208,8 @@ defmodule Deckex.Decks.Versions do
   end
 
   defp write_back(deck, rows, commanders, by_key) do
+    was = working_state(deck)
+
     {:ok, _result} =
       Repo.transact(fn ->
         Repo.delete_all(from dc in DeckCard, where: dc.deck_id == ^deck.id)
@@ -232,10 +234,37 @@ defmodule Deckex.Decks.Versions do
     :ok = Edits.clear(deck)
 
     {:ok, restored} = DeckQuery.fetch_deck(deck.id)
+    restored = stale_dossier(restored, was)
 
     Events.broadcast_deck_updated(restored)
 
     {:ok, restored}
+  end
+
+  # The dossier describes a list, and this function just replaced the list.
+  #
+  # Staleness used to be flagged only in `Decks.add_card/3` and
+  # `remove_card/3` — the one-card-at-a-time path — so a deck could take two
+  # whole optimizations, fifty cards each, and still hand the next briefing a
+  # dossier written before either of them. It happened: a run opened by
+  # spending its first paragraph explaining that eight cards the dossier calls
+  # the plan are not in the deck, which is a paid stage answering a question
+  # nobody asked. And because `Optimizations.recipe/2` decides whether to scout
+  # from this same flag, the dossier could never fix itself either.
+  #
+  # A restore that lands on the identical list changed nothing, and saying it
+  # did would send the owner to regenerate a dossier that is still correct.
+  defp stale_dossier(%Deck{dossier: nil} = deck, _was), do: deck
+  defp stale_dossier(%Deck{dossier_stale: true} = deck, _was), do: deck
+
+  defp stale_dossier(%Deck{} = deck, {was_commanders, was_rows}) do
+    {commanders, rows} = working_state(deck)
+
+    if commanders == was_commanders and normalize(rows) == normalize(was_rows) do
+      deck
+    else
+      deck |> Deck.changeset(%{dossier_stale: true}) |> Repo.update!()
+    end
   end
 
   defp insert_card!(deck, card, quantity, board) do

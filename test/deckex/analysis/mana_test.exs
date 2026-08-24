@@ -232,4 +232,88 @@ defmodule Deckex.Analysis.ManaTest do
       end
     end
   end
+
+  # The real deck this came from: three shocklands, three fastlands, two
+  # battlebond lands, a checkland and a slowland — ten lands flagged as slow,
+  # not one of them unconditional. The stage spent its answer arguing the
+  # point, correctly, and the owner paid for the paragraph.
+  describe "the conditions on the clause" do
+    defp base(entries), do: AnalysisFixture.snapshot(entries ++ [land("Reta", quantity: 26)])
+
+    test "a shockland is not a tapland — it is untapped for two life" do
+      snapshot =
+        base([
+          land("Steam Vents",
+            quantity: 10,
+            oracle_text:
+              "As this land enters, you may pay 2 life. If you don't, it enters tapped."
+          )
+        ])
+
+      assert %{taplands: 0, taplands_conditional: 10} =
+               Mana.measure(snapshot, Baselines.default())
+    end
+
+    test "a battlebond land in Commander is a dual, and weighs nothing" do
+      snapshot =
+        base([
+          land("Sea of Clouds",
+            quantity: 10,
+            oracle_text: "This land enters tapped unless you have two or more opponents."
+          )
+        ])
+
+      measured = Mana.measure(snapshot, Baselines.default())
+
+      assert %{taplands: 0, taplands_conditional: 0, tapland_share: +0.0} = measured
+      refute "mana.tapland_heavy" in codes(snapshot)
+    end
+
+    test "a fastland counts half, so a base of them alone does not trip the finding" do
+      snapshot =
+        base([
+          land("Seachrome Coast",
+            quantity: 10,
+            oracle_text: "This land enters tapped unless you control two or fewer other lands."
+          )
+        ])
+
+      assert %{taplands: 0, taplands_conditional: 10} =
+               Mana.measure(snapshot, Baselines.default())
+
+      refute "mana.tapland_heavy" in codes(snapshot)
+    end
+
+    test "an unconditional tapland still counts whole, and still trips it" do
+      snapshot =
+        base([land("Raugrin Triome", quantity: 10, oracle_text: "This land enters tapped.")])
+
+      assert %{taplands: 10, taplands_conditional: 0} =
+               Mana.measure(snapshot, Baselines.default())
+
+      assert "mana.tapland_heavy" in codes(snapshot)
+    end
+
+    # Naming a battlebond land as evidence of slowness is how a stage ends up
+    # arguing with the finding instead of working it.
+    test "the finding names only the lands it counted" do
+      snapshot =
+        AnalysisFixture.snapshot([
+          land("Raugrin Triome", quantity: 12, oracle_text: "This land enters tapped."),
+          land("Sea of Clouds",
+            quantity: 4,
+            oracle_text: "This land enters tapped unless you have two or more opponents."
+          ),
+          land("Reta", quantity: 10)
+        ])
+
+      [finding] =
+        snapshot
+        |> Mana.findings(Baselines.default())
+        |> Enum.filter(&(&1.code == "mana.tapland_heavy"))
+
+      assert "Raugrin Triome" in finding.card_names
+      refute "Sea of Clouds" in finding.card_names
+    end
+  end
 end
