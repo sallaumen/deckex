@@ -291,6 +291,23 @@ for *what* we are building and *why*. This file is *how*.
   or wanted card may carry no text; only a bare observation disappears when its
   text is erased. The text is what reaches the briefing, and it is the half
   that stops the next run misreading the same card.
+- **The dossier goes stale wherever the list is replaced, not only where it is
+  edited.** `Versions.write_back/4` flags it, the same as `add_card/3` does —
+  applying a run rewrites every card at once and used to leave the flag alone,
+  so a deck could take two optimizations and still hand the next briefing a
+  description of a deck that no longer existed. `Optimizations.recipe/2`
+  schedules the scout off that same flag, so a dossier that cannot go stale
+  cannot be rewritten either. A restore that lands on an identical list changes
+  nothing and says nothing: a false staleness costs a consult to clear.
+- **"Enters tapped" is a clause, not a verdict.** Every modern dual attaches a
+  condition to it, and the conditions are load-bearing: a shockland is untapped
+  for two life, a fastland is untapped in exactly the turns a fast deck lives
+  in, and a battlebond land's condition — two or more opponents — is the
+  definition of this format. So `Mana.tapland_weight/1` weighs rather than
+  judges: 1 unconditional, ½ conditional (the same half the MDFC lands get), 0
+  when the format itself satisfies the condition. A finding names only the
+  cards it counted; naming the rest is how a stage spends a paid answer arguing
+  with the engine instead of working it.
 - **A round of one stage changes only what was asked.** `:livre` has no
   checkpoint after it to catch an overreach and no validation to argue with it,
   so its briefing asks for narrowness rather than ambition. The audit, the

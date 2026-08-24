@@ -41,10 +41,23 @@ defmodule Deckex.Consults.BriefingTest do
       assert briefing =~ "## Measurements"
     end
 
-    test "a stale dossier says so" do
+    # "Weigh it accordingly" left the stage to invent a policy, and one invented
+    # a whole opening paragraph cataloguing everything the dossier got wrong —
+    # correct, useful once, and paid for by an owner who wanted the findings
+    # worked. The prompt now says which document wins and how much of the answer
+    # the gap is worth.
+    test "a stale dossier says so, says the list wins, and caps what that costs" do
       briefing = build(:full, dossier: @dossier, dossier_stale: true)
 
-      assert briefing =~ "the deck has changed since this dossier was written"
+      assert briefing =~ "This dossier is out of date"
+      assert briefing =~ "the list wins"
+      assert briefing =~ "one sentence"
+    end
+
+    test "a fresh dossier is not hedged" do
+      briefing = build(:full, dossier: @dossier)
+
+      refute briefing =~ "out of date"
     end
 
     test "with a dossier, the rules demand leitura first and out-loud disagreement" do

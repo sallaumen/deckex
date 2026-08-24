@@ -20,7 +20,26 @@ defmodule Deckex.Analysis.Mana do
   alias Deckex.Analysis.DeckSnapshot
   alias Deckex.Analysis.Finding
 
+  # "Enters tapped" is where this used to stop, and on a real deck that was ten
+  # false positives out of ten: three shocklands, three fastlands, two
+  # battlebond lands, a checkland and a slowland — not one unconditional
+  # tapland among them. The stage spent its answer arguing the point, correctly,
+  # and the owner paid for the paragraph.
+  #
+  # Every modern dual attaches a condition to the clause, and the conditions are
+  # not decoration. So a weight rather than a boolean:
+  #
+  #   * **1** — unconditional. "Enters tapped." and nothing else.
+  #   * **½** — conditional: any `unless`, and the shockland's "you may pay 2
+  #     life. If you don't, it enters tapped." The same half the MDFC lands
+  #     already get, for the same reason — it is sometimes a land and sometimes
+  #     half of one.
+  #   * **0** — a condition this format satisfies by existing. "Unless you have
+  #     two or more opponents" is the definition of Commander; a battlebond land
+  #     is a dual that enters untapped, and counting it as slow is simply wrong.
   @enters_tapped ~r/enters tapped/i
+  @format_satisfies ~r/enters tapped unless you have two or more opponents/i
+  @conditionally_tapped ~r/enters tapped unless|if you don't, it enters tapped/i
 
   # A fetchland produces no mana itself but grabs one that does, and Scryfall
   # reports `produced_mana: []` for every one of them. Counting only direct
@@ -39,7 +58,8 @@ defmodule Deckex.Analysis.Mana do
     lands = DeckSnapshot.lands(snapshot)
     nonlands = DeckSnapshot.nonlands(snapshot)
     ramp = DeckSnapshot.with_role(nonlands, :ramp)
-    taplands = Enum.filter(lands, &tapland?/1)
+    always = Enum.filter(lands, &(tapland_weight(&1) == 1.0))
+    sometimes = Enum.filter(lands, &(tapland_weight(&1) == 0.5))
 
     %{
       land_count: land_count(snapshot),
@@ -48,8 +68,13 @@ defmodule Deckex.Analysis.Mana do
       ramp_total: DeckSnapshot.count(ramp),
       ramp_cheap: ramp |> Enum.filter(&(CardEntry.cmc(&1) <= 2)) |> DeckSnapshot.count(),
       ramp_by_band: ramp_by_band(ramp),
-      taplands: DeckSnapshot.count(taplands),
-      tapland_share: share(DeckSnapshot.count(taplands), DeckSnapshot.count(lands)),
+      taplands: DeckSnapshot.count(always),
+      taplands_conditional: DeckSnapshot.count(sometimes),
+      tapland_share:
+        share(
+          DeckSnapshot.count(always) + DeckSnapshot.count(sometimes) * 0.5,
+          DeckSnapshot.count(lands)
+        ),
       fetchlands: lands |> Enum.filter(&fetchland?/1) |> DeckSnapshot.count(),
       colors: colors(snapshot, baselines)
     }
@@ -161,24 +186,43 @@ defmodule Deckex.Analysis.Mana do
 
   defp ramp_slow(_total, _cheap, _names, _baselines), do: []
 
-  defp tapland_findings(%{tapland_share: share, taplands: taplands}, snapshot, b)
-       when share > b.tapland_share_max do
+  defp tapland_findings(measured, snapshot, b)
+       when measured.tapland_share > b.tapland_share_max do
+    %{tapland_share: share, taplands: always, taplands_conditional: sometimes} = measured
+
     [
       Finding.new(
         "mana.tapland_heavy",
         :warning,
         :mana_ramp,
         "Muito terreno entrando virado",
-        "#{taplands} terrenos entram virados (#{percent(share)} da base). " <>
-          "Cada um é meio turno perdido.",
-        evidence: %{taplands: taplands, share: share},
-        card_names:
-          snapshot |> DeckSnapshot.lands() |> Enum.filter(&tapland?/1) |> DeckSnapshot.names()
+        "#{tapland_count(always, sometimes)} — #{percent(share)} da base, contando " <>
+          "os condicionais por metade. Cada terreno virado é meio turno perdido.",
+        evidence: %{taplands: always, taplands_conditional: sometimes, share: share},
+        # Only the lands that were actually counted. Naming a battlebond land
+        # here is how a stage ends up arguing with the finding instead of
+        # working it.
+        card_names: snapshot |> DeckSnapshot.lands() |> counted_taplands() |> DeckSnapshot.names()
       )
     ]
   end
 
   defp tapland_findings(_measured, _snapshot, _baselines), do: []
+
+  defp counted_taplands(lands), do: Enum.filter(lands, &(tapland_weight(&1) > 0.0))
+
+  # The two halves are said apart because they are answered apart: an
+  # unconditional tapland is a slot to replace, a conditional one is a choice
+  # about when it comes down.
+  defp tapland_count(always, 0), do: "#{always} terrenos entram virados"
+
+  defp tapland_count(0, sometimes) do
+    "#{sometimes} terrenos entram virados dependendo do turno"
+  end
+
+  defp tapland_count(always, sometimes) do
+    "#{always} terrenos entram virados sempre, e #{sometimes} dependendo do turno"
+  end
 
   defp color_findings(%{colors: colors}, snapshot) do
     Enum.flat_map(colors, fn {colour, measured} -> color_finding(colour, measured, snapshot) end)
@@ -291,7 +335,16 @@ defmodule Deckex.Analysis.Mana do
   defp source_target(2, b), do: b.sources_double_pip
   defp source_target(_three_or_more, b), do: b.sources_triple_pip
 
-  defp tapland?(%{card: card}), do: (card.oracle_text || "") =~ @enters_tapped
+  defp tapland_weight(%{card: card}) do
+    text = card.oracle_text || ""
+
+    cond do
+      not (text =~ @enters_tapped) -> 0.0
+      text =~ @format_satisfies -> 0.0
+      text =~ @conditionally_tapped -> 0.5
+      true -> 1.0
+    end
+  end
 
   defp avg_cmc(_nonlands, 0), do: 0.0
 
