@@ -65,6 +65,30 @@ defmodule Deckex.Scryfall.HttpTest do
       assert length(found) == 80
     end
 
+    test "retries a transient failure instead of losing the batch" do
+      # The bug this guards: one 503 used to cost the whole batch, permanently.
+      # The cards never reached the catalogue and the suggestion table said
+      # "não achei essa carta na Scryfall" about a card Scryfall has.
+      Req.Test.expect(Http, &Plug.Conn.send_resp(&1, 503, ""))
+
+      Req.Test.expect(Http, fn conn ->
+        Req.Test.json(conn, %{"data" => [%{"name" => "Lotus Petal"}], "not_found" => []})
+      end)
+
+      assert {:ok, %{found: [%{"name" => "Lotus Petal"}], not_found: []}} =
+               Http.fetch_by_names(["Lotus Petal"])
+    end
+
+    test "retries a dropped connection" do
+      Req.Test.expect(Http, &Req.Test.transport_error(&1, :closed))
+
+      Req.Test.expect(Http, fn conn ->
+        Req.Test.json(conn, %{"data" => [%{"name" => "Mana Vault"}], "not_found" => []})
+      end)
+
+      assert {:ok, %{found: [%{"name" => "Mana Vault"}]}} = Http.fetch_by_names(["Mana Vault"])
+    end
+
     test "turns a non-200 response into a domain error" do
       Req.Test.stub(Http, fn conn -> Plug.Conn.send_resp(conn, 503, "") end)
 

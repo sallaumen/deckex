@@ -8,6 +8,7 @@ defmodule DeckexWeb.SettingsAndTableTest do
   alias Deckex.CatalogueFixture
   alias Deckex.Consults
   alias Deckex.Decks
+  alias Deckex.Repo
   alias Deckex.Settings
 
   describe "Ajustes" do
@@ -114,6 +115,38 @@ defmodule DeckexWeb.SettingsAndTableTest do
 
       assert html =~ "2 carta(s) na fila"
       assert_enqueued(worker: Deckex.Workers.RepriceWorker)
+    end
+
+    # The repair for consults that lost cards to a Scryfall outage before the
+    # retry existed. Their suggestions still read "não achei essa carta na
+    # Scryfall", and the audit and the optimizer still ignore them, until
+    # something asks Scryfall again.
+    test "re-fetching the missing cards queues only the short consults", %{conn: conn} do
+      CatalogueFixture.seed!(~w(sol_ring forest))
+
+      {:ok, deck} =
+        Decks.import_from_text("1 Sol Ring\n4 Forest", %{name: "Deck Furado", source: :paste})
+
+      {:ok, consult} = Consults.request(deck, :full)
+
+      {:ok, short} =
+        consult
+        |> Ecto.Changeset.change(%{
+          status: :done,
+          response: %{
+            "diagnosis" => ".",
+            "cuts" => [],
+            "adds" => [%{"card" => "Cultivate", "reason" => "ramp"}]
+          }
+        })
+        |> Repo.update()
+
+      {:ok, live, _html} = live(conn, ~p"/ajustes")
+
+      html = live |> element("button[phx-click='refetch-missing']") |> render_click()
+
+      assert html =~ "1 consulta(s) na fila"
+      assert_enqueued(worker: Deckex.Workers.CatalogueWorker, args: %{consult_id: short.id})
     end
   end
 
