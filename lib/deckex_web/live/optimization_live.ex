@@ -498,6 +498,8 @@ defmodule DeckexWeb.OptimizationLive do
         ← Otimizações de {@deck.name}
       </.link>
 
+      <.deck_nav deck={@deck} current={:runs} />
+
       <header class="mt-3 mb-8">
         <div class="flex flex-wrap items-end justify-between gap-4">
           <div>

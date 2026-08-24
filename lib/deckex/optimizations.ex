@@ -48,6 +48,7 @@ defmodule Deckex.Optimizations do
   @spec default_contract(Deck.t()) :: map()
   def default_contract(%Deck{} = deck) do
     ceilings = Settings.ceilings(:upgrade)
+    standing = Decks.standing_rules(deck)
 
     %{
       "bracket_max" => Bracket.floor(Decks.snapshot(deck)).floor,
@@ -55,7 +56,12 @@ defmodule Deckex.Optimizations do
       # Frozen at launch, like every other rule here: changing Ajustes halfway
       # through must not quietly move the line a finished stage was judged by.
       "forma_do_gasto" => Budget.to_contract(Budget.policy()),
-      "keep" => [],
+      # The deck's own standing decisions, not an empty box he refills every
+      # time. He locked these cards once, on the screen made for it; a launch
+      # that started from nothing would make him remember them under pressure,
+      # and forgetting is how a combo piece gets cut.
+      "keep" => standing["keep"],
+      "wanted" => standing["wanted"],
       "matchups" => ["um deck aggro rápido", "um deck de controle pesado"],
       "notes" => "",
       # Every stage of an optimization proposes cutting and adding cards, so
@@ -87,7 +93,11 @@ defmodule Deckex.Optimizations do
   is the point: once the direction is chosen and the big swap is done, making
   the new deck good is the work the Otimizador already does well.
   """
-  @spec recipe(Deck.t(), :refine | :reimagine) :: [map()]
+  @spec recipe(Deck.t(), :livre | :refine | :reimagine) :: [map()]
+  def recipe(%Deck{} = _deck, :livre) do
+    [%{"kind" => "lens", "lens" => "livre", "label" => "Ajuste direto"}]
+  end
+
   def recipe(%Deck{} = deck, :refine) do
     scout =
       if deck.dossier == nil or deck.dossier_stale do
@@ -130,7 +140,9 @@ defmodule Deckex.Optimizations do
   @spec start(Deck.t(), map(), [map()] | nil) :: {:ok, Optimization.t()} | {:error, Error.t()}
   def start(%Deck{} = deck, contract_attrs \\ %{}, recipe_override \\ nil) do
     {mode, contract_attrs} = Map.pop(contract_attrs, "mode", :refine)
-    contract = Map.merge(default_contract(deck), contract_attrs)
+
+    contract =
+      default_contract(deck) |> Map.merge(contract_attrs) |> merge_standing_rules(deck)
 
     cond do
       OptimizationQuery.running_for_deck(deck.id) ->
@@ -151,6 +163,22 @@ defmodule Deckex.Optimizations do
       true ->
         launch(deck, mode, contract, recipe_override)
     end
+  end
+
+  # The launch form's protected list is *additional*. A card the owner locked
+  # on the Cartas screen is locked in every round of this deck, and a run that
+  # dropped it because a textarea came back empty would be the exact failure
+  # the screen exists to prevent — he watched a stage cut a combo piece once
+  # and had to notice it himself.
+  #
+  # Merged here so the frozen contract records what was protected at launch;
+  # the audit reads the locks live as well, so one written mid-run counts too.
+  defp merge_standing_rules(contract, deck) do
+    standing = Decks.standing_rules(deck)
+
+    contract
+    |> Map.put("keep", Enum.uniq(standing["keep"] ++ (contract["keep"] || [])))
+    |> Map.put("wanted", Enum.uniq(standing["wanted"] ++ (contract["wanted"] || [])))
   end
 
   # Nobody supervises a pipeline mid-flight, so the floor is a refusal here
@@ -893,7 +921,16 @@ defmodule Deckex.Optimizations do
         balance_mode: if(step.kind == :balance, do: :closing, else: :stage),
         history: history(optimization, step),
         exempt: exempt_for(optimization, step),
-        keep: (optimization.contract["keep"] || []) ++ current_commanders(optimization),
+        # Read live, exactly like the commanders beside it. The contract froze
+        # what he asked for at launch; a card he locks at stage four — usually
+        # because he just watched a stage try to cut it — is protected from
+        # stage five, not from the next run. A rule the owner states while
+        # watching is the whole reason he watches.
+        keep:
+          Enum.uniq(
+            (optimization.contract["keep"] || []) ++
+              Decks.locked_cards(deck) ++ current_commanders(optimization)
+          ),
         bracket_max: optimization.contract["bracket_max"],
         avoid: Salt.avoided(optimization.contract["salt"]),
         budget: optimization.contract["orcamento_total"],

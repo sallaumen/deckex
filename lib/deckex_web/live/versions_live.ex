@@ -132,6 +132,8 @@ defmodule DeckexWeb.VersionsLive do
         ← {@deck.name}
       </.link>
 
+      <.deck_nav deck={@deck} current={:versions} />
+
       <header class="mt-3 mb-8 flex flex-col items-start gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 class="text-display font-semibold text-ink">Versões</h1>

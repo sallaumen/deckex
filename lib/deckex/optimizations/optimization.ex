@@ -23,7 +23,7 @@ defmodule Deckex.Optimizations.Optimization do
   @type t :: %__MODULE__{}
 
   schema "optimizations" do
-    field :mode, Ecto.Enum, values: [:refine, :reimagine], default: :refine
+    field :mode, Ecto.Enum, values: [:livre, :refine, :reimagine], default: :refine
 
     field :status, Ecto.Enum,
       values: [:running, :awaiting_choice, :paused, :done, :failed, :cancelled]

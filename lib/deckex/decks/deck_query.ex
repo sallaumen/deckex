@@ -24,6 +24,18 @@ defmodule Deckex.Decks.DeckQuery do
     Repo.all(from n in CardNote, where: n.deck_id == ^deck_id, order_by: [asc: n.card_name])
   end
 
+  @doc """
+  One card's rule in one deck, or nil.
+
+  Written by hand rather than by `Repo.get_by/3` because the name is matched
+  as the owner typed it — the unique index is on the literal string, and an
+  upsert that looked the row up any other way would write a second one.
+  """
+  @spec get_card_note(String.t(), String.t()) :: CardNote.t() | nil
+  def get_card_note(deck_id, card_name) do
+    Repo.one(from n in CardNote, where: n.deck_id == ^deck_id and n.card_name == ^card_name)
+  end
+
   @doc "Forgets what was said about one card in one deck."
   @spec delete_card_note(String.t(), String.t()) :: :ok
   def delete_card_note(deck_id, card_name) do

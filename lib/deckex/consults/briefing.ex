@@ -16,6 +16,7 @@ defmodule Deckex.Consults.Briefing do
   alias Deckex.Analysis.Bracket
   alias Deckex.Analysis.DeckSnapshot
   alias Deckex.Analysis.Report
+  alias Deckex.Decks.CardRules
   alias Deckex.Optimizations.Balance
   alias Deckex.Optimizations.Salt
 
@@ -250,6 +251,33 @@ defmodule Deckex.Consults.Briefing do
     """
   end
 
+  # A round of one stage, run because the owner already knows what he wants
+  # done and does not need nine stages to discover it. The whole pipeline's
+  # value is that later stages correct earlier ones; here there are none, so
+  # the instruction is narrowness rather than ambition.
+  defp task_block(:livre, opts) do
+    """
+    #{free_request(get_in(opts, [:optimization, :contract, "pedido"]))}
+
+    ## How to treat it
+
+    This is a **single-stage round**. Nothing runs after you: no checkpoint
+    will revisit your changes, no validation will catch an overreach, and the
+    owner applies what you return or throws the whole round away. So do the
+    thing that was asked and stop.
+
+    - Change **only** what his request and his standing decisions above reach.
+      A change nobody asked for has no later stage to argue with it, and it is
+      the reason he will discard the round.
+    - Every card he locked stays. Every card he is asking for is a candidate
+      you should take unless you can say why not.
+    - The deck must end at exactly #{Balance.target()} cards, so every card
+      that comes in is paid for by one that goes out — and the one that goes
+      out is the weakest card for the plan this deck is actually running, not
+      the cheapest or the most recently added.
+    """
+  end
+
   defp task_block(:scout, _opts) do
     """
     Read this deck and write its strategic dossier — nothing else.
@@ -270,6 +298,29 @@ defmodule Deckex.Consults.Briefing do
     Work the findings above. For each one, name specific cards to **cut** from
     the list and specific cards to **add**, and say why in one sentence each.
     """
+  end
+
+  # A round launched with no text is not an empty request: it is "do what I
+  # already told you", and everything he told you is above.
+  defp free_request(nil), do: free_request("")
+
+  defp free_request(pedido) do
+    case String.trim(pedido) do
+      "" ->
+        """
+        The owner launched this round without writing a request. That means the
+        work is the standing decisions above and nothing else: put back every
+        card he locked that is missing, take the cards he is asking for, and pay
+        for them.
+        """
+
+      request ->
+        """
+        The owner asked for one thing, and it is this:
+
+        > #{String.replace(request, "\n", "\n> ")}
+        """
+    end
   end
 
   defp balance_order(count, gap) when count > 100 do
@@ -354,12 +405,60 @@ defmodule Deckex.Consults.Briefing do
   defp card_notes_block([]), do: ""
 
   defp card_notes_block(notes) do
-    lines = Enum.map_join(notes, "\n", &"- **#{&1.card_name}**: #{&1.note}")
+    groups = CardRules.split(notes)
 
+    [locked_block(groups.locked), wanted_block(groups.wanted), said_block(groups.notes)]
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.join("\n")
+  end
+
+  # The strongest thing the owner can say, and the only one the engine also
+  # enforces. It is stated in the prompt anyway: a stage that spends its answer
+  # proposing a cut the audit will reject has wasted the whole stage, and the
+  # owner pays for stages.
+  defp locked_block([]), do: ""
+
+  defp locked_block(locked) do
+    """
+    ## Cartas que o dono trancou neste deck
+
+    #{Enum.map_join(locked, "\n", &rule_line/1)}
+
+    These cards are **not available to cut**. Not for value, not for the
+    curve, not to make room, not to close the count — the engine rejects a cut
+    of any of them and the stage loses the change. Several of them are here
+    because a card that looks unremarkable on its own is load-bearing in *this*
+    list; where he explained why, that explanation is worth more than your
+    reading of the card in isolation.
+
+    If one of them is **missing from the decklist below**, putting it back is
+    the first change you should propose, and something else pays for it.
+    """
+  end
+
+  defp wanted_block([]), do: ""
+
+  defp wanted_block(wanted) do
+    """
+    ## Cartas que o dono está pedindo
+
+    #{Enum.map_join(wanted, "\n", &rule_line/1)}
+
+    He wants these in the deck. Treat each one as a strong candidate to add —
+    stronger than anything you would have thought of yourself, because he
+    plays this deck and you are reading it. You may still decline one, but
+    then say so **by name** in `leitura` and say what the deck would lose by
+    taking it. Silence about a card he asked for reads as having ignored him.
+    """
+  end
+
+  defp said_block([]), do: ""
+
+  defp said_block(said) do
     """
     ## O que o dono já disse sobre cartas deste deck
 
-    #{lines}
+    #{Enum.map_join(said, "\n", &rule_line/1)}
 
     These are his words about his own list, from earlier rounds. Where one of
     them contradicts your reading of a card, **his reading wins** — he plays
@@ -368,6 +467,9 @@ defmodule Deckex.Consults.Briefing do
     engaging the note by name.
     """
   end
+
+  defp rule_line(%{card_name: name, note: nil}), do: "- **#{name}**"
+  defp rule_line(%{card_name: name, note: note}), do: "- **#{name}**: #{note}"
 
   defp stale_line(true) do
     "\nCaution: the deck has changed since this dossier was written — weigh it accordingly.\n"

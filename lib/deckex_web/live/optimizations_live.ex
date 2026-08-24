@@ -39,6 +39,7 @@ defmodule DeckexWeb.OptimizationsLive do
            drifted?: Versions.drifted?(deck),
            deck_size: deck_size(deck),
            contract: Optimizations.default_contract(deck),
+           standing: Decks.standing_rules(deck),
            recipe: Optimizations.recipe(deck, :refine),
            mode: :refine,
            salt: Salt.preset("sem_freio"),
@@ -100,7 +101,15 @@ defmodule DeckexWeb.OptimizationsLive do
 
   @impl Phoenix.LiveView
   def handle_event("abrir-lancador", _params, socket) do
-    {:noreply, assign(socket, launching: true)}
+    # Re-read rather than trust the mount: the Cartas screen is one click away
+    # and he goes there precisely to change what this modal is about to state
+    # as fact.
+    {:noreply,
+     assign(socket,
+       launching: true,
+       standing: Decks.standing_rules(socket.assigns.deck),
+       contract: Optimizations.default_contract(socket.assigns.deck)
+     )}
   end
 
   def handle_event("fechar-lancador", _params, socket) do
@@ -132,6 +141,7 @@ defmodule DeckexWeb.OptimizationsLive do
       "keep" => lines(params["keep"]),
       "matchups" => lines(params["matchups"]),
       "notes" => String.trim(params["notes"] || ""),
+      "pedido" => String.trim(params["pedido"] || ""),
       "model" => params["model"],
       "salt" => salt_for(socket),
       "from_version" => parse_int(params["from_version"])
@@ -190,13 +200,14 @@ defmodule DeckexWeb.OptimizationsLive do
 
   defp current_stage(run), do: Enum.find(run.steps, &(&1.status == :running))
 
+  defp mode_label(:livre), do: "ajuste direto"
   defp mode_label(:reimagine), do: "reimaginar"
   defp mode_label(_refine), do: "refinar"
 
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <div class="mx-auto max-w-[1100px] px-6 py-10 lg:px-10 lg:py-14">
+    <div class="mx-auto max-w-[1100px] px-6 py-10 lg:px-10 lg:py-14 2xl:max-w-[1440px] 3xl:max-w-[1700px]">
       <%!-- Inside the LiveView's own tree, not the root layout: the layout is
             static after mount, so a flash put during an event would never
             reach the screen from there. --%>
@@ -209,6 +220,8 @@ defmodule DeckexWeb.OptimizationsLive do
       >
         ← {@deck.name}
       </.link>
+
+      <.deck_nav deck={@deck} current={:runs} />
 
       <header class="mt-3 mb-10 flex flex-wrap items-end justify-between gap-4">
         <div>
@@ -233,7 +246,7 @@ defmodule DeckexWeb.OptimizationsLive do
         </p>
       </div>
 
-      <ul class="space-y-4">
+      <ul class="space-y-4 3xl:grid 3xl:grid-cols-2 3xl:gap-4 3xl:space-y-0">
         <li :for={run <- @runs}>
           <.link
             navigate={~p"/otimizacoes/#{run.id}"}
@@ -305,15 +318,15 @@ defmodule DeckexWeb.OptimizationsLive do
           role="dialog"
           aria-modal="true"
           aria-label="Nova otimização"
-          class="w-full max-w-2xl rounded-xl border border-hairline-soft bg-surface shadow-lifted"
+          class="w-full max-w-2xl rounded-xl border border-hairline-soft bg-surface shadow-lifted 2xl:max-w-4xl"
         >
           <header class="border-b border-hairline-soft px-6 py-4">
-            <h2 class="text-heading font-semibold text-ink">Nova otimização</h2>
+            <h2 class="text-heading font-semibold text-ink">Nova rodada</h2>
             <%!-- The total, not just the per-stage cost: ten stages at "2–5
                   min cada" is half an hour of the afternoon, and that is the
                   number someone decides with. --%>
             <p class="text-caption text-ink-muted">
-              {length(@recipe)} etapas · {length(@recipe) * 2}–{length(@recipe) * 5} min no total,
+              {etapas(length(@recipe))} · {length(@recipe) * 2}–{length(@recipe) * 5} min no total,
               rodando sozinho. O pipeline aplica só o que o motor aprovar — e só na cópia.
             </p>
           </header>
@@ -323,16 +336,25 @@ defmodule DeckexWeb.OptimizationsLive do
             as={:contract}
             id="launch-form"
             phx-submit="comecar"
-            class="space-y-4 px-6 py-5"
+            class="space-y-4 px-6 py-5 2xl:grid 2xl:grid-cols-2 2xl:gap-x-8 2xl:gap-y-4 2xl:space-y-0"
           >
-            <div class="flex gap-2">
+            <%!-- Three modes, weakest first, because the order is how much of
+                  the deck you are handing over — and the cheapest one is the
+                  one he reaches for most. --%>
+            <div class="grid grid-cols-3 gap-2 2xl:col-span-2">
               <button
-                :for={{mode, label} <- [{:refine, "Refinar"}, {:reimagine, "Reimaginar"}]}
+                :for={
+                  {mode, label} <- [
+                    {:livre, "Ajuste direto"},
+                    {:refine, "Refinar"},
+                    {:reimagine, "Reimaginar"}
+                  ]
+                }
                 type="button"
                 phx-click="modo"
                 phx-value-modo={mode}
                 class={[
-                  "min-h-touch flex-1 rounded-md border px-3 py-2 text-caption transition-colors",
+                  "min-h-touch rounded-md border px-3 py-2 text-caption transition-colors motion-reduce:transition-none",
                   @mode == mode && "border-hairline-strong bg-inlay text-ink",
                   @mode != mode && "border-hairline-soft text-ink-faint hover:text-ink"
                 ]}
@@ -341,14 +363,34 @@ defmodule DeckexWeb.OptimizationsLive do
               </button>
             </div>
 
-            <p class="text-micro text-ink-muted">
-              {if @mode == :refine,
-                do: "Melhora o deck dentro do plano que ele já tem.",
-                else:
-                  "A IA propõe três direções novas, você escolhe uma, e o pipeline reconstrói o deck em cima dela."}
-            </p>
+            <p class="text-micro text-ink-muted 2xl:col-span-2 2xl:-mt-2">{mode_note(@mode)}</p>
 
-            <div :if={@mode == :reimagine} class="space-y-2 border-t border-hairline-soft pt-4">
+            <%!-- The whole point of a one-stage round: he already knows what
+                  he wants done and does not need nine stages to discover it. --%>
+            <div :if={@mode == :livre} class="2xl:col-span-2">
+              <label
+                for="launch-pedido"
+                class="mb-1 block text-caption font-semibold text-ink-secondary"
+              >
+                O que você quer que ele faça
+              </label>
+              <textarea
+                id="launch-pedido"
+                name="contract[pedido]"
+                rows="3"
+                placeholder={pedido_placeholder()}
+                class="w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-caption text-ink placeholder:text-ink-faint"
+              ></textarea>
+              <p class="mt-1 text-micro text-ink-muted">
+                Pode deixar em branco: sem pedido, a rodada faz só o que suas cartas obrigatórias e
+                pedidas já mandam.
+              </p>
+            </div>
+
+            <div
+              :if={@mode == :reimagine}
+              class="space-y-2 border-t border-hairline-soft pt-4 2xl:col-span-2"
+            >
               <div class="flex flex-wrap items-center justify-between gap-2">
                 <span class="text-caption font-semibold text-ink-secondary">
                   O que você não quer na mesa
@@ -502,12 +544,48 @@ defmodule DeckexWeb.OptimizationsLive do
               </div>
             </div>
 
+            <%!-- This box used to be the only place to protect a card, and it
+                  came up empty every single time — so protecting a combo piece
+                  meant remembering it under pressure, which is exactly how one
+                  got cut. The standing decisions are stated here as fact, and
+                  the box below them went back to being what it always should
+                  have been: an exception for this one round. --%>
+            <div class="rounded-lg border border-hairline-soft bg-inlay/50 px-4 py-3">
+              <div class="flex flex-wrap items-baseline justify-between gap-2">
+                <span class="text-caption font-semibold text-ink-secondary">
+                  Suas cartas, já valendo nesta rodada
+                </span>
+                <.link
+                  navigate={~p"/decks/#{@deck.id}/cartas"}
+                  class="-my-2 inline-flex min-h-touch items-center py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink motion-reduce:transition-none"
+                >
+                  mudar →
+                </.link>
+              </div>
+
+              <p :if={@standing["keep"] != []} class="mt-1 text-caption text-ink">
+                <span class="text-ink-faint">Nunca corta:</span>
+                {Enum.join(@standing["keep"], ", ")}
+              </p>
+              <p :if={@standing["wanted"] != []} class="mt-1 text-caption text-ink">
+                <span class="text-ink-faint">Pede para entrar:</span>
+                {Enum.join(@standing["wanted"], ", ")}
+              </p>
+              <p
+                :if={@standing["keep"] == [] and @standing["wanted"] == []}
+                class="mt-1 text-caption text-ink-muted"
+              >
+                Nenhuma ainda. Uma carta trancada lá não pode ser cortada por rodada nenhuma —
+                é onde vive uma peça de combo.
+              </p>
+            </div>
+
             <div>
               <label
                 for="launch-keep"
                 class="mb-1 block text-caption font-semibold text-ink-secondary"
               >
-                Cartas protegidas (uma por linha)
+                Proteger só nesta rodada (uma por linha)
               </label>
               <textarea
                 id="launch-keep"
@@ -517,11 +595,14 @@ defmodule DeckexWeb.OptimizationsLive do
                 class="w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 font-mono text-caption text-ink placeholder:text-ink-faint"
               ></textarea>
               <p class="mt-1 text-micro text-ink-muted">
-                O pipeline nunca corta essas. O comandante já é protegido.
+                Soma-se às de cima, e vale só aqui. O comandante já é protegido.
               </p>
             </div>
 
-            <div>
+            <%!-- Only the recipe that has a matchup stage asks for matchups.
+                  A field that changes nothing is a field that makes the reader
+                  wonder what it changed. --%>
+            <div :if={@mode != :livre}>
               <label
                 for="launch-matchups"
                 class="mb-1 block text-caption font-semibold text-ink-secondary"
@@ -584,7 +665,7 @@ defmodule DeckexWeb.OptimizationsLive do
               </div>
             </div>
 
-            <div class="flex items-center justify-end gap-3 border-t border-hairline-soft pt-4">
+            <div class="flex items-center justify-end gap-3 border-t border-hairline-soft pt-4 2xl:col-span-2">
               <button
                 type="button"
                 phx-click="fechar-lancador"
@@ -593,7 +674,7 @@ defmodule DeckexWeb.OptimizationsLive do
                 Cancelar
               </button>
               <.button type="submit" variant="primary" phx-disable-with="Começando…">
-                Começar as {length(@recipe)} etapas
+                Começar {if length(@recipe) == 1, do: "a etapa", else: "as #{length(@recipe)} etapas"}
               </.button>
             </div>
           </.form>
@@ -606,4 +687,23 @@ defmodule DeckexWeb.OptimizationsLive do
   # A function, not an inline string: the formatter mangles multi-line
   # attribute literals (the placeholder law from the import screen).
   defp keep_placeholder, do: "Sol Ring"
+
+  defp pedido_placeholder do
+    "ex.: tira as três terras que entram viradas e põe rampa de duas; não mexe em mais nada"
+  end
+
+  defp mode_note(:livre) do
+    "Uma etapa só, fazendo o que você pedir. Nada de plano, nada de checkpoint — é o modo para quando você já sabe o que quer."
+  end
+
+  defp mode_note(:refine) do
+    "Melhora o deck dentro do plano que ele já tem."
+  end
+
+  defp mode_note(:reimagine) do
+    "A IA propõe três direções novas, você escolhe uma, e o pipeline reconstrói o deck em cima dela."
+  end
+
+  defp etapas(1), do: "1 etapa"
+  defp etapas(count), do: "#{count} etapas"
 end
