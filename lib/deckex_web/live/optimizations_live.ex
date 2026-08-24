@@ -573,6 +573,14 @@ defmodule DeckexWeb.OptimizationsLive do
                     {model}
                   </option>
                 </select>
+                <%!-- The floor filters this list, and when it filtered it down
+                      to one nothing on screen said why — the picker just looked
+                      like the app only had one model. Now it names the rule and
+                      where to change it. --%>
+                <p class="mt-1 text-micro text-ink-muted">
+                  Piso: <span class="font-mono">{Settings.model_floor()}</span>. Modelos abaixo dele
+                  não podem propor mudança de carta — muda nos Ajustes.
+                </p>
               </div>
             </div>
 
