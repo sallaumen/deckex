@@ -22,7 +22,14 @@ defmodule Deckex.Optimizations.RedoTest do
 
   # A floor of sonnet leaves a real ladder to climb: the run starts on sonnet
   # and the redo reaches for fable, which is the whole point of the feature.
+  #
+  # Cards are seeded first, and that order is load-bearing: a transaction that
+  # writes `settings` before `cards` inverts the order every other test takes
+  # them in, and two of those deadlock. See the lock-order law in AGENTS.md.
+  # `seed!/1` is idempotent within a transaction, so the tests' own `seed!`
+  # calls are free after this one.
   setup do
+    CatalogueFixture.seed!(~w(sol_ring forest cultivate counterspell))
     {:ok, _} = Deckex.Settings.put(:model_floor, "sonnet")
 
     :ok

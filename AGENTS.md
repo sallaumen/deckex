@@ -68,15 +68,30 @@ for *what* we are building and *why*. This file is *how*.
   configurable User-Agent for the day Moxfield approves one. **Pasting a
   decklist is the primary import path.** No browser impersonation, no
   User-Agent rotation, no CAPTCHA handling — ever.
-- **Every card write takes its locks in `oracle_id` order.** The Ecto sandbox
-  isolates what a test can *see*, not the locks it *takes*: two async
-  transactions inserting the same card rows in different orders deadlock in
-  Postgres, surfacing as a random `40P01` in whichever one lost. One global
-  order means concurrent writers queue instead of colliding. This holds in
-  production code (`Deckex.Cards.insert_all/1`, the classification pass) and in
-  tests (`Deckex.CatalogueFixture`). **Never hand-roll a card insert in a
-  test** — seed through `CatalogueFixture`, once per test, in a single call.
-  This bug came back three times before the rule was written down here.
+- **Every card write takes its locks in `oracle_id` order**, in production
+  (`Deckex.Cards.insert_all/1`, the classification pass) and in tests
+  (`Deckex.CatalogueFixture`). One global order means concurrent multi-row
+  writers queue instead of colliding. **Never hand-roll a card insert in a
+  test** — seed through `CatalogueFixture`.
+- **A row is written at most once per transaction.** Ordering is necessary and
+  was never sufficient, which is why the suite's `40P01` came back three times
+  while the rule above was already in place: measured 2026-08-24, the losing
+  transaction had inserted exactly **one** row, so there was no order to get
+  wrong. The cycle needs a *second* write of a row the transaction already
+  wrote — B completes its speculative insertion of R, A's is still in flight
+  holding a token, B writes R again and waits on A's token, A reaches
+  `cards_name_normalized_index`, meets B's tuple and waits on B. Writing the
+  same row **once** from each of two transactions is fine and must stay fine:
+  640 concurrent attempts, zero deadlocks. `Deckex.CatalogueFixture` reads
+  before it writes so a second seed is free, and
+  `Deckex.Cards.CatalogueSeedConcurrencyTest` reproduces the deadlock and
+  guards it.
+- **Tests take `cards` before `settings`.** The other half of the same
+  measurement was a plain two-table inversion: one transaction wrote a
+  `settings` row and then waited for a `cards` row, while another held that
+  card and waited for the same setting. Every test in the suite seeds cards
+  first — a test that calls `Deckex.Settings.put/2` before seeding inverts the
+  order the rest of the suite takes, and deadlocks against any of them.
 - **A Tailwind class that names a nothing is silent.** `class="text-hero"`
   compiles, renders, and does nothing; it cost four page titles their size for
   weeks. Every utility using a design-token prefix must name a token declared in

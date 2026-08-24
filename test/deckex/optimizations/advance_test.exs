@@ -269,8 +269,11 @@ defmodule Deckex.Optimizations.AdvanceTest do
   test "an applied change carries the engine's note about it" do
     stub_scryfall()
 
+    # Cards before settings — the order every other test takes them in, and
+    # inverting it deadlocks against them. See the lock-order law in AGENTS.md.
+    deck = deck()
     {:ok, _v} = Deckex.Settings.put(:expensive_card_brl, 1)
-    {:ok, optimization} = Optimizations.start(deck(), %{}, @two_lenses)
+    {:ok, optimization} = Optimizations.start(deck, %{}, @two_lenses)
 
     expect(Deckex.AI.Mock, :complete, fn _p, _s, _o -> answer([], ["Cultivate"]) end)
     {:ok, run} = beat(optimization.id)

@@ -21,6 +21,8 @@ defmodule Deckex.CliTest do
       assert {:error, :timeout} = Cli.run(slow, 50)
     end
 
+    # The crash is the point, so its report is expected output, not noise.
+    @tag capture_log: true
     test "reports a crashing command rather than crashing with it" do
       # Task.async links, so an abnormal exit reaches the caller as a signal.
       # Only a process trapping exits survives to receive the tagged tuple —
