@@ -278,6 +278,41 @@ defmodule Deckex.Consults.Briefing do
     """
   end
 
+  # The question the owner cannot answer card by card without spending an
+  # evening on it, and the engine cannot answer at all: it reads one card at a
+  # time and a pillar is usually a card that is unremarkable alone.
+  defp task_block(:pilares, _opts) do
+    """
+    Name the cards this deck **cannot lose**, and nothing else.
+
+    A pillar is not a good card. It is a card whose removal changes what the
+    deck *does*:
+
+    - one half of an interaction the rest of the list is built to assemble —
+      the case that matters most, because each half looks ordinary alone and a
+      stage reading them one at a time will cut one of them;
+    - the engine every other card feeds, or the payoff they all feed;
+    - the only card doing a job the plan requires, with no second copy of that
+      job in the list.
+
+    **Not** a pillar: a strong generic staple any deck in these colours would
+    play, a card that is merely expensive, a card that is merely popular. Those
+    are replaceable — that is what makes them staples, and replaceable is the
+    opposite of what this list is for.
+
+    Be strict. Most decks have between five and twelve of these. **A list that
+    names a quarter of the deck protects nothing**, because a pipeline that
+    cannot cut anything cannot improve anything, and the owner will delete the
+    whole list rather than sort it.
+
+    Every entry needs the sentence that justifies it, and when the card is half
+    of an interaction, **name the other half**. He is going to read these one
+    by one and decide; "carta forte" is not a reason he can check.
+
+    Propose no cuts and no adds. You are not tuning this deck.
+    """
+  end
+
   defp task_block(:scout, _opts) do
     """
     Read this deck and write its strategic dossier — nothing else.
@@ -494,6 +529,20 @@ defmodule Deckex.Consults.Briefing do
   defp stale_line(_fresh), do: ""
 
   # The scout only reads, so most of the consulting rules are noise to it.
+  # Read-only, like the scout: every rule about cuts, adds, ceilings and colour
+  # identity is noise to a stage that proposes no change.
+  defp rules_block(:pilares, _report, _opts) do
+    """
+    Search the web where it helps you understand what a card does in this deck,
+    or find the interaction it belongs to.
+
+    Only name cards that are in the decklist above. A card you think the deck
+    *should* have is a different question, asked on a different screen.
+
+    Answer in **Portuguese (pt-BR)**, but never translate a card name.
+    """
+  end
+
   defp rules_block(:scout, _report, _opts) do
     """
     Search the web where it helps you understand a card's role in this deck.
