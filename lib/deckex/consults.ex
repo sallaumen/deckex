@@ -11,6 +11,7 @@ defmodule Deckex.Consults do
   require Logger
 
   alias Deckex.AI
+  alias Deckex.AI.Ledger
   alias Deckex.Analysis
   alias Deckex.Analysis.DeckSnapshot
   alias Deckex.Budget
@@ -199,8 +200,22 @@ defmodule Deckex.Consults do
     opts = [allowed_tools: ["WebSearch"], timeout_ms: timeout_ms(), model: running.model]
 
     case AI.complete(running.briefing, schema, opts) do
-      {:ok, response} -> {:ok, succeed(running, response, started)}
-      {:error, %Error{} = error} -> fail(running, error)
+      {:ok, response, usage} ->
+        # Recorded against both the consult and its deck: the run page asks
+        # "what did this stage cost", the deck page asks "what has this deck
+        # cost", and both are the same rows read differently.
+        :ok =
+          Ledger.record(usage,
+            kind: :consult,
+            model: running.model,
+            deck_id: running.deck_id,
+            consult_id: running.id
+          )
+
+        {:ok, succeed(running, response, started)}
+
+      {:error, %Error{} = error} ->
+        fail(running, error)
     end
   end
 

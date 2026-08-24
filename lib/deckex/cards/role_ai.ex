@@ -13,6 +13,7 @@ defmodule Deckex.Cards.RoleAI do
   """
 
   alias Deckex.AI
+  alias Deckex.AI.Ledger
   alias Deckex.Cards.Card
   alias Deckex.Cards.RoleMatch
   alias Deckex.Error
@@ -57,9 +58,21 @@ defmodule Deckex.Cards.RoleAI do
     by_name = Map.new(cards, &{&1.name, &1})
 
     case AI.complete(prompt(cards), schema()) do
-      {:ok, %{"cards" => results}} -> {:ok, collect(results, by_name)}
-      {:ok, _unexpected} -> {:ok, %{}}
-      {:error, _reason} = error -> error
+      {:ok, %{"cards" => results}, usage} ->
+        # Classifying cards belongs to no deck and still costs real money, so
+        # it lands in the ledger like everything else — otherwise the global
+        # meter would quietly understate the bill.
+        :ok = Ledger.record(usage, kind: :classification, model: AI.model())
+
+        {:ok, collect(results, by_name)}
+
+      {:ok, _unexpected, usage} ->
+        :ok = Ledger.record(usage, kind: :classification, model: AI.model())
+
+        {:ok, %{}}
+
+      {:error, _reason} = error ->
+        error
     end
   end
 

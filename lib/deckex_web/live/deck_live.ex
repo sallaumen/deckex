@@ -10,6 +10,7 @@ defmodule DeckexWeb.DeckLive do
   """
   use DeckexWeb, :live_view
 
+  alias Deckex.AI.Ledger
   alias Deckex.Analysis
   alias Deckex.Analysis.Bracket
   alias Deckex.Budget
@@ -66,6 +67,7 @@ defmodule DeckexWeb.DeckLive do
       drifted?: Versions.drifted?(deck),
       pending_edits: Edits.changelog(deck),
       card_notes: Decks.card_notes(deck),
+      ai_totals: Ledger.totals_for_deck(deck),
       page_title: deck.name
     )
     |> assign_new(:renaming, fn -> false end)
@@ -339,6 +341,7 @@ defmodule DeckexWeb.DeckLive do
     assign(socket,
       consults: consults,
       suggestions: suggestions,
+      consult_spend: Ledger.by_consult(Enum.map(consults, & &1.id)),
       audits: audits(socket.assigns.snapshot, consults, suggestions),
       scout_running?: running?(consults, :scout),
       consult_running?: running?(consults, :any)
@@ -588,6 +591,11 @@ defmodule DeckexWeb.DeckLive do
           >
             Otimizar
           </.button>
+
+          <%!-- Beside the deck's own value on purpose: one is what the cards
+                cost, the other is what asking about them cost, and an owner
+                deciding whether to run another optimization is weighing both. --%>
+          <.token_meter totals={@ai_totals} label="Gasto com IA" size={:lg} class="text-right" />
 
           <div class="text-right whitespace-nowrap">
             <p class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
@@ -1164,6 +1172,16 @@ defmodule DeckexWeb.DeckLive do
                   <span class="font-mono text-caption text-ink-faint">
                     {consult.finding_code || consult.lens}
                     <span :if={consult.model} class="text-ink-faint">· {consult.model}</span>
+                    <%!-- What this one answer cost, where the answer is. The
+                          per-deck total upstairs is the sum of these, and a
+                          sum nobody can break down is a number to distrust. --%>
+                    <span
+                      :if={@consult_spend[consult.id]}
+                      title={"#{@consult_spend[consult.id].total_tokens} tokens"}
+                      class="text-ink-faint"
+                    >
+                      · {Money.brl(@consult_spend[consult.id].cost_usd)}
+                    </span>
                   </span>
                   <span class={[
                     "font-mono text-caption",

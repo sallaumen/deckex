@@ -8,19 +8,70 @@ defmodule DeckexWeb.MesaLive do
   """
   use DeckexWeb, :live_view
 
+  alias Deckex.AI.Ledger
   alias Deckex.Analysis
   alias Deckex.Analysis.Bracket
   alias Deckex.Analysis.Report
   alias Deckex.Decks
   alias Deckex.Error
+  alias Deckex.Events
+  alias Deckex.Money
   alias Deckex.Optimizations
   alias Deckex.Settings
 
   @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
+    decks = load_decks()
+
+    # Three runs going at once is the case this screen exists to survive, so it
+    # listens to all of them and redraws itself when any lands a stage.
+    if connected?(socket) do
+      Enum.each(decks, &subscribe_to_run(&1.running))
+      schedule_tick(decks)
+    end
+
     # No page_title: the root layout already suffixes " · A Mesa", and this
     # screen IS A Mesa — setting it would render "A Mesa · A Mesa".
-    {:ok, assign(socket, decks: load_decks(), deck_layout: Settings.get(:deck_layout))}
+    {:ok,
+     assign(socket,
+       decks: decks,
+       running: Enum.filter(decks, & &1.running),
+       deck_layout: Settings.get(:deck_layout),
+       ai_totals: Ledger.totals(),
+       now: DateTime.utc_now()
+     )}
+  end
+
+  defp subscribe_to_run(nil), do: :ok
+  defp subscribe_to_run(run), do: Events.subscribe_optimization(run.id)
+
+  # Only while something is moving: a table of settled decks has no clock to
+  # keep, and a timer that ticks forever is a timer nobody turned off.
+  defp schedule_tick(decks) do
+    if Enum.any?(decks, & &1.running), do: Process.send_after(self(), :tick, 20_000)
+  end
+
+  @impl Phoenix.LiveView
+  def handle_info({:optimization_updated, _id}, socket), do: {:noreply, reload(socket)}
+
+  def handle_info(:tick, socket) do
+    schedule_tick(socket.assigns.decks)
+
+    {:noreply, assign(socket, now: DateTime.utc_now())}
+  end
+
+  defp reload(socket) do
+    decks = load_decks()
+
+    # A run that started since mount is a run nobody is listening to yet.
+    Enum.each(decks, &subscribe_to_run(&1.running))
+
+    assign(socket,
+      decks: decks,
+      running: Enum.filter(decks, & &1.running),
+      ai_totals: Ledger.totals(),
+      now: DateTime.utc_now()
+    )
   end
 
   # The choice is remembered, because a layout you have to re-pick on every
@@ -51,6 +102,7 @@ defmodule DeckexWeb.MesaLive do
   # stops being true, the vital sign is what to cache, not the report.
   defp load_decks do
     live = Optimizations.live_by_deck()
+    spend = Ledger.by_deck()
 
     Enum.map(Decks.list_decks(), fn deck ->
       snapshot = Decks.snapshot(deck)
@@ -71,6 +123,7 @@ defmodule DeckexWeb.MesaLive do
         # money and is now waiting on a person. Invisible from here, it waits
         # forever — so the tile says it before you open anything.
         running: live[deck.id],
+        spend: spend[deck.id] || Ledger.empty(),
         cost: Decks.deletion_cost(deck)
       }
     end)
@@ -106,6 +159,10 @@ defmodule DeckexWeb.MesaLive do
           <p class="mt-1 text-body text-ink-muted">
             {length(@decks)} {if length(@decks) == 1, do: "deck", else: "decks"} na mesa.
           </p>
+
+          <%!-- In the title block rather than the row of actions: the actions
+                row folds away on a phone and the bill is not an action. --%>
+          <.token_meter totals={@ai_totals} label="Gasto com IA" size={:lg} class="mt-4" />
         </div>
 
         <div class="flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-end">
@@ -144,6 +201,19 @@ defmodule DeckexWeb.MesaLive do
           <.button navigate={~p"/importar"} variant="primary">Trazer um deck</.button>
         </div>
       </header>
+
+      <%!-- Three runs at once is the case this exists for: half an hour each,
+            stages landing one at a time, and reading them used to mean three
+            tabs and a refresh key. --%>
+      <section :if={@running != []} class="mb-8">
+        <h2 class="mb-3 flex flex-wrap items-baseline gap-x-2 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+          Rodando agora <span class="font-mono text-micro text-ink-faint">({length(@running)})</span>
+        </h2>
+
+        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <.run_progress :for={row <- @running} run={row.running} deck={row.deck} now={@now} />
+        </div>
+      </section>
 
       <div
         :if={@decks == []}
@@ -204,6 +274,13 @@ defmodule DeckexWeb.MesaLive do
                   {vital_sign(row)}
                 </span>
                 <.run_chip running={row.running} />
+                <span
+                  :if={row.spend.calls > 0}
+                  title={"#{row.spend.calls} chamada(s) de IA neste deck"}
+                  class="font-mono text-micro text-ink-faint"
+                >
+                  {Money.brl(row.spend.cost_usd)} em IA
+                </span>
               </div>
             </div>
           </.link>
@@ -279,6 +356,14 @@ defmodule DeckexWeb.MesaLive do
               vital_tone(row)
             ]}>
               {vital_sign(row)}
+            </span>
+
+            <span
+              :if={row.spend.calls > 0}
+              title={"#{row.spend.calls} chamada(s) de IA · #{row.spend.total_tokens} tokens"}
+              class="hidden w-20 shrink-0 text-right font-mono text-caption text-ink-faint lg:block"
+            >
+              {Money.brl(row.spend.cost_usd)}
             </span>
 
             <span class="hidden shrink-0 sm:block">

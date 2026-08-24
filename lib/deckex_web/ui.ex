@@ -14,6 +14,7 @@ defmodule DeckexWeb.UI do
   use Phoenix.Component
 
   alias Deckex.Cards.PlayRate
+  alias Deckex.Money
   alias DeckexWeb.UI.Format
 
   @identity_slots ~w(W U B R G)
@@ -374,6 +375,160 @@ defmodule DeckexWeb.UI do
     </span>
     """
   end
+
+  @doc """
+  What the model has cost, in tokens and in reais.
+
+  Two numbers, always together. Tokens alone answer "how much did it read"
+  and cost alone answers "what do I owe" — the owner asks both at once, and a
+  meter that shows one of them makes him open a calculator for the other.
+
+  Cache is folded into the total and spelled out in the tooltip. Almost every
+  token this app spends is cache: the briefing repeats the same deck, the same
+  baselines and the same rules on every stage. A meter that hid that would make
+  a ten-stage run look like it read a novel ten times.
+
+  Nothing measured renders nothing. A row of zeros looks like a measurement.
+
+  ## Examples
+
+      <.token_meter totals={@ai_totals} />
+      <.token_meter totals={@ai_totals} label="Este deck" size={:lg} />
+  """
+  attr :totals, :map, required: true, doc: "a `Deckex.AI.Ledger` total"
+  attr :label, :string, default: nil, doc: "shown above the numbers when given"
+  attr :size, :atom, default: :sm, values: [:sm, :lg]
+  attr :class, :any, default: nil
+
+  def token_meter(assigns) do
+    ~H"""
+    <div :if={@totals.calls > 0} class={@class} title={token_breakdown(@totals)}>
+      <p
+        :if={@label}
+        class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint"
+      >
+        {@label}
+      </p>
+      <p class={[
+        "font-mono leading-none text-ink",
+        @size == :lg && "text-numeral-sm font-semibold",
+        @size == :sm && "text-caption"
+      ]}>
+        {Money.brl(@totals.cost_usd)}
+      </p>
+      <p class={[
+        "font-mono text-ink-faint",
+        @size == :lg && "mt-1 text-micro",
+        @size == :sm && "text-micro"
+      ]}>
+        {token_count(@totals.total_tokens)} tokens · {@totals.calls} chamada(s)
+      </p>
+    </div>
+    """
+  end
+
+  @doc """
+  A token count at reading scale: `29,9 k`, `1,2 M`.
+
+  Nobody reads seven digits. The exact figure stays in the tooltip, where
+  someone checking a bill can find it.
+  """
+  @spec token_count(non_neg_integer()) :: String.t()
+  def token_count(tokens) when tokens >= 1_000_000 do
+    "#{decimal_place(tokens / 1_000_000)} M"
+  end
+
+  def token_count(tokens) when tokens >= 1_000, do: "#{decimal_place(tokens / 1_000)} k"
+  def token_count(tokens), do: Integer.to_string(tokens)
+
+  defp decimal_place(number) do
+    number |> Float.round(1) |> :erlang.float_to_binary(decimals: 1) |> String.replace(".", ",")
+  end
+
+  # The tooltip carries what the headline number folds together, exact figures
+  # included — the headline is for reading, this is for checking.
+  defp token_breakdown(totals) do
+    """
+    entrada #{totals.input_tokens} · saída #{totals.output_tokens} · \
+    cache criado #{totals.cache_creation_tokens} · cache lido #{totals.cache_read_tokens} \
+    (total #{totals.total_tokens})\
+    """
+  end
+
+  @doc """
+  One optimization in flight, drawn small enough to sit in a list of them.
+
+  The screen this exists for is A Mesa with three runs going at once. Each is
+  half an hour of stages landing one at a time, and reading three of them meant
+  opening three tabs and refreshing.
+
+  The bar is segmented rather than continuous because the stages are countable
+  and their number is the point: ten segments, three filled, one breathing.
+  The count is written beside it, never only drawn — a bar alone cannot be read
+  by someone who cannot see it, and cannot be read precisely by anyone.
+  """
+  attr :run, :map, required: true
+  attr :deck, :map, required: true
+  attr :now, :any, required: true
+
+  def run_progress(assigns) do
+    assigns =
+      assigns
+      |> assign(:total, length(assigns.run.steps))
+      |> assign(:done, Enum.count(assigns.run.steps, &(&1.status in [:done, :skipped])))
+      |> assign(:current, Enum.find(assigns.run.steps, &(&1.status == :running)))
+
+    ~H"""
+    <.link
+      navigate={"/otimizacoes/#{@run.id}"}
+      class="block rounded-lg border border-hairline-soft bg-surface p-4 transition-colors hover:border-hairline-strong motion-reduce:transition-none"
+    >
+      <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <span class="min-w-0 truncate text-body font-semibold text-ink">{@deck.name}</span>
+        <span class={["font-mono text-caption", run_tone(@run.status)]}>
+          {run_progress_status(@run, @current)}
+        </span>
+      </div>
+
+      <div class="mt-2 flex items-center gap-3">
+        <div
+          role="progressbar"
+          aria-valuenow={@done}
+          aria-valuemin="0"
+          aria-valuemax={@total}
+          aria-valuetext={"etapa #{min(@done + 1, @total)} de #{@total}"}
+          class="flex min-w-0 flex-1 gap-0.5"
+        >
+          <span
+            :for={step <- @run.steps}
+            class={[
+              "h-1.5 min-w-0 flex-1 rounded-full",
+              step.status in [:done, :skipped] && "bg-ink-faint",
+              step.status == :running && "animate-pulse bg-sev-warning motion-reduce:animate-none",
+              step.status == :failed && "bg-sev-critical",
+              step.status == :pending && "bg-inlay"
+            ]}
+          />
+        </div>
+
+        <%!-- Written, not only drawn: a bar says "some of it" and this says
+              which one. --%>
+        <span class="shrink-0 font-mono text-micro text-ink-faint">
+          {min(@done + 1, @total)}/{@total}
+        </span>
+      </div>
+    </.link>
+    """
+  end
+
+  defp run_tone(:awaiting_choice), do: "text-sev-warning"
+  defp run_tone(:paused), do: "text-ink-faint"
+  defp run_tone(_running), do: "text-ink-secondary"
+
+  defp run_progress_status(%{status: :awaiting_choice}, _current), do: "esperando você"
+  defp run_progress_status(%{status: :paused}, _current), do: "pausada"
+  defp run_progress_status(_run, nil), do: "seguindo"
+  defp run_progress_status(_run, current), do: current.label
 
   @doc """
   A card at a glance: its art, its name, and a way to go read it.

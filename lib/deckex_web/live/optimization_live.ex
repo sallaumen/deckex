@@ -9,6 +9,7 @@ defmodule DeckexWeb.OptimizationLive do
   """
   use DeckexWeb, :live_view
 
+  alias Deckex.AI.Ledger
   alias Deckex.Analysis
   alias Deckex.Analysis.Report
   alias Deckex.Cards
@@ -59,6 +60,7 @@ defmodule DeckexWeb.OptimizationLive do
       deck: deck,
       applied_version: Versions.applied_runs(deck)[optimization.id],
       marks: Map.new(Optimizations.marks(optimization), &{&1.card_name, &1}),
+      run_spend: Ledger.by_consult(Enum.map(optimization.steps, & &1.consult_id)),
       card_count:
         Optimizations.sandbox_size(optimization, Optimizations.current_list(optimization)),
       stage_progress: stage_progress(optimization, deck, baselines),
@@ -277,6 +279,18 @@ defmodule DeckexWeb.OptimizationLive do
 
   def handle_event("aplicar-no-deck", _params, socket) do
     apply_run(socket, nil)
+  end
+
+  # Summed from the stages rather than stored on the run: one set of rows, and
+  # no second number that can disagree with the first.
+  defp run_cost(spend) do
+    Enum.reduce(spend, Decimal.new(0), fn {_id, totals}, sum ->
+      Decimal.add(sum, totals.cost_usd)
+    end)
+  end
+
+  defp run_tokens(spend) do
+    Enum.reduce(spend, 0, fn {_id, totals}, sum -> sum + totals.total_tokens end)
   end
 
   defp mark_action(:add), do: "a rodada colocou"
@@ -582,6 +596,20 @@ defmodule DeckexWeb.OptimizationLive do
             target={"era #{@report_original.bracket.floor}"}
           />
           <.stat label="Entradas" value={Money.brl(changes_cost(@optimization))} />
+          <%!-- A ten-stage run is ten paid answers; the number belongs next to
+                what the run bought, not in a bill somewhere else. Before the
+                first stage lands there is nothing to show, and "R$ 0,00" for a
+                run in flight reads as a broken meter rather than as an empty
+                one. --%>
+          <.stat
+            label="Custo da rodada"
+            value={if @run_spend == %{}, do: "—", else: Money.brl(run_cost(@run_spend))}
+            target={
+              if @run_spend == %{},
+                do: "quando a 1ª etapa responder",
+                else: "#{DeckexWeb.UI.token_count(run_tokens(@run_spend))} tokens"
+            }
+          />
           <.stat label="Mudanças" value={Integer.to_string(changed_count(@optimization))} />
           <.stat
             label="Cartas"

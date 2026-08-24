@@ -16,6 +16,7 @@ defmodule Deckex.AI.ClaudeCli do
   """
   @behaviour Deckex.AI.Client
 
+  alias Deckex.AI.Usage
   alias Deckex.Cli
   alias Deckex.Error
 
@@ -42,15 +43,22 @@ defmodule Deckex.AI.ClaudeCli do
       model_args(opts) ++ tool_args(opts)
   end
 
-  @doc "Parses the `claude --output-format json` envelope."
-  @spec parse_output(String.t()) :: {:ok, map()} | {:error, Error.t()}
+  @doc """
+  Parses the `claude --output-format json` envelope.
+
+  Returns the structured output **and what the call cost**. The envelope has
+  carried `usage` and `total_cost_usd` all along and this function used to
+  drop them on the floor, which is why the app could spend all afternoon and
+  not say how much.
+  """
+  @spec parse_output(String.t()) :: {:ok, map(), Usage.t()} | {:error, Error.t()}
   def parse_output(output) do
     case Jason.decode(output) do
       {:ok, %{"is_error" => true} = envelope} ->
         {:error, ai_error("A IA retornou erro.", %{result: envelope["result"]})}
 
-      {:ok, %{"structured_output" => structured}} when is_map(structured) ->
-        {:ok, structured}
+      {:ok, %{"structured_output" => structured} = envelope} when is_map(structured) ->
+        {:ok, structured, Usage.from_envelope(envelope)}
 
       {:ok, envelope} ->
         {:error,

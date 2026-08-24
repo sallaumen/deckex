@@ -55,7 +55,10 @@ defmodule Deckex.Optimizations.OptimizationQuery do
     Repo.all(
       from o in Optimization,
         where: o.status in [:running, :awaiting_choice, :paused],
-        order_by: [desc: o.inserted_at]
+        order_by: [desc: o.inserted_at],
+        # Steps come along: A Mesa draws a progress bar per run, and a bar
+        # needs to know how many stages there are and how many are done.
+        preload: :steps
     )
     |> Map.new(&{&1.deck_id, &1})
   end
