@@ -4,12 +4,23 @@ defmodule Deckex.AI do
   configured model so callers never name either.
   """
 
+  alias Deckex.AI.Usage
+
   @adapter Application.compile_env(:deckex, [Deckex.AI.Client, :adapter], Deckex.AI.ClaudeCli)
 
-  @doc "Calls the AI client with the model default applied."
-  @spec complete(String.t(), map(), keyword()) :: {:ok, map()} | {:error, Deckex.Error.t()}
+  @doc """
+  Calls the AI client with the model default applied, and normalises the
+  answer to `{:ok, output, usage}`.
+
+  An adapter that reports no usage gets an empty one — measured or absent,
+  never guessed.
+  """
+  @spec complete(String.t(), map(), keyword()) ::
+          {:ok, map(), Usage.t()} | {:error, Deckex.Error.t()}
   def complete(prompt, schema, opts \\ []) do
-    @adapter.complete(prompt, schema, Keyword.put_new(opts, :model, model()))
+    prompt
+    |> @adapter.complete(schema, Keyword.put_new(opts, :model, model()))
+    |> Usage.attach()
   end
 
   @doc ~S"""

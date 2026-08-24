@@ -90,6 +90,36 @@ defmodule DeckexWeb.MesaLiveTest do
     end
   end
 
+  # Three runs at once is the case A Mesa exists to survive: half an hour each,
+  # stages landing one at a time, and reading them used to mean three tabs.
+  describe "the runs in flight, drawn" do
+    test "each running deck gets a progress card with its stage count", %{conn: conn} do
+      deck = deck("Deck em Voo")
+
+      {:ok, _run} =
+        Optimizations.start(deck, %{}, [
+          %{"kind" => "lens", "lens" => "mana_ramp", "label" => "Mana"},
+          %{"kind" => "lens", "lens" => "speed_curve", "label" => "Early game"}
+        ])
+
+      {:ok, _live, html} = live(conn, ~p"/")
+
+      assert html =~ "Rodando agora"
+      assert html =~ "Deck em Voo"
+      # Written, not only drawn: a bar alone cannot be read precisely by anyone.
+      assert html =~ "1/2"
+      assert html =~ ~s(role="progressbar")
+    end
+
+    test "a table with nothing running says nothing about it", %{conn: conn} do
+      deck()
+
+      {:ok, _live, html} = live(conn, ~p"/")
+
+      refute html =~ "Rodando agora"
+    end
+  end
+
   describe "deleting a deck" do
     test "removes it from the table", %{conn: conn} do
       deck = deck("Deck Descartável")

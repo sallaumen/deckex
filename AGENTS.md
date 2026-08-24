@@ -238,6 +238,13 @@ for *what* we are building and *why*. This file is *how*.
   the churn guard exists to stop two models arguing in circles, and a person
   with new information is not churn. Everything else still applies: the engine
   audits, the budget holds, the count lands on a hundred.
+- **Every model call is measured, and never estimated.** The CLI envelope
+  carries `usage` and `total_cost_usd` on every answer; the adapter reads them
+  and `Deckex.AI.Ledger` records one row per call. Every meter on screen — the
+  global one, the per-deck one, the per-consult one — is the same rows summed
+  differently, so no two numbers can disagree. A call that reported no usage
+  writes **no row**: a row of zeros reads exactly like a measurement, and an
+  estimated token count is worse than none because it looks the same.
 - **A correction is knowledge about the deck, not about the run.** The note he
   writes in a review is upserted onto the deck as a `deck_card_note` and
   injected into **every future briefing for that deck** — with the instruction
