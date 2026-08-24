@@ -124,6 +124,7 @@ defmodule Deckex.ConsultsTest do
   end
 
   describe "refresh_catalogue/1" do
+    @tag capture_log: true
     test "reports a Scryfall failure instead of swallowing it" do
       {:ok, consult} = Consults.request(deck(), :full)
 
@@ -157,6 +158,7 @@ defmodule Deckex.ConsultsTest do
     # The bug this guards: the failure was logged and forgotten, so the card
     # never reached the catalogue and the suggestion said "não achei essa
     # carta na Scryfall" forever. A miss must be retried, not accepted.
+    @tag capture_log: true
     test "queues a retry rather than leaving the catalogue short" do
       {:ok, consult} = Consults.request(deck(), :full)
 

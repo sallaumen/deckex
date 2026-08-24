@@ -11,6 +11,10 @@ defmodule Deckex.Workers.CatalogueWorkerTest do
   alias Deckex.ScryfallFixture
   alias Deckex.Workers.CatalogueWorker
 
+  # Every test here drives a consult whose Scryfall call fails on purpose, so
+  # the warning that failure logs is expected output.
+  @moduletag capture_log: true
+
   setup :verify_on_exit!
 
   defp deck do

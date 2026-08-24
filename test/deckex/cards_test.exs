@@ -266,6 +266,7 @@ defmodule Deckex.CardsTest do
     # A price is advisory. One 404 must not cost the other hundred and
     # seventy-eight corrections — the first real pass over this catalogue hit
     # exactly one transient failure and finished anyway.
+    @tag capture_log: true
     test "one card failing does not stop the pass" do
       broken = insert(:card, name: "Scute Swarm", price_usd: Decimal.new("5.00"))
       fine = insert(:card, name: "Sol Ring", price_usd: Decimal.new("1.50"))
