@@ -16,6 +16,7 @@ defmodule Deckex.Consults do
   alias Deckex.Analysis.DeckSnapshot
   alias Deckex.Budget
   alias Deckex.Cards
+  alias Deckex.Cards.Name
   alias Deckex.Consults.Audit
   alias Deckex.Consults.Briefing
   alias Deckex.Consults.Consult
@@ -30,6 +31,7 @@ defmodule Deckex.Consults do
   alias Deckex.Events
   alias Deckex.Repo
   alias Deckex.Settings
+  alias Deckex.Workers.CatalogueWorker
   alias Deckex.Workers.ConsultWorker
   alias Deckex.Workers.OptimizationAdvanceWorker
 
@@ -314,31 +316,76 @@ defmodule Deckex.Consults do
   # card missing from the catalogue would render without a price forever.
   # A Scryfall outage is not a reason to lose an answer that already cost money.
   defp catalogue(%Consult{} = consult) do
-    refresh_catalogue(consult)
+    case refresh_catalogue(consult) do
+      :ok ->
+        :ok
+
+      {:error, %Error{} = error} ->
+        Logger.warning("catalogue refresh failed for consult #{consult.id}: #{error.message}")
+
+        # The miss is queued, not accepted. Left alone it is permanent: the
+        # table only reads, so a card that never reached the catalogue reads as
+        # "não achei essa carta na Scryfall" forever, and the audit and the
+        # optimizer drop that suggestion from every count they make.
+        {:ok, _job} = CatalogueWorker.enqueue(consult.id)
+    end
 
     consult
   end
 
   @doc """
   Fetches every card the consult's answer names into the catalogue, and
-  classifies the new arrivals. Best-effort: a Scryfall failure is logged and
-  tolerated — the pipeline's judge retries it before any verdict, so a
-  transient failure here must not fail the consult.
-  """
-  @spec refresh_catalogue(Consult.t()) :: :ok
-  def refresh_catalogue(%Consult{} = consult) do
-    names = Suggestions.names(consult) ++ Visions.card_names(consult)
+  classifies the new arrivals.
 
-    case Cards.resolve_names(names) do
+  Reports the failure rather than swallowing it. Callers decide what a miss
+  costs them: `run/1` queues `Deckex.Workers.CatalogueWorker` and keeps the
+  answer, and the worker hands the error back to Oban so a Scryfall still down
+  is retried instead of written off.
+  """
+  @spec refresh_catalogue(Consult.t()) :: :ok | {:error, Error.t()}
+  def refresh_catalogue(%Consult{} = consult) do
+    case consult |> card_names() |> Cards.resolve_names() do
       {:ok, %{cards: cards}} ->
         Enum.each(cards, &Cards.classify_card/1)
 
-      {:error, %Error{} = error} ->
-        Logger.warning("catalogue refresh failed for consult #{consult.id}: #{error.message}")
-    end
+        :ok
 
-    :ok
+      {:error, %Error{}} = error ->
+        error
+    end
   end
+
+  @doc """
+  Every answered consult whose suggestions name a card the catalogue does not
+  hold.
+
+  A card lost to a Scryfall outage is invisible until someone re-reads the
+  answer it belonged to, so finding them means reading all of them — one query
+  for the whole set rather than one per consult.
+  """
+  @spec incomplete_catalogue() :: [Consult.t()]
+  def incomplete_catalogue do
+    wanted = Enum.map(ConsultQuery.list_answered(), &{&1, keys(card_names(&1))})
+
+    known =
+      wanted
+      |> Enum.flat_map(fn {_consult, keys} -> keys end)
+      |> Enum.uniq()
+      |> Cards.list_by_normalized_names()
+      |> MapSet.new(& &1.name_normalized)
+
+    for {consult, keys} <- wanted,
+        Enum.any?(keys, &(not MapSet.member?(known, &1))),
+        do: consult
+  end
+
+  # Suggestions carry the cuts and the adds; a vision answer has neither, and
+  # its key cards would go unpriced without this.
+  defp card_names(%Consult{} = consult) do
+    Suggestions.names(consult) ++ Visions.card_names(consult)
+  end
+
+  defp keys(names), do: names |> Enum.map(&Name.normalize/1) |> Enum.uniq()
 
   defp fail(consult, %Error{} = error) do
     update!(consult, %{status: :failed, error: error.message})

@@ -38,7 +38,14 @@ config :deckex, Deckex.Moxfield.Http, req_options: [plug: {Req.Test, Deckex.Moxf
 # When the real adapter is exercised directly (test/deckex/scryfall/http_test.exs)
 # it routes through Req.Test instead of the network, and does not really sleep.
 config :deckex, Deckex.Scryfall.Http,
-  req_options: [plug: {Req.Test, Deckex.Scryfall.Http}],
+  # `retry_delay: 0` keeps the retry behaviour under test without paying its
+  # exponential backoff; `retry_log_level: false` keeps the deliberate failure
+  # tests from printing warnings that read like real ones.
+  req_options: [
+    plug: {Req.Test, Deckex.Scryfall.Http},
+    retry_delay: 0,
+    retry_log_level: false
+  ],
   throttle_ms: 0
 
 # Initialize plugs at runtime for faster test compilation

@@ -148,7 +148,19 @@ defmodule Deckex.Scryfall.Http do
       url: @endpoint,
       headers: [{"user-agent", @user_agent}, {"accept", "application/json"}],
       receive_timeout: 15_000,
-      retry: false
+      # Retried, and that is load-bearing. Without it a single 429 from the
+      # rate limiter, a 503, or a dropped connection cost the entire batch —
+      # and because the failure is only logged, the cards never reached the
+      # catalogue and the suggestion table reported "não achei essa carta na
+      # Scryfall" about cards Scryfall has. Measured over ten days: five
+      # consults, ten real cards, silently dropped.
+      #
+      # `:transient` rather than Req's default `:safe_transient` because the
+      # call that matters here is a POST. `POST /cards/collection` is a pure
+      # lookup — it writes nothing and returns the same answer every time — so
+      # retrying it is safe in the only sense that matters.
+      retry: :transient,
+      max_retries: 3
     ]
     |> Keyword.merge(config(:req_options, []))
     |> Req.new()

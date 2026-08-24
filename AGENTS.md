@@ -51,6 +51,18 @@ for *what* we are building and *why*. This file is *how*.
   request and is capped at 2 requests/second. Never bypass
   `Deckex.Scryfall.Http`'s chunking or throttle, and never fetch a card the
   catalogue already holds.
+- **A Scryfall miss is retried, never accepted.** Requests carry
+  `retry: :transient` — `:transient` and not Req's `:safe_transient` default
+  because the call that matters is a POST, and `POST /cards/collection` is a
+  pure lookup. Any caller that tolerates a failure to keep going must also
+  queue the work again: `Deckex.Consults.run/1` enqueues
+  `Deckex.Workers.CatalogueWorker`. Verified 2026-08-24: with `retry: false`
+  and the failure only logged, one 503 cost the whole batch permanently — five
+  consults and ten real cards over ten days, each rendering "não achei essa
+  carta na Scryfall" about a card Scryfall has, and each dropped from every
+  count the audit and the optimizer make. **A card absent from the catalogue is
+  indistinguishable from a card Scryfall does not have, and the app says the
+  second while meaning the first.** That is why the miss cannot be left alone.
 - **Moxfield is blocked, and we do not evade it.** An honest User-Agent gets a
   Cloudflare 403 (verified 2026-08-13). URL sync ships wired behind a
   configurable User-Agent for the day Moxfield approves one. **Pasting a

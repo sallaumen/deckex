@@ -19,6 +19,7 @@ defmodule DeckexWeb.SettingsPanel do
   alias Deckex.Cards
   alias Deckex.Settings
   alias Deckex.Settings.Registry
+  alias Deckex.Workers.CatalogueWorker
   alias Deckex.Workers.RepriceWorker
 
   @groups [
@@ -35,6 +36,7 @@ defmodule DeckexWeb.SettingsPanel do
      |> assign(assigns)
      |> assign_new(:open, fn -> false end)
      |> assign_new(:refreshed, fn -> nil end)
+     |> assign_new(:refetching, fn -> nil end)
      |> assign_new(:repricing, fn -> nil end)
      |> assign_new(:saved, fn -> nil end)
      |> load()}
@@ -84,6 +86,17 @@ defmodule DeckexWeb.SettingsPanel do
 
       {:error, _reason} ->
         {:noreply, assign(socket, error: "Não consegui enfileirar.")}
+    end
+  end
+
+  # The repair for an answer that lost cards to a Scryfall outage. Nothing on
+  # the deck page can tell that story: the suggestion just says "não achei essa
+  # carta na Scryfall", and the audit and the optimizer quietly drop it from
+  # every count they make. This asks again, for every consult still short.
+  def handle_event("refetch-missing", _params, socket) do
+    case CatalogueWorker.enqueue_all() do
+      {:ok, queued} -> {:noreply, assign(socket, error: nil, refetching: queued)}
+      {:error, _reason} -> {:noreply, assign(socket, error: "Não consegui enfileirar.")}
     end
   end
 
@@ -286,6 +299,30 @@ defmodule DeckexWeb.SettingsPanel do
                 </.button>
                 <span :if={@repricing} class="font-mono text-micro text-ink-faint">
                   {@repricing} carta(s) na fila
+                </span>
+              </div>
+            </section>
+
+            <section class="space-y-2 border-t border-hairline-soft pt-4">
+              <h3 class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+                Cartas que faltaram
+              </h3>
+              <p class="text-micro text-ink-muted">
+                Quando a Scryfall falha no momento da resposta, a carta sugerida nunca chega
+                ao catálogo e a linha passa a dizer "não achei essa carta na Scryfall" para
+                sempre — o motor e o otimizador param de contá-la. Isto pergunta de novo,
+                só para as consultas que ainda estão faltando carta.
+              </p>
+              <div class="flex flex-wrap items-center gap-3">
+                <%!-- No count on the label: finding it means reading every
+                      answer, and this panel opens from every page. The click
+                      says how many, which is when the number is worth its
+                      cost. --%>
+                <.button type="button" phx-click="refetch-missing" phx-target={@myself}>
+                  Buscar de novo
+                </.button>
+                <span :if={@refetching} class="font-mono text-micro text-ink-faint">
+                  {@refetching} consulta(s) na fila
                 </span>
               </div>
             </section>

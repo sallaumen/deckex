@@ -8,6 +8,7 @@ defmodule Deckex.ConsultsTest do
   alias Deckex.Decks
   alias Deckex.Error
   alias Deckex.ScryfallFixture
+  alias Deckex.Workers.CatalogueWorker
   alias Deckex.Workers.ConsultWorker
 
   setup :verify_on_exit!
@@ -119,6 +120,67 @@ defmodule Deckex.ConsultsTest do
       end)
 
       assert {:ok, _done} = Consults.run(consult)
+    end
+  end
+
+  describe "refresh_catalogue/1" do
+    test "reports a Scryfall failure instead of swallowing it" do
+      {:ok, consult} = Consults.request(deck(), :full)
+
+      # Scryfall is down for the whole test, so "Cultivate" never reaches the
+      # catalogue and the refresh has real work to fail at.
+      stub(Deckex.Scryfall.Mock, :fetch_by_names, fn _names ->
+        {:error, Error.new(:scryfall_unavailable, "caiu")}
+      end)
+
+      expect(Deckex.AI.Mock, :complete, fn _prompt, _schema, _opts -> answer() end)
+      {:ok, done} = Consults.run(consult)
+
+      assert {:error, %Error{code: :scryfall_unavailable}} = Consults.refresh_catalogue(done)
+    end
+
+    test "answers :ok without a request when the catalogue already holds them" do
+      {:ok, consult} = Consults.request(deck(), :full)
+
+      stub_catalogue()
+      expect(Deckex.AI.Mock, :complete, fn _prompt, _schema, _opts -> answer() end)
+      {:ok, done} = Consults.run(consult)
+
+      # No `expect` on the Scryfall mock: a second pass over a complete
+      # catalogue must not spend a request. This is what makes the owner's
+      # re-run button cheap enough to press twice.
+      assert :ok = Consults.refresh_catalogue(done)
+    end
+  end
+
+  describe "run/1 when the catalogue refresh fails" do
+    # The bug this guards: the failure was logged and forgotten, so the card
+    # never reached the catalogue and the suggestion said "não achei essa
+    # carta na Scryfall" forever. A miss must be retried, not accepted.
+    test "queues a retry rather than leaving the catalogue short" do
+      {:ok, consult} = Consults.request(deck(), :full)
+
+      stub(Deckex.Scryfall.Mock, :fetch_by_names, fn _names ->
+        {:error, Error.new(:scryfall_unavailable, "caiu")}
+      end)
+
+      expect(Deckex.AI.Mock, :complete, fn _prompt, _schema, _opts -> answer() end)
+
+      assert {:ok, done} = Consults.run(consult)
+      assert done.status == :done
+
+      assert_enqueued(worker: CatalogueWorker, args: %{consult_id: done.id})
+    end
+
+    test "queues nothing when the refresh works" do
+      {:ok, consult} = Consults.request(deck(), :full)
+
+      stub_catalogue()
+      expect(Deckex.AI.Mock, :complete, fn _prompt, _schema, _opts -> answer() end)
+
+      assert {:ok, _done} = Consults.run(consult)
+
+      refute_enqueued(worker: CatalogueWorker)
     end
   end
 

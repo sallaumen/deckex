@@ -34,6 +34,17 @@ defmodule Deckex.Consults.ConsultQuery do
   end
 
   @doc """
+  Every consult that has an answer, newest first — pipeline runs included.
+
+  A card lost to a Scryfall outage is lost the same way whether the owner asked
+  the question or the pipeline did, so the sweep that finds them reads both.
+  """
+  @spec list_answered() :: [Consult.t()]
+  def list_answered do
+    Repo.all(from c in Consult, where: not is_nil(c.response), order_by: [desc: c.inserted_at])
+  end
+
+  @doc """
   One optimization's consults for a lens, oldest first.
 
   A stage may run more than once — asking for other visions is the case that
