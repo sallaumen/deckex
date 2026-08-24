@@ -143,7 +143,10 @@ defmodule DeckexWeb.MesaLive do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <div class="mx-auto max-w-[1800px] px-6 py-10 lg:px-10 lg:py-14">
+    <%!-- The table gets wider than Tailwind's scale goes: at 3xl the grid keeps
+          growing, at 4xl it stops at 2600px so a 3440px monitor keeps a margin
+          instead of running the tiles into the bezel. --%>
+    <div class="mx-auto max-w-[1800px] px-6 py-10 lg:px-10 lg:py-14 3xl:max-w-[2240px] 4xl:max-w-[2600px] 4xl:px-14">
       <%!-- Inside the LiveView's own tree, not the root layout: the layout is
             static after mount, so a flash put during an event would never
             reach the screen from there. --%>
@@ -202,178 +205,206 @@ defmodule DeckexWeb.MesaLive do
         </div>
       </header>
 
-      <%!-- Three runs at once is the case this exists for: half an hour each,
-            stages landing one at a time, and reading them used to mean three
-            tabs and a refresh key. --%>
-      <section :if={@running != []} class="mb-8">
-        <h2 class="mb-3 flex flex-wrap items-baseline gap-x-2 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
-          Rodando agora <span class="font-mono text-micro text-ink-faint">({length(@running)})</span>
-        </h2>
-
-        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          <.run_progress :for={row <- @running} run={row.running} deck={row.deck} now={@now} />
-        </div>
-      </section>
-
-      <div
-        :if={@decks == []}
-        class="rounded-xl border border-hairline-soft bg-surface p-10 text-center"
-      >
-        <p class="text-body text-ink-secondary">Nenhum deck ainda.</p>
-        <p class="mt-1 mb-5 text-caption text-ink-faint">
-          Cole a lista exportada do Moxfield e a mesa começa.
-        </p>
-        <.button navigate={~p"/importar"} variant="primary">Trazer um deck</.button>
-      </div>
-
-      <ul
-        :if={@deck_layout == "cartoes"}
-        class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
-      >
-        <li
-          :for={row <- @decks}
-          class="group flex flex-col overflow-hidden rounded-xl border border-hairline-soft bg-surface transition-colors hover:border-hairline-strong"
+      <%!-- Stacked up to 3xl, two columns past it. On an ultra-wide the runs
+            panel was a band of three small cards with 1500px of nothing beside
+            it, and it pushed the decks — the reason the screen exists — below
+            the fold. As a rail it sits beside the grid and stays put while the
+            table scrolls, which is what someone watching three runs land does
+            with this screen. Only when something is running: an empty 20rem
+            track is the same waste one column over. --%>
+      <div class={[
+        "3xl:items-start 3xl:gap-8",
+        @running != [] && "3xl:grid 3xl:grid-cols-[minmax(0,1fr)_20rem]"
+      ]}>
+        <%!-- Three runs at once is the case this exists for: half an hour each,
+              stages landing one at a time, and reading them used to mean three
+              tabs and a refresh key. --%>
+        <section
+          :if={@running != []}
+          class="mb-8 3xl:sticky 3xl:top-8 3xl:col-start-2 3xl:row-start-1 3xl:mb-0 3xl:max-h-[calc(100vh-4rem)] 3xl:overflow-y-auto"
         >
-          <.link navigate={~p"/decks/#{row.deck.id}"} class="block">
-            <div class="aspect-[16/9] overflow-hidden bg-inlay">
-              <img
-                :if={row.commander}
-                src={row.commander.card.image_art_crop_url}
-                alt={row.commander.card.name}
-                class="size-full object-cover transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transition-none"
-              />
-            </div>
+          <h2 class="mb-3 flex flex-wrap items-baseline gap-x-2 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+            Rodando agora
+            <span class="font-mono text-micro text-ink-faint">({length(@running)})</span>
+          </h2>
 
-            <div class="space-y-2.5 p-4">
-              <div class="flex items-start justify-between gap-3">
-                <h2 class="text-heading font-semibold leading-tight text-ink">{row.deck.name}</h2>
-                <.color_identity colors={row.deck.color_identity} full size={13} />
-              </div>
+          <%!-- Back to one per row inside the rail: a segmented progress bar
+                cut into thirds of 320px cannot be read. --%>
+          <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 3xl:grid-cols-1">
+            <.run_progress :for={row <- @running} run={row.running} deck={row.deck} now={@now} />
+          </div>
+        </section>
 
-              <p :if={row.commander} class="truncate text-caption text-ink-muted">
-                {row.commander.card.name}
-              </p>
+        <div class="min-w-0 3xl:col-start-1 3xl:row-start-1">
+          <div
+            :if={@decks == []}
+            class="rounded-xl border border-hairline-soft bg-surface p-10 text-center"
+          >
+            <p class="text-body text-ink-secondary">Nenhum deck ainda.</p>
+            <p class="mt-1 mb-5 text-caption text-ink-faint">
+              Cole a lista exportada do Moxfield e a mesa começa.
+            </p>
+            <.button navigate={~p"/importar"} variant="primary">Trazer um deck</.button>
+          </div>
 
-              <div class="flex items-center gap-2 pt-1">
-                <span class="rounded-md bg-inlay px-2 py-0.5 font-mono text-micro text-ink-secondary">
-                  B{row.bracket.floor}+
-                </span>
-                <span class="truncate text-caption text-ink-faint">
-                  {Bracket.name(row.bracket.floor)}
-                </span>
-              </div>
+          <ul
+            :if={@deck_layout == "cartoes"}
+            class="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 4xl:grid-cols-6"
+          >
+            <li
+              :for={row <- @decks}
+              class="group flex flex-col overflow-hidden rounded-xl border border-hairline-soft bg-surface transition-colors hover:border-hairline-strong"
+            >
+              <.link navigate={~p"/decks/#{row.deck.id}"} class="block">
+                <div class="aspect-[16/9] overflow-hidden bg-inlay">
+                  <img
+                    :if={row.commander}
+                    src={row.commander.card.image_art_crop_url}
+                    alt={row.commander.card.name}
+                    class="size-full object-cover transition-transform duration-300 group-hover:scale-[1.03] motion-reduce:transition-none"
+                  />
+                </div>
 
-              <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-caption text-ink-faint">
-                <span class="font-mono">{row.cards} cartas</span>
-                <span aria-hidden="true">·</span>
-                <span class={[
-                  "font-mono",
-                  row.critical > 0 && "text-sev-critical",
-                  row.critical == 0 && "text-sev-healthy"
-                ]}>
-                  {vital_sign(row)}
-                </span>
-                <.run_chip running={row.running} />
-                <span
-                  :if={row.spend.calls > 0}
-                  title={"#{row.spend.calls} chamada(s) de IA neste deck"}
-                  class="font-mono text-micro text-ink-faint"
-                >
-                  {Money.brl(row.spend.cost_usd)} em IA
-                </span>
-              </div>
-            </div>
-          </.link>
+                <div class="space-y-2.5 p-4">
+                  <div class="flex items-start justify-between gap-3">
+                    <h2 class="text-heading font-semibold leading-tight text-ink">{row.deck.name}</h2>
+                    <.color_identity colors={row.deck.color_identity} full size={13} />
+                  </div>
 
-          <%!-- Outside the link, not inside it: a button nested in an anchor is
+                  <p :if={row.commander} class="truncate text-caption text-ink-muted">
+                    {row.commander.card.name}
+                  </p>
+
+                  <div class="flex items-center gap-2 pt-1">
+                    <span class="rounded-md bg-inlay px-2 py-0.5 font-mono text-micro text-ink-secondary">
+                      B{row.bracket.floor}+
+                    </span>
+                    <span class="truncate text-caption text-ink-faint">
+                      {Bracket.name(row.bracket.floor)}
+                    </span>
+                  </div>
+
+                  <div class="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-caption text-ink-faint">
+                    <span class="font-mono">{row.cards} cartas</span>
+                    <span aria-hidden="true">·</span>
+                    <span class={[
+                      "font-mono",
+                      row.critical > 0 && "text-sev-critical",
+                      row.critical == 0 && "text-sev-healthy"
+                    ]}>
+                      {vital_sign(row)}
+                    </span>
+                    <.run_chip running={row.running} />
+                    <span
+                      :if={row.spend.calls > 0}
+                      title={"#{row.spend.calls} chamada(s) de IA neste deck"}
+                      class="font-mono text-micro text-ink-faint"
+                    >
+                      {Money.brl(row.spend.cost_usd)} em IA
+                    </span>
+                  </div>
+                </div>
+              </.link>
+
+              <%!-- Outside the link, not inside it: a button nested in an anchor is
                 invalid markup and a coin flip about which one the click hits.
                 Always visible, never hover-only — half this app is read on a
                 phone, where hover does not exist. --%>
-          <div class="mt-auto flex justify-end border-t border-hairline-soft px-2">
-            <.delete_deck_button row={row} />
-          </div>
-        </li>
-      </ul>
+              <div class="mt-auto flex justify-end border-t border-hairline-soft px-2">
+                <.delete_deck_button row={row} />
+              </div>
+            </li>
+          </ul>
 
-      <ul
-        :if={@deck_layout == "lista"}
-        class="divide-y divide-hairline-soft rounded-xl border border-hairline-soft bg-surface"
-      >
-        <li
-          :for={row <- @decks}
-          class="flex items-center gap-3 pr-2 transition-colors hover:bg-surface-2 motion-reduce:transition-none"
-        >
-          <.link
-            navigate={~p"/decks/#{row.deck.id}"}
-            class="flex min-w-0 flex-1 items-center gap-4 p-3"
+          <ul
+            :if={@deck_layout == "lista"}
+            class="divide-y divide-hairline-soft rounded-xl border border-hairline-soft bg-surface"
           >
-            <div class="h-touch w-[72px] shrink-0 overflow-hidden rounded-md bg-inlay">
-              <img
-                :if={row.commander}
-                src={row.commander.card.image_art_crop_url}
-                alt=""
-                class="size-full object-cover"
-              />
-            </div>
+            <li
+              :for={row <- @decks}
+              class="flex items-center gap-3 pr-2 transition-colors hover:bg-surface-2 motion-reduce:transition-none"
+            >
+              <.link
+                navigate={~p"/decks/#{row.deck.id}"}
+                class="flex min-w-0 flex-1 items-center gap-4 p-3"
+              >
+                <div class="h-touch w-[72px] shrink-0 overflow-hidden rounded-md bg-inlay">
+                  <img
+                    :if={row.commander}
+                    src={row.commander.card.image_art_crop_url}
+                    alt=""
+                    class="size-full object-cover"
+                  />
+                </div>
 
-            <%!-- The name owns the leftover width and every other column is
+                <%!-- The name owns the leftover width and every other column is
                   fixed, so each column that survives a narrow screen is one
                   the name loses. Below `sm` they all fold into the block
                   below — a row where the deck's own name got crushed to
                   nothing is not a list of decks. --%>
-            <div class="min-w-0 flex-1">
-              <h2 class="truncate text-body font-semibold leading-tight text-ink">
-                {row.deck.name}
-              </h2>
-              <p :if={row.commander} class="truncate text-caption text-ink-muted">
-                {row.commander.card.name}
-              </p>
-              <p class="mt-0.5 flex flex-wrap items-center gap-2 sm:hidden">
-                <.color_identity colors={row.deck.color_identity} size={11} />
-                <span class={["font-mono text-micro", vital_tone(row)]}>{vital_sign(row)}</span>
-                <.run_chip running={row.running} />
-              </p>
-            </div>
+                <div class="min-w-0 flex-1">
+                  <h2 class="truncate text-body font-semibold leading-tight text-ink">
+                    {row.deck.name}
+                  </h2>
+                  <p :if={row.commander} class="truncate text-caption text-ink-muted">
+                    {row.commander.card.name}
+                  </p>
+                  <p class="mt-0.5 flex flex-wrap items-center gap-2 sm:hidden">
+                    <.color_identity colors={row.deck.color_identity} size={11} />
+                    <span class={["font-mono text-micro", vital_tone(row)]}>{vital_sign(row)}</span>
+                    <.run_chip running={row.running} />
+                  </p>
+                </div>
 
-            <%!-- Wrapped rather than passed `hidden`: the component hardcodes
+                <%!-- Wrapped rather than passed `hidden`: the component hardcodes
                   `inline-flex`, and two display utilities on one element is a
                   coin flip decided by Tailwind's output order, not by the one
                   written last. --%>
-            <span class="hidden shrink-0 sm:block">
-              <.color_identity colors={row.deck.color_identity} full size={13} />
-            </span>
+                <span class="hidden shrink-0 sm:block">
+                  <.color_identity colors={row.deck.color_identity} full size={13} />
+                </span>
 
-            <span class="hidden w-16 shrink-0 rounded-md bg-inlay px-2 py-0.5 text-center font-mono text-micro text-ink-secondary sm:block">
-              B{row.bracket.floor}+
-            </span>
+                <span class="hidden w-16 shrink-0 rounded-md bg-inlay px-2 py-0.5 text-center font-mono text-micro text-ink-secondary sm:block">
+                  B{row.bracket.floor}+
+                </span>
 
-            <span class="hidden w-20 shrink-0 text-right font-mono text-caption text-ink-faint md:block">
-              {row.cards} cartas
-            </span>
+                <%!-- The bracket's name, spelled out only where there is room
+                      for it. The card layout has always carried it; the row
+                      could not afford the width until the screen got this wide,
+                      and "B3+" alone is a code you have to have memorised. --%>
+                <span class="hidden w-28 shrink-0 truncate text-caption text-ink-faint 3xl:block">
+                  {Bracket.name(row.bracket.floor)}
+                </span>
 
-            <span class={[
-              "hidden w-24 shrink-0 text-right font-mono text-caption sm:block",
-              vital_tone(row)
-            ]}>
-              {vital_sign(row)}
-            </span>
+                <span class="hidden w-20 shrink-0 text-right font-mono text-caption text-ink-faint md:block">
+                  {row.cards} cartas
+                </span>
 
-            <span
-              :if={row.spend.calls > 0}
-              title={"#{row.spend.calls} chamada(s) de IA · #{row.spend.total_tokens} tokens"}
-              class="hidden w-20 shrink-0 text-right font-mono text-caption text-ink-faint lg:block"
-            >
-              {Money.brl(row.spend.cost_usd)}
-            </span>
+                <span class={[
+                  "hidden w-24 shrink-0 text-right font-mono text-caption sm:block",
+                  vital_tone(row)
+                ]}>
+                  {vital_sign(row)}
+                </span>
 
-            <span class="hidden shrink-0 sm:block">
-              <.run_chip running={row.running} />
-            </span>
-          </.link>
+                <span
+                  :if={row.spend.calls > 0}
+                  title={"#{row.spend.calls} chamada(s) de IA · #{row.spend.total_tokens} tokens"}
+                  class="hidden w-20 shrink-0 text-right font-mono text-caption text-ink-faint lg:block"
+                >
+                  {Money.brl(row.spend.cost_usd)}
+                </span>
 
-          <.delete_deck_button row={row} />
-        </li>
-      </ul>
+                <span class="hidden shrink-0 sm:block">
+                  <.run_chip running={row.running} />
+                </span>
+              </.link>
+
+              <.delete_deck_button row={row} />
+            </li>
+          </ul>
+        </div>
+      </div>
     </div>
     """
   end

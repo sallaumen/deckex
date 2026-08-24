@@ -154,7 +154,7 @@ defmodule DeckexWeb.SettingsPanel do
           aria-modal="true"
           aria-label="Ajustes"
           phx-click-away="close"
-          class="w-full max-w-2xl rounded-xl border border-hairline-soft bg-surface shadow-lifted"
+          class="w-full max-w-2xl rounded-xl border border-hairline-soft bg-surface shadow-lifted 2xl:max-w-5xl"
           onclick="event.stopPropagation()"
         >
           <header class="flex items-center justify-between gap-4 border-b border-hairline-soft px-6 py-4">
@@ -174,74 +174,81 @@ defmodule DeckexWeb.SettingsPanel do
             </button>
           </header>
 
-          <div class="max-h-[70vh] space-y-6 overflow-y-auto px-6 py-5">
+          <div class="max-h-[70vh] space-y-6 overflow-y-auto px-6 py-5 2xl:max-h-[78vh]">
             <p :if={@error} class="rounded-md bg-inlay p-3 text-caption text-sev-critical">
               {@error}
             </p>
 
-            <section :for={{group, title} <- groups()} class="space-y-4">
-              <h3 class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
-                {title}
-              </h3>
+            <%!-- Four groups of two or three fields each: one column of them is
+                  a dialog you scroll past the knob you came for. Past 2xl the
+                  dialog is wide enough to stand them side by side, and every
+                  setting is on screen at once — which is how you notice that
+                  the ceiling and the model floor argue with each other. --%>
+            <div class="space-y-6 2xl:grid 2xl:grid-cols-2 2xl:items-start 2xl:gap-x-10 2xl:gap-y-6 2xl:space-y-0">
+              <section :for={{group, title} <- groups()} class="space-y-4">
+                <h3 class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+                  {title}
+                </h3>
 
-              <.form
-                :for={entry <- Registry.group(group)}
-                :if={entry.type != :baselines}
-                for={%{}}
-                as={:setting}
-                id={"panel-#{entry.key}"}
-                phx-change="save"
-                phx-submit="save"
-                phx-target={@myself}
-                class="flex flex-wrap items-end gap-3"
-              >
-                <input type="hidden" name="setting[key]" value={entry.key} />
+                <.form
+                  :for={entry <- Registry.group(group)}
+                  :if={entry.type != :baselines}
+                  for={%{}}
+                  as={:setting}
+                  id={"panel-#{entry.key}"}
+                  phx-change="save"
+                  phx-submit="save"
+                  phx-target={@myself}
+                  class="flex flex-wrap items-end gap-3"
+                >
+                  <input type="hidden" name="setting[key]" value={entry.key} />
 
-                <div class="min-w-0 flex-1">
-                  <label
-                    for={"panel-field-#{entry.key}"}
-                    class="mb-1 flex items-baseline gap-2 text-caption font-semibold text-ink-secondary"
-                  >
-                    {entry.label}
-                    <%!-- The header promised the panel saves by itself; nine
+                  <div class="min-w-0 flex-1">
+                    <label
+                      for={"panel-field-#{entry.key}"}
+                      class="mb-1 flex items-baseline gap-2 text-caption font-semibold text-ink-secondary"
+                    >
+                      {entry.label}
+                      <%!-- The header promised the panel saves by itself; nine
                           "Salvar" buttons said otherwise, and for a select the
                           promise was simply false. Now it is true, and the
                           field says so where the eye already is. --%>
-                    <span :if={@saved == entry.key} class="font-mono text-micro text-sev-healthy">
-                      salvo
-                    </span>
-                  </label>
+                      <span :if={@saved == entry.key} class="font-mono text-micro text-sev-healthy">
+                        salvo
+                      </span>
+                    </label>
 
-                  <select
-                    :if={entry.options}
-                    id={"panel-field-#{entry.key}"}
-                    name="setting[value]"
-                    class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-body text-ink"
-                  >
-                    <option
-                      :for={option <- entry.options}
-                      value={option}
-                      selected={to_string(@values[entry.key]) == to_string(option)}
+                    <select
+                      :if={entry.options}
+                      id={"panel-field-#{entry.key}"}
+                      name="setting[value]"
+                      class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-body text-ink"
                     >
-                      {option}
-                    </option>
-                  </select>
+                      <option
+                        :for={option <- entry.options}
+                        value={option}
+                        selected={to_string(@values[entry.key]) == to_string(option)}
+                      >
+                        {option}
+                      </option>
+                    </select>
 
-                  <input
-                    :if={is_nil(entry.options)}
-                    id={"panel-field-#{entry.key}"}
-                    type="text"
-                    inputmode={if entry.type in [:integer, :number], do: "decimal"}
-                    phx-debounce="blur"
-                    name="setting[value]"
-                    value={@values[entry.key]}
-                    class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 font-mono text-body-lg text-ink"
-                  />
+                    <input
+                      :if={is_nil(entry.options)}
+                      id={"panel-field-#{entry.key}"}
+                      type="text"
+                      inputmode={if entry.type in [:integer, :number], do: "decimal"}
+                      phx-debounce="blur"
+                      name="setting[value]"
+                      value={@values[entry.key]}
+                      class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 font-mono text-body-lg text-ink"
+                    />
 
-                  <p :if={entry.hint} class="mt-1 text-micro text-ink-muted">{entry.hint}</p>
-                </div>
-              </.form>
-            </section>
+                    <p :if={entry.hint} class="mt-1 text-micro text-ink-muted">{entry.hint}</p>
+                  </div>
+                </.form>
+              </section>
+            </div>
 
             <section class="space-y-2 border-t border-hairline-soft pt-4">
               <h3 class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
@@ -294,7 +301,7 @@ defmodule DeckexWeb.SettingsPanel do
                 Discorde à vontade; é para isso que os campos são editáveis.
               </p>
 
-              <div class="mt-3 grid gap-3 sm:grid-cols-2">
+              <div class="mt-3 grid gap-3 sm:grid-cols-2 2xl:grid-cols-4">
                 <.form
                   :for={{field, value} <- baseline_fields(@baselines)}
                   for={%{}}

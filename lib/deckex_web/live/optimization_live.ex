@@ -478,7 +478,13 @@ defmodule DeckexWeb.OptimizationLive do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <div class="mx-auto max-w-[1100px] px-6 py-10 lg:px-10 lg:py-14">
+    <%!-- A run is the longest page in the app — ten stages, each with two lists
+          under it — and at 1100px it scrolled for a minute. The container grows
+          in two steps so the stage detail can go two-up (2xl) and then the
+          closing sections can sit side by side (3xl); it stops at 1760px
+          because past that a line of reasoning stops being readable no matter
+          how much felt is left over. --%>
+    <div class="mx-auto max-w-[1100px] px-6 py-10 lg:px-10 lg:py-14 2xl:max-w-[1440px] 3xl:max-w-[1760px]">
       <%!-- Inside the LiveView's own tree, not the root layout: the layout is
             static after mount, so a flash put during an event would never
             reach the screen from there. --%>
@@ -583,7 +589,12 @@ defmodule DeckexWeb.OptimizationLive do
           </div>
         </div>
 
-        <div class="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
+        <%!-- Six tiles, and five columns left one orphan on its own row at
+              every width above 640px while squeezing the other five (118px each
+              at 640, where "R$ 1.234,56" in the numeral face does not fit).
+              Three and six both divide six: two clean rows until the container
+              is wide enough for one. --%>
+        <div class="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 2xl:grid-cols-6">
           <.stat
             label="Críticos"
             value={Integer.to_string(criticals(@report_current))}
@@ -767,7 +778,7 @@ defmodule DeckexWeb.OptimizationLive do
 
           <p
             :if={step.consult && step.consult.response["leitura"]}
-            class="mt-3 border-l-2 border-hairline-strong pl-3 text-caption italic text-ink-muted"
+            class="mt-3 max-w-[78ch] border-l-2 border-hairline-strong pl-3 text-caption italic text-ink-muted"
           >
             {step.consult.response["leitura"]}
           </p>
@@ -779,55 +790,65 @@ defmodule DeckexWeb.OptimizationLive do
             Nenhuma mudança — o modelo olhou e não propôs nada.
           </p>
 
-          <div :if={step.applied != []} class="mt-3">
-            <h3 class="mb-1 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
-              Aplicadas
-            </h3>
-            <ul class="space-y-1">
-              <li :for={change <- step.applied} class="text-caption text-ink-secondary">
-                <.mark_toggle
-                  card={change["card"]}
-                  action={change["action"]}
-                  marked?={Map.has_key?(@marks, change["card"])}
-                />
-                <span class={[
-                  "font-mono",
-                  change["action"] == "add" && "text-sev-healthy",
-                  change["action"] == "cut" && "text-sev-critical"
-                ]}>
-                  {if change["action"] == "add", do: "+", else: "−"}
-                </span>
-                <.card_link name={change["card"]} uri={@card_uris[change["card"]]} class="text-ink" />
-                <.play_rate :if={change["action"] == "add"} rank={@card_ranks[change["card"]]} />
-                <span class="text-ink-muted">— {change["reason"]}</span>
-                <span :if={change["note"]} class="block text-micro text-ink-faint">
-                  motor: {change["note"]}
-                </span>
-              </li>
-            </ul>
-          </div>
+          <%!-- The two halves of a stage's verdict, stacked on a laptop and
+                side by side once there is room. They are read against each
+                other — what went in, what the motor refused — and on an
+                ultra-wide the pair used to be two narrow lists one under the
+                other with half the screen empty beside them. --%>
+          <div
+            :if={step.applied != [] or step.rejected != []}
+            class="mt-3 grid gap-x-10 gap-y-3 2xl:grid-cols-2 2xl:items-start"
+          >
+            <div :if={step.applied != []}>
+              <h3 class="mb-1 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+                Aplicadas
+              </h3>
+              <ul class="max-w-[78ch] space-y-1">
+                <li :for={change <- step.applied} class="text-caption text-ink-secondary">
+                  <.mark_toggle
+                    card={change["card"]}
+                    action={change["action"]}
+                    marked?={Map.has_key?(@marks, change["card"])}
+                  />
+                  <span class={[
+                    "font-mono",
+                    change["action"] == "add" && "text-sev-healthy",
+                    change["action"] == "cut" && "text-sev-critical"
+                  ]}>
+                    {if change["action"] == "add", do: "+", else: "−"}
+                  </span>
+                  <.card_link name={change["card"]} uri={@card_uris[change["card"]]} class="text-ink" />
+                  <.play_rate :if={change["action"] == "add"} rank={@card_ranks[change["card"]]} />
+                  <span class="text-ink-muted">— {change["reason"]}</span>
+                  <span :if={change["note"]} class="block text-micro text-ink-faint">
+                    motor: {change["note"]}
+                  </span>
+                </li>
+              </ul>
+            </div>
 
-          <div :if={step.rejected != []} class="mt-3">
-            <h3 class="mb-1 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
-              Recusadas pelo motor
-            </h3>
-            <ul class="space-y-1">
-              <li :for={change <- step.rejected} class="text-caption">
-                <.mark_toggle
-                  card={change["card"]}
-                  action="rejected"
-                  marked?={Map.has_key?(@marks, change["card"])}
-                />
-                <.card_link
-                  name={change["card"]}
-                  uri={@card_uris[change["card"]]}
-                  class="text-ink-secondary"
-                />
-                <span class="text-sev-critical">
-                  — {Enum.join(change["problems"] || [], "; ")}
-                </span>
-              </li>
-            </ul>
+            <div :if={step.rejected != []}>
+              <h3 class="mb-1 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+                Recusadas pelo motor
+              </h3>
+              <ul class="max-w-[78ch] space-y-1">
+                <li :for={change <- step.rejected} class="text-caption">
+                  <.mark_toggle
+                    card={change["card"]}
+                    action="rejected"
+                    marked?={Map.has_key?(@marks, change["card"])}
+                  />
+                  <.card_link
+                    name={change["card"]}
+                    uri={@card_uris[change["card"]]}
+                    class="text-ink-secondary"
+                  />
+                  <span class="text-sev-critical">
+                    — {Enum.join(change["problems"] || [], "; ")}
+                  </span>
+                </li>
+              </ul>
+            </div>
           </div>
 
           <div
@@ -970,18 +991,25 @@ defmodule DeckexWeb.OptimizationLive do
         <h2 class="mb-1 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
           Sua revisão
         </h2>
-        <p class="mb-3 text-caption text-ink-muted">
+        <p class="mb-3 max-w-[75ch] text-caption text-ink-muted">
           Uma última etapa, contra o que você escrever. Ela pode desfazer o que as outras fizeram —
           você joga esse deck, o modelo só leu as cartas.
         </p>
 
         <div class="rounded-xl border border-hairline-soft bg-surface p-6">
-          <p :if={@marks == %{}} class="text-caption text-ink-muted">
+          <p :if={@marks == %{}} class="max-w-[75ch] text-caption text-ink-muted">
             Nenhuma carta marcada. Durante a rodada, o marcador ao lado de cada carta guarda ela
             para você comentar aqui — e o campo abaixo vale para a rodada inteira.
           </p>
 
-          <ul :if={@marks != %{}} class="mb-4 space-y-3">
+          <%!-- A card and a two-line box is a shape that tiles: on a wide screen
+                twelve marked cards were twelve full-width rows and a scroll,
+                and they are read as a set. `space-y-0` because a grid gap and a
+                sibling margin are two spacings arguing. --%>
+          <ul
+            :if={@marks != %{}}
+            class="mb-4 space-y-3 2xl:grid 2xl:grid-cols-2 2xl:gap-x-8 2xl:gap-y-4 2xl:space-y-0 3xl:grid-cols-3"
+          >
             <li :for={{card, mark} <- Enum.sort_by(@marks, &elem(&1, 0))}>
               <div class="flex flex-wrap items-baseline gap-2">
                 <.mark_toggle card={card} marked?={true} />
@@ -1010,7 +1038,10 @@ defmodule DeckexWeb.OptimizationLive do
             </li>
           </ul>
 
-          <.form for={%{}} id="revisao" phx-submit="revisar" class="space-y-2">
+          <%!-- Capped past 2xl only: a three-row box the width of an ultra-wide
+                is a field nobody can proofread, and narrower screens already
+                had a sane one. --%>
+          <.form for={%{}} id="revisao" phx-submit="revisar" class="space-y-2 2xl:max-w-[80ch]">
             <label for="revisao-geral" class="block text-caption font-semibold text-ink-secondary">
               E da rodada inteira
             </label>
@@ -1042,151 +1073,167 @@ defmodule DeckexWeb.OptimizationLive do
         </div>
       </section>
 
-      <section :if={@optimization.status == :done and @shopping.cards != []} class="mt-10">
-        <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
-          O que comprar
-        </h2>
+      <%!-- The shopping list and the changelog are the two things read after a
+            run lands, and they answer different questions about the same set of
+            cards — what it costs, what it did. Side by side once both fit; when
+            there is nothing to buy the changelog keeps the whole width rather
+            than sitting in a half-column beside a hole. --%>
+      <div
+        :if={@optimization.status == :done}
+        class={[
+          "mt-10 grid gap-10 3xl:items-start",
+          @shopping.cards != [] && "3xl:grid-cols-2"
+        ]}
+      >
+        <section :if={@optimization.status == :done and @shopping.cards != []}>
+          <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+            O que comprar
+          </h2>
 
-        <div class="rounded-xl border border-hairline-soft bg-surface p-6">
-          <ul class="divide-y divide-hairline-soft">
-            <li
-              :for={item <- @shopping.cards}
-              class="flex flex-wrap items-baseline gap-x-2 gap-y-1 py-2 first:pt-0 last:pb-0"
-            >
-              <.card_link
-                name={item.name}
-                uri={item.card && item.card.scryfall_uri}
-                class="text-body text-ink"
-              />
-              <.play_rate rank={item.rank} />
-              <span class="ml-auto font-mono text-caption text-ink-secondary">
-                {Money.brl(item.card && item.card.price_usd)}
-              </span>
-            </li>
-          </ul>
+          <div class="rounded-xl border border-hairline-soft bg-surface p-6">
+            <ul class="divide-y divide-hairline-soft">
+              <li
+                :for={item <- @shopping.cards}
+                class="flex flex-wrap items-baseline gap-x-2 gap-y-1 py-2 first:pt-0 last:pb-0"
+              >
+                <.card_link
+                  name={item.name}
+                  uri={item.card && item.card.scryfall_uri}
+                  class="text-body text-ink"
+                />
+                <.play_rate rank={item.rank} />
+                <span class="ml-auto font-mono text-caption text-ink-secondary">
+                  {Money.brl(item.card && item.card.price_usd)}
+                </span>
+              </li>
+            </ul>
 
-          <div class="mt-4 flex flex-wrap items-baseline justify-between gap-3 border-t border-hairline-soft pt-4">
-            <p class="font-mono text-numeral-sm leading-none text-ink">
-              {Money.brl(@shopping.total_usd)}
-              <span class="font-sans text-caption text-ink-faint">
-                por {length(@shopping.cards)} carta(s)
-              </span>
+            <div class="mt-4 flex flex-wrap items-baseline justify-between gap-3 border-t border-hairline-soft pt-4">
+              <p class="font-mono text-numeral-sm leading-none text-ink">
+                {Money.brl(@shopping.total_usd)}
+                <span class="font-sans text-caption text-ink-faint">
+                  por {length(@shopping.cards)} carta(s)
+                </span>
+              </p>
+
+              <div class="flex items-center gap-3">
+                <a
+                  href={~p"/otimizacoes/#{@optimization.id}/compras.txt"}
+                  download
+                  class="-my-2 inline-flex min-h-touch items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+                >
+                  Baixar
+                </a>
+                <button
+                  id="copiar-compras"
+                  type="button"
+                  phx-hook=".CopyList"
+                  data-target="lista-compras"
+                  class="-my-2 inline-flex min-h-touch items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+                >
+                  copiar tudo
+                </button>
+              </div>
+            </div>
+
+            <%!-- Unpriced cards are listed and left out of the total: guessing
+                what one costs to make the arithmetic tidy is the invention
+                this app refuses everywhere else. --%>
+            <p :if={@shopping.unpriced > 0} class="mt-2 text-micro text-ink-faint">
+              {@shopping.unpriced} carta(s) sem preço conhecido não entram no total.
             </p>
 
-            <div class="flex items-center gap-3">
-              <a
-                href={~p"/otimizacoes/#{@optimization.id}/compras.txt"}
-                download
-                class="-my-2 inline-flex min-h-touch items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+            <label for="lista-compras" class="sr-only">Lista de compra</label>
+            <textarea id="lista-compras" readonly rows="1" class="sr-only">{Optimizations.shopping_list_text(@optimization, @deck)}</textarea>
+          </div>
+        </section>
+
+        <section :if={@optimization.status == :done}>
+          <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+            O que mudou, no total
+          </h2>
+
+          <div class="rounded-xl border border-hairline-soft bg-surface p-6">
+            <p :if={@card_count != 100} class="mb-4 text-caption text-sev-warning">
+              A lista final tem {@card_count} cartas — um deck de Commander precisa de 100.
+              Complete a diferença antes de levar este deck para a mesa.
+            </p>
+
+            <p :if={consolidated_diff(@optimization) == []} class="text-body text-ink-secondary">
+              Nada — o deck já estava onde o pipeline queria levar.
+            </p>
+
+            <%!-- Measure, not width: a card, a price and a sentence of
+                  reasoning stay one readable line however wide the panel
+                  gets. --%>
+            <ul class="max-w-[78ch] space-y-1">
+              <li
+                :for={change <- consolidated_diff(@optimization)}
+                class="text-caption text-ink-secondary"
               >
-                Baixar
-              </a>
+                <span class={[
+                  "font-mono",
+                  change["action"] == "add" && "text-sev-healthy",
+                  change["action"] == "cut" && "text-sev-critical"
+                ]}>
+                  {if change["action"] == "add", do: "+", else: "−"}
+                </span>
+                <.card_link name={change["card"]} uri={@card_uris[change["card"]]} class="text-ink" />
+                <span :if={price = add_price(change)} class="font-mono text-ink-faint">{price}</span>
+                <.play_rate :if={change["action"] == "add"} rank={@card_ranks[change["card"]]} />
+                <span class="text-ink-muted">— {change["reason"]}</span>
+              </li>
+            </ul>
+
+            <details class="mt-4 border-t border-hairline-soft pt-4">
+              <summary class="-my-2 inline-flex min-h-touch cursor-pointer items-center py-2 text-caption text-ink-faint transition-colors hover:text-ink motion-reduce:transition-none">
+                Lista final para copiar
+              </summary>
               <button
-                id="copiar-compras"
+                id="copiar-lista"
                 type="button"
                 phx-hook=".CopyList"
-                data-target="lista-compras"
-                class="-my-2 inline-flex min-h-touch items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+                data-target="lista-final"
+                class="-my-2 mt-1 inline-flex min-h-touch items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
               >
                 copiar tudo
               </button>
-            </div>
-          </div>
+              <script :type={Phoenix.LiveView.ColocatedHook} name=".CopyList">
+                // The clipboard API can refuse (permissions, embedded browsers).
+                // Refusal must not be silence: fall back to selecting the text
+                // so one keystroke finishes the job, and say so on the button.
+                export default {
+                  mounted() {
+                    this.el.addEventListener("click", () => {
+                      const target = document.getElementById(this.el.dataset.target)
 
-          <%!-- Unpriced cards are listed and left out of the total: guessing
-                what one costs to make the arithmetic tidy is the invention
-                this app refuses everywhere else. --%>
-          <p :if={@shopping.unpriced > 0} class="mt-2 text-micro text-ink-faint">
-            {@shopping.unpriced} carta(s) sem preço conhecido não entram no total.
-          </p>
-
-          <label for="lista-compras" class="sr-only">Lista de compra</label>
-          <textarea id="lista-compras" readonly rows="1" class="sr-only">{Optimizations.shopping_list_text(@optimization, @deck)}</textarea>
-        </div>
-      </section>
-
-      <section :if={@optimization.status == :done} class="mt-10">
-        <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
-          O que mudou, no total
-        </h2>
-
-        <div class="rounded-xl border border-hairline-soft bg-surface p-6">
-          <p :if={@card_count != 100} class="mb-4 text-caption text-sev-warning">
-            A lista final tem {@card_count} cartas — um deck de Commander precisa de 100.
-            Complete a diferença antes de levar este deck para a mesa.
-          </p>
-
-          <p :if={consolidated_diff(@optimization) == []} class="text-body text-ink-secondary">
-            Nada — o deck já estava onde o pipeline queria levar.
-          </p>
-
-          <ul class="space-y-1">
-            <li
-              :for={change <- consolidated_diff(@optimization)}
-              class="text-caption text-ink-secondary"
-            >
-              <span class={[
-                "font-mono",
-                change["action"] == "add" && "text-sev-healthy",
-                change["action"] == "cut" && "text-sev-critical"
-              ]}>
-                {if change["action"] == "add", do: "+", else: "−"}
-              </span>
-              <.card_link name={change["card"]} uri={@card_uris[change["card"]]} class="text-ink" />
-              <span :if={price = add_price(change)} class="font-mono text-ink-faint">{price}</span>
-              <.play_rate :if={change["action"] == "add"} rank={@card_ranks[change["card"]]} />
-              <span class="text-ink-muted">— {change["reason"]}</span>
-            </li>
-          </ul>
-
-          <details class="mt-4 border-t border-hairline-soft pt-4">
-            <summary class="-my-2 inline-flex min-h-touch cursor-pointer items-center py-2 text-caption text-ink-faint transition-colors hover:text-ink motion-reduce:transition-none">
-              Lista final para copiar
-            </summary>
-            <button
-              id="copiar-lista"
-              type="button"
-              phx-hook=".CopyList"
-              data-target="lista-final"
-              class="-my-2 mt-1 inline-flex min-h-touch items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
-            >
-              copiar tudo
-            </button>
-            <script :type={Phoenix.LiveView.ColocatedHook} name=".CopyList">
-              // The clipboard API can refuse (permissions, embedded browsers).
-              // Refusal must not be silence: fall back to selecting the text
-              // so one keystroke finishes the job, and say so on the button.
-              export default {
-                mounted() {
-                  this.el.addEventListener("click", () => {
-                    const target = document.getElementById(this.el.dataset.target)
-
-                    const flash = (text) => {
-                      this.el.textContent = text
-                      setTimeout(() => { this.el.textContent = "copiar tudo" }, 2500)
-                    }
-
-                    navigator.clipboard.writeText(target.value).then(
-                      () => flash("copiado ✓"),
-                      () => {
-                        target.focus()
-                        target.select()
-                        flash("selecionei — copia com Ctrl/⌘+C")
+                      const flash = (text) => {
+                        this.el.textContent = text
+                        setTimeout(() => { this.el.textContent = "copiar tudo" }, 2500)
                       }
-                    )
-                  })
+
+                      navigator.clipboard.writeText(target.value).then(
+                        () => flash("copiado ✓"),
+                        () => {
+                          target.focus()
+                          target.select()
+                          flash("selecionei — copia com Ctrl/⌘+C")
+                        }
+                      )
+                    })
+                  }
                 }
-              }
-            </script>
-            <textarea
-              id="lista-final"
-              readonly
-              rows="12"
-              class="mt-2 w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 font-mono text-caption text-ink"
-            >{Optimizations.list_to_text(Optimizations.current_list(@optimization), Optimizations.current_commanders(@optimization))}</textarea>
-          </details>
-        </div>
-      </section>
+              </script>
+              <textarea
+                id="lista-final"
+                readonly
+                rows="12"
+                class="mt-2 w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 font-mono text-caption text-ink"
+              >{Optimizations.list_to_text(Optimizations.current_list(@optimization), Optimizations.current_commanders(@optimization))}</textarea>
+            </details>
+          </div>
+        </section>
+      </div>
     </div>
     """
   end
