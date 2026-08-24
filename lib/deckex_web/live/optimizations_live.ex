@@ -207,7 +207,7 @@ defmodule DeckexWeb.OptimizationsLive do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <div class="mx-auto max-w-[1100px] px-6 py-10 lg:px-10 lg:py-14">
+    <div class="mx-auto max-w-[1100px] px-6 py-10 lg:px-10 lg:py-14 2xl:max-w-[1440px] 3xl:max-w-[1700px]">
       <%!-- Inside the LiveView's own tree, not the root layout: the layout is
             static after mount, so a flash put during an event would never
             reach the screen from there. --%>
@@ -220,6 +220,8 @@ defmodule DeckexWeb.OptimizationsLive do
       >
         ← {@deck.name}
       </.link>
+
+      <.deck_nav deck={@deck} current={:runs} />
 
       <header class="mt-3 mb-10 flex flex-wrap items-end justify-between gap-4">
         <div>
@@ -244,7 +246,7 @@ defmodule DeckexWeb.OptimizationsLive do
         </p>
       </div>
 
-      <ul class="space-y-4">
+      <ul class="space-y-4 3xl:grid 3xl:grid-cols-2 3xl:gap-4 3xl:space-y-0">
         <li :for={run <- @runs}>
           <.link
             navigate={~p"/otimizacoes/#{run.id}"}
@@ -316,7 +318,7 @@ defmodule DeckexWeb.OptimizationsLive do
           role="dialog"
           aria-modal="true"
           aria-label="Nova otimização"
-          class="w-full max-w-2xl rounded-xl border border-hairline-soft bg-surface shadow-lifted"
+          class="w-full max-w-2xl rounded-xl border border-hairline-soft bg-surface shadow-lifted 2xl:max-w-4xl"
         >
           <header class="border-b border-hairline-soft px-6 py-4">
             <h2 class="text-heading font-semibold text-ink">Nova rodada</h2>
@@ -334,12 +336,12 @@ defmodule DeckexWeb.OptimizationsLive do
             as={:contract}
             id="launch-form"
             phx-submit="comecar"
-            class="space-y-4 px-6 py-5"
+            class="space-y-4 px-6 py-5 2xl:grid 2xl:grid-cols-2 2xl:gap-x-8 2xl:gap-y-4 2xl:space-y-0"
           >
             <%!-- Three modes, weakest first, because the order is how much of
                   the deck you are handing over — and the cheapest one is the
                   one he reaches for most. --%>
-            <div class="grid grid-cols-3 gap-2">
+            <div class="grid grid-cols-3 gap-2 2xl:col-span-2">
               <button
                 :for={
                   {mode, label} <- [
@@ -361,11 +363,11 @@ defmodule DeckexWeb.OptimizationsLive do
               </button>
             </div>
 
-            <p class="text-micro text-ink-muted">{mode_note(@mode)}</p>
+            <p class="text-micro text-ink-muted 2xl:col-span-2 2xl:-mt-2">{mode_note(@mode)}</p>
 
             <%!-- The whole point of a one-stage round: he already knows what
                   he wants done and does not need nine stages to discover it. --%>
-            <div :if={@mode == :livre}>
+            <div :if={@mode == :livre} class="2xl:col-span-2">
               <label
                 for="launch-pedido"
                 class="mb-1 block text-caption font-semibold text-ink-secondary"
@@ -385,7 +387,10 @@ defmodule DeckexWeb.OptimizationsLive do
               </p>
             </div>
 
-            <div :if={@mode == :reimagine} class="space-y-2 border-t border-hairline-soft pt-4">
+            <div
+              :if={@mode == :reimagine}
+              class="space-y-2 border-t border-hairline-soft pt-4 2xl:col-span-2"
+            >
               <div class="flex flex-wrap items-center justify-between gap-2">
                 <span class="text-caption font-semibold text-ink-secondary">
                   O que você não quer na mesa
@@ -660,7 +665,7 @@ defmodule DeckexWeb.OptimizationsLive do
               </div>
             </div>
 
-            <div class="flex items-center justify-end gap-3 border-t border-hairline-soft pt-4">
+            <div class="flex items-center justify-end gap-3 border-t border-hairline-soft pt-4 2xl:col-span-2">
               <button
                 type="button"
                 phx-click="fechar-lancador"
