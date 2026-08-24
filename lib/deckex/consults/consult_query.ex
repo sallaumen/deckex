@@ -24,6 +24,23 @@ defmodule Deckex.Consults.ConsultQuery do
     )
   end
 
+  @doc """
+  The newest consult of one lens on one deck, or nil.
+
+  A screen that asked a question once should still be showing the answer after
+  a reload — an answer that cost money and vanishes on F5 is an answer the
+  owner pays for twice.
+  """
+  @spec latest_for_lens(String.t(), atom()) :: Consult.t() | nil
+  def latest_for_lens(deck_id, lens) do
+    Repo.one(
+      from c in Consult,
+        where: c.deck_id == ^deck_id and c.lens == ^lens,
+        order_by: [desc: c.inserted_at],
+        limit: 1
+    )
+  end
+
   @doc "Fetches a consult by id as a tagged tuple."
   @spec fetch(String.t()) :: {:ok, Consult.t()} | {:error, Error.t()}
   def fetch(id) do

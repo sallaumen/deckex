@@ -29,7 +29,8 @@ defmodule Deckex.Consults.Consult do
     :visao,
     :balanco,
     :revisao,
-    :livre
+    :livre,
+    :pilares
   ]
 
   @type t :: %__MODULE__{}

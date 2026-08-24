@@ -21,16 +21,31 @@ defmodule DeckexWeb.CardRulesLive do
   use DeckexWeb, :live_view
 
   alias Deckex.Cards.Name
+  alias Deckex.Consults
+  alias Deckex.Consults.Consult
   alias Deckex.Decks
   alias Deckex.Decks.CardNote
   alias Deckex.Decks.CardRules
   alias Deckex.Error
+  alias Deckex.Events
 
   @impl Phoenix.LiveView
   def mount(%{"id" => deck_id}, _session, socket) do
     case Decks.fetch_deck(deck_id) do
       {:ok, deck} ->
-        {:ok, socket |> assign(stance: :locked) |> load(deck)}
+        if connected?(socket), do: Events.subscribe_consults(deck.id)
+
+        {:ok,
+         socket
+         |> assign(
+           stance: :locked,
+           # The answer that cost money outlives the page: a `:pilares` consult
+           # asked yesterday is still the sharpest thing this screen knows.
+           consult: Consults.latest_for_lens(deck.id, :pilares),
+           swept?: false,
+           checked: MapSet.new()
+         )
+         |> load(deck)}
 
       {:error, %Error{} = error} ->
         {:ok, socket |> put_flash(:error, error.message) |> push_navigate(to: ~p"/")}
@@ -41,7 +56,8 @@ defmodule DeckexWeb.CardRulesLive do
     rules = Decks.card_notes(deck)
     present = card_names(deck)
 
-    assign(socket,
+    socket
+    |> assign(
       deck: deck,
       groups: CardRules.split(rules),
       # Computed once for the whole page rather than per row: the answer is the
@@ -50,7 +66,34 @@ defmodule DeckexWeb.CardRulesLive do
       present: MapSet.new(present, &Name.normalize/1),
       page_title: "Cartas · #{deck.name}"
     )
+    |> propose()
   end
+
+  # Recomputed whenever the rules change, because locking a proposal has to make
+  # it leave the list — otherwise the screen keeps offering him what he just did.
+  defp propose(socket) do
+    proposals =
+      if socket.assigns.swept? or answered?(socket.assigns.consult) do
+        Decks.pillar_proposals(socket.assigns.deck, pillar_rows(socket.assigns.consult))
+      else
+        []
+      end
+
+    assign(socket,
+      proposals: proposals,
+      # Everything ticked on arrival: he asked for the obvious ones, and
+      # unticking the two he disagrees with is less work than ticking eight.
+      checked: MapSet.new(proposals, & &1.name)
+    )
+  end
+
+  defp answered?(%Consult{status: :done, response: %{}}), do: true
+  defp answered?(_pending_or_absent), do: false
+
+  defp pillar_rows(%Consult{status: :done, response: %{"pilares" => rows}}) when is_list(rows),
+    do: rows
+
+  defp pillar_rows(_nothing_yet), do: []
 
   defp card_names(deck) do
     snapshot = Decks.snapshot(deck)
@@ -59,8 +102,63 @@ defmodule DeckexWeb.CardRulesLive do
   end
 
   @impl Phoenix.LiveView
+  def handle_info({:consult_updated, id}, socket) do
+    if socket.assigns.consult && socket.assigns.consult.id == id do
+      {:ok, consult} = Consults.fetch(id)
+
+      {:noreply, socket |> assign(consult: consult) |> propose()}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl Phoenix.LiveView
   def handle_event("stance", %{"stance" => stance}, socket) do
     {:noreply, assign(socket, stance: String.to_existing_atom(stance))}
+  end
+
+  def handle_event("varrer", _params, socket) do
+    socket = socket |> assign(swept?: true) |> propose()
+
+    {:noreply, swept_message(socket)}
+  end
+
+  def handle_event("perguntar-ia", _params, socket) do
+    {:ok, consult} = Consults.request(socket.assigns.deck, :pilares)
+
+    {:noreply,
+     socket
+     |> assign(consult: consult)
+     |> put_flash(:info, "Perguntei. A resposta aparece aqui quando chegar.")}
+  end
+
+  def handle_event("marcar-proposta", %{"card" => card}, socket) do
+    checked = socket.assigns.checked
+
+    toggled =
+      if MapSet.member?(checked, card),
+        do: MapSet.delete(checked, card),
+        else: MapSet.put(checked, card)
+
+    {:noreply, assign(socket, checked: toggled)}
+  end
+
+  def handle_event("trancar-marcadas", _params, socket) do
+    chosen =
+      Enum.filter(socket.assigns.proposals, &MapSet.member?(socket.assigns.checked, &1.name))
+
+    Enum.each(chosen, fn proposal ->
+      {:ok, _rule} =
+        Decks.put_card_rule(socket.assigns.deck, proposal.name,
+          stance: :locked,
+          note: proposal.reason
+        )
+    end)
+
+    {:noreply,
+     socket
+     |> load(socket.assigns.deck)
+     |> put_flash(:info, locked_message(length(chosen)))}
   end
 
   def handle_event("colar", %{"lote" => %{"texto" => text}}, socket) do
@@ -108,6 +206,30 @@ defmodule DeckexWeb.CardRulesLive do
      |> load(socket.assigns.deck)
      |> put_flash(:info, "#{card} saiu das suas decisões.")}
   end
+
+  # The empty sweep is the useful message, not a failure: it says which of the
+  # two sources came up dry, and the paid one is right there.
+  defp swept_message(%{assigns: %{proposals: []}} = socket) do
+    put_flash(socket, :error, empty_sweep(socket.assigns.deck))
+  end
+
+  defp swept_message(socket), do: socket
+
+  defp empty_sweep(%{dossier: nil}) do
+    "Não achei nada: este deck ainda não tem dossiê, que é de onde eu leio as sinergias. Gere um na página do deck, ou pergunte para a IA aqui embaixo."
+  end
+
+  defp empty_sweep(_has_dossier) do
+    "Não achei nada novo — o dossiê não cita nenhuma carta que já não esteja decidida. A IA lê as cartas uma a uma e acha o que o texto não diz."
+  end
+
+  defp locked_message(0), do: "Nenhuma marcada, nada trancado."
+  defp locked_message(1), do: "1 carta trancada."
+  defp locked_message(count), do: "#{count} cartas trancadas."
+
+  defp source_label(:ia), do: "a IA leu as cartas"
+  defp source_label(:dossier), do: "está no dossiê"
+  defp source_label(:review), do: "você disse numa revisão"
 
   defp saved_message([one], stance) do
     "#{one.card_name} guardada como #{stance_label(stance)}."
@@ -175,6 +297,94 @@ defmodule DeckexWeb.CardRulesLive do
           só na próxima.
         </p>
       </header>
+
+      <%!-- Mapear carta por carta é trabalho, e trabalho que ninguém faz é
+            proteção que ninguém tem. Metade da resposta já está escrita: o
+            dossiê nomeia as sinergias, e as revisões passadas nomearam as
+            cartas que uma etapa leu errado. --%>
+      <section class="mb-10 rounded-xl border border-hairline-soft bg-surface p-6">
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+          <h2 class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+            Achar as óbvias
+          </h2>
+          <span class="font-mono text-micro text-ink-faint">de graça, na hora</span>
+        </div>
+
+        <p class="mt-2 mb-4 max-w-[72ch] text-caption text-ink-secondary">
+          Leio o dossiê e o que você já disse em revisões, e proponho o que trancar. Nada é
+          trancado sem você marcar.
+        </p>
+
+        <div class="flex flex-wrap items-center gap-3">
+          <.button type="button" phx-click="varrer" phx-disable-with="Lendo…">
+            Ler o que o app já sabe
+          </.button>
+
+          <%!-- Um combo que ninguém escreveu ainda não deixa rastro em prosa
+                nenhuma. Achar isso é ler as cartas, e ler as cartas custa. --%>
+          <.button
+            :if={is_nil(@consult)}
+            type="button"
+            phx-click="perguntar-ia"
+            phx-disable-with="Perguntando…"
+          >
+            Perguntar para a IA (1 consulta)
+          </.button>
+
+          <span
+            :if={@consult && @consult.status in [:pending, :running]}
+            class="inline-flex items-center gap-2 text-caption text-ink-muted"
+          >
+            <span class="hero-arrow-path size-3 motion-safe:animate-spin" aria-hidden="true" />
+            A IA está lendo as cartas — 2 a 5 min.
+          </span>
+
+          <span :if={@consult && @consult.status == :failed} class="text-caption text-sev-critical">
+            A consulta falhou. A varredura de graça continua valendo.
+          </span>
+        </div>
+
+        <div :if={@proposals != []} class="mt-5 border-t border-hairline-soft pt-4">
+          <h3 class="mb-3 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+            Proponho trancar ({MapSet.size(@checked)} de {length(@proposals)})
+          </h3>
+
+          <ul class="space-y-2">
+            <li :for={proposal <- @proposals} class="rounded-lg bg-inlay/60 px-3 py-2">
+              <label class="flex cursor-pointer items-start gap-3">
+                <input
+                  type="checkbox"
+                  checked={MapSet.member?(@checked, proposal.name)}
+                  phx-click="marcar-proposta"
+                  phx-value-card={proposal.name}
+                  class="mt-1 size-4 shrink-0 rounded border-hairline-strong bg-inlay text-ink"
+                />
+                <span class="min-w-0">
+                  <span class="text-body font-semibold text-ink">{proposal.name}</span>
+                  <span class="ml-2 font-mono text-micro text-ink-faint">
+                    {source_label(proposal.source)}
+                  </span>
+                  <span :if={proposal.reason != ""} class="mt-0.5 block text-caption text-ink-muted">
+                    {proposal.reason}
+                  </span>
+                </span>
+              </label>
+            </li>
+          </ul>
+
+          <div class="mt-4 flex justify-end">
+            <.button
+              type="button"
+              phx-click="trancar-marcadas"
+              variant="primary"
+              disabled={MapSet.size(@checked) == 0}
+              phx-disable-with="Trancando…"
+            >
+              Trancar as marcadas
+            </.button>
+          </div>
+        </div>
+      </section>
 
       <section class="mb-10 rounded-xl border border-hairline-soft bg-surface p-6">
         <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">

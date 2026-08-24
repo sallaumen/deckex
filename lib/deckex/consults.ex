@@ -44,6 +44,7 @@ defmodule Deckex.Consults do
   defdelegate list_for_deck(deck), to: ConsultQuery
   defdelegate list_all_for_optimization(id), to: ConsultQuery
   defdelegate fetch(id), to: ConsultQuery
+  defdelegate latest_for_lens(deck_id, lens), to: ConsultQuery
 
   @doc """
   Measures `deck`, freezes the report, the prompt **and the model**, then queues
@@ -86,11 +87,15 @@ defmodule Deckex.Consults do
   def model_rank(model), do: Map.get(@model_rank, model, 0)
 
   # The floor is about what an answer CHANGES, not what it costs. The scout
-  # writes a dossier and the bracket lens classifies; neither proposes cutting
-  # a card from a real deck, so neither needs the expensive model. Everything
-  # else does — including `:visao`, which carries no cuts and no adds but names
-  # what the owner will buy and steers nine stages after it.
-  @reads_only [:scout, :bracket]
+  # writes a dossier, the bracket lens classifies, and `:pilares` names cards
+  # already in the list; none of them proposes cutting a card from a real deck,
+  # so none needs the expensive model. Nothing a `:pilares` answer says reaches
+  # the deck without the owner ticking it first, which is the same reason the
+  # scout is here.
+  #
+  # `:visao` is deliberately NOT here: it carries no cuts and no adds either,
+  # but it names what the owner will buy and steers nine stages after it.
+  @reads_only [:scout, :bracket, :pilares]
 
   @doc """
   The models allowed to propose a card change, strongest first.

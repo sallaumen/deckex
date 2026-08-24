@@ -7,7 +7,9 @@ defmodule DeckexWeb.CardRulesLiveTest do
   import Phoenix.LiveViewTest
 
   alias Deckex.CatalogueFixture
+  alias Deckex.Consults
   alias Deckex.Decks
+  alias Deckex.Repo
 
   setup do
     CatalogueFixture.seed!(~w(sol_ring forest cultivate))
@@ -95,6 +97,109 @@ defmodule DeckexWeb.CardRulesLiveTest do
 
     assert html =~ "Sol Ring saiu das suas decisões"
     assert Decks.card_notes(deck) == []
+  end
+
+  describe "achar as óbvias" do
+    test "reads the dossier and proposes, without locking anything", %{conn: conn, deck: deck} do
+      {:ok, deck} =
+        Decks.put_dossier(deck, %{
+          "sinergias" => "O motor é o Sol Ring virando dois manas no turno um."
+        })
+
+      {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}/cartas")
+      html = live |> element("button[phx-click='varrer']") |> render_click()
+
+      assert html =~ "Proponho trancar"
+      assert html =~ "Sol Ring"
+      assert html =~ "virando dois manas"
+      assert html =~ "está no dossiê"
+      # Proposing is not deciding.
+      assert Decks.card_notes(deck) == []
+    end
+
+    test "locking the ticked ones keeps the evidence as the reason",
+         %{conn: conn, deck: deck} do
+      {:ok, deck} = Decks.put_dossier(deck, %{"sinergias" => "Tudo passa pelo Sol Ring."})
+
+      {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}/cartas")
+      live |> element("button[phx-click='varrer']") |> render_click()
+      html = live |> element("button[phx-click='trancar-marcadas']") |> render_click()
+
+      assert html =~ "1 carta trancada"
+
+      assert [%{card_name: "Sol Ring", stance: :locked, note: "Tudo passa pelo Sol Ring."}] =
+               Decks.card_notes(deck)
+    end
+
+    # Unticking everything must not leave a button that promises to do nothing.
+    test "a card he unticks is left alone, and the button stops offering",
+         %{conn: conn, deck: deck} do
+      {:ok, deck} = Decks.put_dossier(deck, %{"sinergias" => "Tudo passa pelo Sol Ring."})
+
+      {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}/cartas")
+      html = live |> element("button[phx-click='varrer']") |> render_click()
+      assert html =~ "Proponho trancar (1 de 1)"
+
+      html =
+        live
+        |> element("input[phx-click='marcar-proposta'][phx-value-card='Sol Ring']")
+        |> render_click()
+
+      assert html =~ "Proponho trancar (0 de 1)"
+
+      assert live
+             |> element("button[phx-click='trancar-marcadas']")
+             |> render() =~ "disabled"
+
+      assert Decks.card_notes(deck) == []
+    end
+
+    # An empty sweep is not a failure — it says which of the two sources came up
+    # dry, and the paid one is right there.
+    test "a deck with no dossier is told why the free pass found nothing",
+         %{conn: conn, deck: deck} do
+      {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}/cartas")
+
+      html = live |> element("button[phx-click='varrer']") |> render_click()
+
+      assert html =~ "ainda não tem dossiê"
+      assert html =~ "Perguntar para a IA"
+    end
+
+    test "asking the model costs one consult, and says so before spending",
+         %{conn: conn, deck: deck} do
+      {:ok, live, html} = live(conn, ~p"/decks/#{deck.id}/cartas")
+      assert html =~ "Perguntar para a IA (1 consulta)"
+
+      html = live |> element("button[phx-click='perguntar-ia']") |> render_click()
+
+      assert html =~ "A IA está lendo as cartas"
+      assert [%{lens: :pilares, status: :pending}] = Consults.list_for_deck(deck)
+    end
+
+    test "the answer becomes proposals in the model's own words",
+         %{conn: conn, deck: deck} do
+      {:ok, consult} = Consults.request(deck, :pilares)
+
+      answered =
+        consult
+        |> Ecto.Changeset.change(%{
+          status: :done,
+          response: %{
+            "leitura" => "É um deck de rampa.",
+            "pilares" => [%{"carta" => "Sol Ring", "motivo" => "metade do combo"}]
+          }
+        })
+        |> Repo.update!()
+
+      assert answered.status == :done
+
+      {:ok, _live, html} = live(conn, ~p"/decks/#{deck.id}/cartas")
+
+      assert html =~ "Proponho trancar"
+      assert html =~ "metade do combo"
+      assert html =~ "a IA leu as cartas"
+    end
   end
 
   test "text with no card in it is refused out loud", %{conn: conn, deck: deck} do

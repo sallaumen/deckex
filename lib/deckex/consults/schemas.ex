@@ -75,6 +75,40 @@ defmodule Deckex.Consults.Schemas do
     }
   end
 
+  def for_lens(:pilares) do
+    %{
+      "type" => "object",
+      "properties" => %{
+        "leitura" => %{
+          "type" => "string",
+          "description" =>
+            "2-4 frases, pt-BR: o que este deck faz, e o que ele para de ser se as cartas abaixo saírem."
+        },
+        "pilares" => %{
+          "type" => "array",
+          "description" =>
+            "As cartas que este deck não pode perder. Poucas — se você listar um quarto do deck, não protegeu nada.",
+          "items" => %{
+            "type" => "object",
+            "properties" => %{
+              "carta" => %{
+                "type" => "string",
+                "description" => "Exact card name as written in the decklist, untranslated."
+              },
+              "motivo" => %{
+                "type" => "string",
+                "description" =>
+                  "Uma frase, pt-BR: o que o deck deixa de fazer sem ela. Nomeie a outra carta quando for uma interação."
+              }
+            },
+            "required" => ["carta", "motivo"]
+          }
+        }
+      },
+      "required" => ["leitura", "pilares"]
+    }
+  end
+
   def for_lens(:visao) do
     %{
       "type" => "object",

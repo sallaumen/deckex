@@ -22,6 +22,7 @@ defmodule Deckex.Decks do
   alias Deckex.Decks.DeckQuery
   alias Deckex.Decks.DeckVersion
   alias Deckex.Decks.Edits
+  alias Deckex.Decks.Pillars
   alias Deckex.Decks.Versions
   alias Deckex.Error
   alias Deckex.Events
@@ -519,6 +520,15 @@ defmodule Deckex.Decks do
   @doc "The cards this deck's rules protect from being cut, by name."
   @spec locked_cards(Deck.t()) :: [String.t()]
   def locked_cards(%Deck{} = deck), do: deck |> card_notes() |> CardRules.names(:locked)
+
+  @doc """
+  Cards worth locking that this app can already name, from the dossier and from
+  what past reviews taught it. Proposals, never writes — see `Pillars`.
+  """
+  @spec pillar_proposals(Deck.t(), [map()]) :: [Pillars.proposal()]
+  def pillar_proposals(%Deck{} = deck, ai_rows \\ []) do
+    Pillars.propose(list_deck_cards(deck), deck.dossier, card_notes(deck), ai_rows)
+  end
 
   @doc """
   The names this deck's rules protect and the ones they ask for, ready to be
