@@ -140,6 +140,14 @@ defmodule DeckexWeb.CardRulesLive do
 
   defp other_stances(stance), do: Enum.reject(CardNote.stances(), &(&1 == stance))
 
+  defp groups_columns([_only_one]), do: nil
+
+  defp groups_columns([_one, _two]),
+    do: "2xl:grid 2xl:grid-cols-2 2xl:items-start 2xl:gap-6 2xl:space-y-0"
+
+  defp groups_columns(_all_three),
+    do: "2xl:grid 2xl:grid-cols-2 2xl:items-start 2xl:gap-6 2xl:space-y-0 3xl:grid-cols-3"
+
   defp motivo_placeholder(:locked), do: "por que ela não pode sair"
   defp motivo_placeholder(:wanted), do: "por que você quer ela"
   defp motivo_placeholder(:note), do: "o que ela faz de verdade neste deck"
@@ -227,12 +235,14 @@ defmodule DeckexWeb.CardRulesLive do
         </p>
       </div>
 
-      <%!-- The three groups are read against each other — "o que é
-            obrigatório" only means something next to "o que é só pedido" — so
-            on a wide screen they sit side by side. `items-start` because they
-            are never the same height and a stretched empty column is worse
-            than an uneven row. --%>
-      <div class="space-y-8 2xl:grid 2xl:grid-cols-2 2xl:items-start 2xl:gap-6 2xl:space-y-0 3xl:grid-cols-3">
+      <%!-- The groups are read against each other — "o que é obrigatório"
+            only means something next to "o que é só pedido" — so on a wide
+            screen they sit side by side. The column count follows how many
+            groups actually have something in them: one group alone at a third
+            of a 2560px screen is a narrow strip beside two empty thirds, and
+            a deck with only locked cards is the common case. `items-start`
+            because they are never the same height. --%>
+      <div class={["space-y-8", groups_columns(filled(@groups))]}>
         <.group
           :for={{stance, rules} <- filled(@groups)}
           stance={stance}
