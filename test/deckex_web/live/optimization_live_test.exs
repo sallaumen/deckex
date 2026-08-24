@@ -113,6 +113,61 @@ defmodule DeckexWeb.OptimizationLiveTest do
 
       assert [_only_one] = Optimizations.list_for_deck(deck.id)
     end
+
+    # The box that used to be here came up empty every time, so it told him
+    # nothing about what was protecting his deck. What he decided once is now
+    # stated as fact, on the screen where he is about to spend money.
+    test "the launcher states the standing decisions instead of an empty box",
+         %{conn: conn} do
+      deck = deck()
+      {:ok, _locked} = Decks.put_card_rules(deck, "Sol Ring", :locked)
+      {:ok, _wanted} = Decks.put_card_rules(deck, "Cultivate", :wanted)
+
+      {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}/otimizacoes")
+      html = live |> element("button[phx-click='abrir-lancador']") |> render_click()
+
+      assert html =~ "Suas cartas, já valendo nesta rodada"
+      assert html =~ "Nunca corta:"
+      assert html =~ "Sol Ring"
+      assert html =~ "Pede para entrar:"
+      assert html =~ "Cultivate"
+      assert html =~ "Proteger só nesta rodada"
+    end
+
+    test "the direct-adjustment mode launches one stage with his request",
+         %{conn: conn} do
+      deck = deck()
+      {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}/otimizacoes")
+
+      live |> element("button[phx-click='abrir-lancador']") |> render_click()
+      html = live |> element("button[phx-value-modo='livre']") |> render_click()
+
+      assert html =~ "Uma etapa só"
+      assert html =~ "O que você quer que ele faça"
+      assert html =~ "Começar a etapa"
+      # A single stage never runs the matchup validation, so it never asks.
+      refute html =~ "Matchups para testar"
+
+      assert {:error, {:live_redirect, %{to: "/otimizacoes/" <> _id}}} =
+               live
+               |> form("#launch-form",
+                 contract: %{
+                   "bracket_max" => "3",
+                   "ceiling_card" => "",
+                   "ceiling_land" => "",
+                   "keep" => "",
+                   "notes" => "",
+                   "pedido" => "tira duas terras e põe rampa de duas",
+                   "model" => "fable"
+                 }
+               )
+               |> render_submit()
+
+      assert [run] = Optimizations.list_for_deck(deck.id)
+      assert run.mode == :livre
+      assert run.contract["pedido"] == "tira duas terras e põe rampa de duas"
+      assert [%{lens: "livre"}] = run.steps
+    end
   end
 
   # The floor filters this picker, and a floor set to the strongest model left

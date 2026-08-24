@@ -46,6 +46,7 @@ defmodule DeckexWeb.Router do
     live "/importar", ImportLive, :new
     live "/ajustes", SettingsLive, :edit
     live "/decks/:id", DeckLive, :show
+    live "/decks/:id/cartas", CardRulesLive, :index
     live "/decks/:id/otimizacoes", OptimizationsLive, :index
     live "/decks/:id/versoes", VersionsLive, :index
     live "/otimizacoes/:id", OptimizationLive, :show

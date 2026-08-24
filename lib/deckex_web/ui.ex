@@ -12,6 +12,7 @@ defmodule DeckexWeb.UI do
   User-facing strings are pt-BR. Card names are data and are never translated.
   """
   use Phoenix.Component
+  use DeckexWeb, :verified_routes
 
   alias Deckex.Cards.PlayRate
   alias Deckex.Money
@@ -335,6 +336,119 @@ defmodule DeckexWeb.UI do
     </a>
     """
   end
+
+  @doc """
+  The four screens one deck has, as one row of links.
+
+  It exists because the app grew four of them — the list, the owner's standing
+  decisions about cards, the version line, the rounds — and each screen only
+  linked back to the one it came from. Reaching the versions of a deck from its
+  optimizations meant going back to the deck first. Four screens that are one
+  subject should look like one subject, and the row makes that true on every
+  page instead of once per page.
+
+  The current screen is a link to nowhere, on purpose: keeping the item in
+  place stops the row reflowing as you move between screens.
+
+  ## Examples
+
+      <.deck_nav deck={@deck} current={:cards} />
+  """
+  attr :deck, :map, required: true
+  attr :current, :atom, values: [:deck, :cards, :versions, :runs], required: true
+  attr :class, :any, default: nil
+
+  def deck_nav(assigns) do
+    ~H"""
+    <nav aria-label="Este deck" class={["-mx-1 flex flex-wrap items-center gap-x-1", @class]}>
+      <.deck_nav_item
+        :for={{key, label, path} <- deck_nav_items(@deck)}
+        current={key == @current}
+        label={label}
+        path={path}
+      />
+    </nav>
+    """
+  end
+
+  defp deck_nav_items(deck) do
+    [
+      {:deck, "Deck", ~p"/decks/#{deck.id}"},
+      {:cards, "Cartas", ~p"/decks/#{deck.id}/cartas"},
+      {:versions, "Versões", ~p"/decks/#{deck.id}/versoes"},
+      {:runs, "Rodadas", ~p"/decks/#{deck.id}/otimizacoes"}
+    ]
+  end
+
+  attr :current, :boolean, required: true
+  attr :label, :string, required: true
+  attr :path, :string, required: true
+
+  defp deck_nav_item(%{current: true} = assigns) do
+    ~H"""
+    <span
+      aria-current="page"
+      class="inline-flex min-h-touch items-center rounded-md bg-inlay px-3 text-caption font-semibold text-ink"
+    >
+      {@label}
+    </span>
+    """
+  end
+
+  defp deck_nav_item(assigns) do
+    ~H"""
+    <.link
+      navigate={@path}
+      class="inline-flex min-h-touch items-center rounded-md px-3 text-caption text-ink-faint transition-colors hover:bg-inlay hover:text-ink motion-reduce:transition-none"
+    >
+      {@label}
+    </.link>
+    """
+  end
+
+  @doc """
+  What the owner decided about a card, as a chip.
+
+  Three stances, and only two of them are orders — so only two of them get a
+  colour. An observation is knowledge the model carries; a lock is a rule the
+  engine enforces; a request is a card he is asking for. The chip says which,
+  in a word, because "trancada" and "pedida" being one colour apart would make
+  a list of them unreadable at a glance.
+
+  ## Examples
+
+      <.card_stance stance={rule.stance} />
+  """
+  attr :stance, :atom, values: [:locked, :wanted, :note], required: true
+  attr :class, :any, default: nil
+
+  def card_stance(assigns) do
+    ~H"""
+    <span class={[
+      "inline-flex items-center rounded-md px-1.5 py-0.5 text-micro font-semibold uppercase tracking-[0.08em]",
+      stance_tone(@stance),
+      @class
+    ]}>
+      {stance_label(@stance)}
+    </span>
+    """
+  end
+
+  @doc "The pt-BR name of a stance, singular."
+  @spec stance_label(atom()) :: String.t()
+  def stance_label(:locked), do: "obrigatória"
+  def stance_label(:wanted), do: "pedida"
+  def stance_label(:note), do: "observação"
+
+  @doc "The pt-BR name of a stance as a heading, plural."
+  @spec stance_heading(atom()) :: String.t()
+  def stance_heading(:locked), do: "Obrigatórias"
+  def stance_heading(:wanted), do: "Pedidas"
+  def stance_heading(:note), do: "Observações"
+
+  defp stance_tone(:locked), do: "bg-sev-critical/15 text-sev-critical"
+  defp stance_tone(:wanted), do: "bg-sev-info/15 text-sev-info"
+  defp stance_tone(:note), do: "bg-inlay text-ink-faint"
 
   @doc """
   How much of Commander plays this card.

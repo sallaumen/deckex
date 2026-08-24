@@ -281,6 +281,21 @@ for *what* we are building and *why*. This file is *how*.
   stage and cut by a later one nets to nothing, and the history reads as what
   happened to the deck rather than as a diary of the run — the same fold
   `consolidated_diff/2` already applies to the shopping list.
+- **The owner says it once, not once per round.** A card's stance
+  (`deck_card_notes.stance`) belongs to the deck: `:locked` is merged into
+  every run's protection list at launch *and* read live by the audit, so a lock
+  written at stage four binds stage five. The launch modal's box is an
+  exception for one round, never the only place a card can be protected — it
+  came up empty every time, which is exactly how a combo piece got cut.
+- **An order does not need a reason, but the reason is what teaches.** A locked
+  or wanted card may carry no text; only a bare observation disappears when its
+  text is erased. The text is what reaches the briefing, and it is the half
+  that stops the next run misreading the same card.
+- **A round of one stage changes only what was asked.** `:livre` has no
+  checkpoint after it to catch an overreach and no validation to argue with it,
+  so its briefing asks for narrowness rather than ambition. The audit, the
+  sandbox and the closing balance stage still apply: one stage is still a
+  round, not a shortcut around the engine.
 
 ## Operating notes
 

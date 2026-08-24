@@ -105,13 +105,15 @@ defmodule Deckex.ConsultModelsTest do
     end
 
     # :finding rides the "Pedir diagnóstico" buttons, :scout the dossier card,
-    # and :alinhamento, :visao and :balanco the optimization pipeline — none
-    # belongs in the lens dropdown, so none has a label.
+    # and :alinhamento, :visao, :balanco, :revisao and :livre the optimization
+    # pipeline — none belongs in the lens dropdown, so none has a label. A
+    # single-stage round is still a round: it is launched from the launcher,
+    # with a contract and a sandbox, not from the consult picker.
     test "every pickable lens has a label" do
       labels = Map.new(Consults.lens_labels())
 
       for lens <- Consult.lenses(),
-          lens not in [:finding, :scout, :alinhamento, :visao, :balanco, :revisao] do
+          lens not in [:finding, :scout, :alinhamento, :visao, :balanco, :revisao, :livre] do
         assert Map.has_key?(labels, lens), "sem rótulo para #{lens}"
       end
     end

@@ -206,21 +206,6 @@ defmodule DeckexWeb.DeckLive do
     {:noreply, socket |> assign_deck(result.deck) |> put_flash(:info, applied_message(result))}
   end
 
-  def handle_event("nota-de-carta", %{"card" => card, "nota" => note}, socket) do
-    {:ok, _result} = Decks.put_card_note(socket.assigns.deck, card, note)
-
-    {:noreply, assign_deck(socket, socket.assigns.deck)}
-  end
-
-  def handle_event("esquecer-nota", %{"card" => card}, socket) do
-    {:ok, :removed} = Decks.delete_card_note(socket.assigns.deck, card)
-
-    {:noreply,
-     socket
-     |> assign_deck(socket.assigns.deck)
-     |> put_flash(:info, "Esqueci o que você disse sobre #{card}.")}
-  end
-
   def handle_event("marcar-versao", _params, socket) do
     {:ok, version} = Versions.mark(socket.assigns.deck)
 
@@ -529,6 +514,13 @@ defmodule DeckexWeb.DeckLive do
               Versões ({@version_count}){if @pending_edits != [],
                 do: " · #{length(@pending_edits)} soltas",
                 else: if(@drifted?, do: " •")}
+            </.link>
+            <span class="text-ink-faint" aria-hidden="true">·</span>
+            <.link
+              navigate={~p"/decks/#{@deck.id}/cartas"}
+              class="-my-2 inline-flex min-h-touch items-center px-1 py-2 text-caption text-ink-faint transition-colors hover:text-ink motion-reduce:transition-none"
+            >
+              Cartas ({length(@card_notes)})
             </.link>
             <span class="text-ink-faint" aria-hidden="true">·</span>
             <button
@@ -1000,47 +992,43 @@ defmodule DeckexWeb.DeckLive do
                 the owner knows that no number shows. The dossier is about the
                 deck; these are about single cards, and they cost a whole run
                 to learn — a stage misread a card, he caught it, and this is
-                where that stops happening again. --%>
-          <section :if={@card_notes != []}>
-            <div class="mb-3 flex items-center gap-3">
+                where that stops happening again.
+
+                A summary and a way in, not an editor. Editing the same rule in
+                two places is how the two places drift, and the screen made for
+                it is one click away. --%>
+          <section>
+            <div class="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
               <h2 class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
-                O que você já disse sobre cartas
+                Suas cartas
               </h2>
-              <span class="font-mono text-micro text-ink-faint">
-                entra em toda consulta deste deck
-              </span>
+              <.link
+                navigate={~p"/decks/#{@deck.id}/cartas"}
+                class="-my-2 inline-flex min-h-touch items-center py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink motion-reduce:transition-none"
+              >
+                {if @card_notes == [], do: "obrigar, pedir, corrigir →", else: "gerenciar →"}
+              </.link>
             </div>
 
-            <ul class="space-y-3 rounded-xl border border-hairline-soft bg-surface p-6">
-              <li :for={note <- @card_notes}>
-                <div class="flex flex-wrap items-baseline justify-between gap-2">
-                  <.card_link name={note.card_name} uri={@card_uris[note.card_name]} class="text-ink" />
-                  <button
-                    type="button"
-                    phx-click="esquecer-nota"
-                    phx-value-card={note.card_name}
-                    data-confirm={"Esquecer o que você disse sobre #{note.card_name}?"}
-                    class="-my-2 inline-flex min-h-touch items-center px-1 py-2 text-micro text-ink-faint transition-colors hover:text-sev-critical"
-                  >
-                    esquecer
-                  </button>
-                </div>
+            <div class="rounded-xl border border-hairline-soft bg-surface p-6">
+              <p :if={@card_notes == []} class="max-w-[52ch] text-caption text-ink-muted">
+                Nada mandado ainda. Uma carta obrigatória não pode ser cortada por rodada nenhuma —
+                é onde vive uma peça de combo que a IA lê errado sozinha.
+              </p>
 
-                <.form for={%{}} id={"nota-carta-#{note.id}"} phx-change="nota-de-carta" class="mt-1">
-                  <input type="hidden" name="card" value={note.card_name} />
-                  <label for={"nota-deck-#{note.id}"} class="sr-only">
-                    O que você diz sobre {note.card_name}
-                  </label>
-                  <textarea
-                    id={"nota-deck-#{note.id}"}
-                    name="nota"
-                    rows="2"
-                    phx-debounce="blur"
-                    class="w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-caption text-ink"
-                  >{note.note}</textarea>
-                </.form>
-              </li>
-            </ul>
+              <ul :if={@card_notes != []} class="space-y-2">
+                <li
+                  :for={note <- @card_notes}
+                  class="flex flex-wrap items-baseline gap-x-2 gap-y-1"
+                >
+                  <.card_stance stance={note.stance} />
+                  <.card_link name={note.card_name} uri={@card_uris[note.card_name]} class="text-ink" />
+                  <span :if={note.note} class="min-w-0 text-caption text-ink-muted">
+                    — {note.note}
+                  </span>
+                </li>
+              </ul>
+            </div>
           </section>
 
           <section>

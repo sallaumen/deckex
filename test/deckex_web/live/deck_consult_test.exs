@@ -164,29 +164,18 @@ defmodule DeckexWeb.DeckConsultTest do
   end
 
   # The most expensive knowledge this app holds: it cost a run to notice and a
-  # review to say, so the deck page is where it lives and can be corrected.
-  test "what he said about a card is on the deck page, editable and forgettable",
+  # review to say. The deck page shows it and says where to change it; the
+  # changing happens on one screen, because a rule editable in two places is a
+  # rule that ends up saying two things.
+  test "what he decided about a card is on the deck page, with the way in",
        %{conn: conn, deck: deck} do
-    {:ok, note} = Decks.put_card_note(deck, "Sol Ring", "fica sempre, é o motor")
+    {:ok, _note} = Decks.put_card_note(deck, "Sol Ring", "fica sempre, é o motor")
 
-    {:ok, live, html} = live(conn, ~p"/decks/#{deck.id}")
+    {:ok, _live, html} = live(conn, ~p"/decks/#{deck.id}")
 
-    assert html =~ "O que você já disse sobre cartas"
+    assert html =~ "Suas cartas"
     assert html =~ "fica sempre, é o motor"
-
-    live
-    |> form("#nota-carta-#{note.id}", %{card: "Sol Ring", nota: "mudei de ideia"})
-    |> render_change()
-
-    assert [%{note: "mudei de ideia"}] = Decks.card_notes(deck)
-
-    forgotten =
-      live
-      |> element("button[phx-click='esquecer-nota'][phx-value-card='Sol Ring']")
-      |> render_click()
-
-    assert forgotten =~ "Esqueci o que você disse sobre Sol Ring"
-    assert Decks.card_notes(deck) == []
+    assert html =~ ~p"/decks/#{deck.id}/cartas"
   end
 
   test "the exact prompt is available to copy", %{conn: conn, deck: deck} do

@@ -15,6 +15,7 @@ defmodule Deckex.Decks do
   alias Deckex.Cards.Name
   alias Deckex.Consults.Suggestion
   alias Deckex.Decks.CardNote
+  alias Deckex.Decks.CardRules
   alias Deckex.Decks.Deck
   alias Deckex.Decks.DeckCard
   alias Deckex.Decks.DecklistParser
@@ -435,31 +436,101 @@ defmodule Deckex.Decks do
   @spec put_card_note(Deck.t(), String.t(), String.t(), atom()) ::
           {:ok, CardNote.t()} | {:ok, :removed} | {:error, Error.t()}
   def put_card_note(%Deck{} = deck, card_name, note, source \\ :manual) do
-    case String.trim(note || "") do
-      "" ->
-        delete_card_note(deck, card_name)
+    put_card_rule(deck, card_name, note: note, source: source)
+  end
 
-      text ->
-        %CardNote{}
-        |> CardNote.changeset(%{
-          deck_id: deck.id,
-          card_name: card_name,
-          note: text,
-          source: source
-        })
-        |> Repo.insert(
-          on_conflict: {:replace, [:note, :source, :updated_at]},
-          conflict_target: [:deck_id, :card_name],
-          returning: true
-        )
-        |> case do
-          {:ok, saved} ->
-            {:ok, saved}
+  @doc """
+  Writes one card's standing rule: its stance, its reason, or both.
 
-          {:error, _changeset} ->
-            {:error, Error.new(:invalid_note, "Não consegui guardar a nota.")}
-        end
+  Every omitted option keeps what the row already holds, which is what makes
+  the two halves independent — changing a card from sugerida to obrigatória
+  must not erase the sentence explaining why he wants it, and rewriting that
+  sentence must not quietly demote the card.
+
+  Only a row that carries no stance disappears when its text is erased. A lock
+  with an empty reason is still a lock; the way to remove one is to remove it.
+  """
+  @spec put_card_rule(Deck.t(), String.t(), keyword()) ::
+          {:ok, CardNote.t()} | {:ok, :removed} | {:error, Error.t()}
+  def put_card_rule(%Deck{} = deck, card_name, opts \\ []) do
+    existing = DeckQuery.get_card_note(deck.id, card_name)
+
+    stance = Keyword.get(opts, :stance) || stance_of(existing)
+    note = if Keyword.has_key?(opts, :note), do: opts[:note], else: existing && existing.note
+
+    if stance == :note and String.trim(note || "") == "" do
+      delete_card_note(deck, card_name)
+    else
+      write_card_rule(deck, card_name, stance, note, Keyword.get(opts, :source, :manual))
     end
+  end
+
+  defp stance_of(nil), do: :note
+  defp stance_of(%CardNote{stance: stance}), do: stance
+
+  defp write_card_rule(deck, card_name, stance, note, source) do
+    %CardNote{}
+    |> CardNote.changeset(%{
+      deck_id: deck.id,
+      card_name: card_name,
+      note: note,
+      stance: stance,
+      source: source
+    })
+    |> Repo.insert(
+      on_conflict: {:replace, [:note, :stance, :source, :updated_at]},
+      conflict_target: [:deck_id, :card_name],
+      returning: true
+    )
+    |> case do
+      {:ok, saved} -> {:ok, saved}
+      {:error, _changeset} -> {:error, Error.new(:invalid_note, "Não consegui guardar a nota.")}
+    end
+  end
+
+  @doc """
+  Stores a pasted block of card names under one stance, and says what it wrote.
+
+  A line with no reason leaves an existing reason alone. He pastes a list of
+  ten cards to lock; the two he had already explained keep their explanations
+  rather than being flattened by the paste.
+  """
+  @spec put_card_rules(Deck.t(), String.t(), CardNote.stance()) :: {:ok, [CardNote.t()]}
+  def put_card_rules(%Deck{} = deck, text, stance) do
+    saved =
+      text
+      |> CardRules.parse()
+      |> Enum.map(&put_card_rule(deck, &1.name, rule_opts(&1, stance)))
+      |> Enum.flat_map(fn
+        {:ok, %CardNote{} = rule} -> [rule]
+        _removed_or_refused -> []
+      end)
+
+    {:ok, saved}
+  end
+
+  defp rule_opts(%{note: nil}, stance), do: [stance: stance]
+  defp rule_opts(%{note: note}, stance), do: [stance: stance, note: note]
+
+  @doc "This deck's rules split by stance."
+  @spec card_rules(Deck.t()) :: CardRules.groups()
+  def card_rules(%Deck{} = deck), do: deck |> card_notes() |> CardRules.split()
+
+  @doc "The cards this deck's rules protect from being cut, by name."
+  @spec locked_cards(Deck.t()) :: [String.t()]
+  def locked_cards(%Deck{} = deck), do: deck |> card_notes() |> CardRules.names(:locked)
+
+  @doc """
+  The names this deck's rules protect and the ones they ask for, ready to be
+  merged into an optimization's contract.
+
+  String-keyed because a contract is JSONB and string-keyed everywhere else.
+  """
+  @spec standing_rules(Deck.t()) :: %{String.t() => [String.t()]}
+  def standing_rules(%Deck{} = deck) do
+    rules = card_notes(deck)
+
+    %{"keep" => CardRules.names(rules, :locked), "wanted" => CardRules.names(rules, :wanted)}
   end
 
   @doc "Forgets what was said about a card."
