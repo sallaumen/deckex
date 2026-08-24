@@ -117,6 +117,36 @@ defmodule Deckex.ConsultModelsTest do
     end
   end
 
+  describe "the floor and the picker it feeds" do
+    # The bug this exists to not have again: the floor shipped defaulting to
+    # `fable`, the STRONGEST model on the ladder, so "the weakest model allowed
+    # to change the deck" excluded everything but the strongest and the
+    # launcher's picker had exactly one option — for everyone, out of the box.
+    test "the default floor leaves a real choice of model" do
+      offered = Consults.models_at_or_above(Settings.model_floor())
+
+      assert length(offered) > 1, "o piso padrão deixa só #{inspect(offered)} para escolher"
+    end
+
+    test "the models the owner named are among them" do
+      offered = Consults.models_at_or_above(Settings.model_floor())
+
+      assert "opus" in offered
+      assert "sonnet" in offered
+    end
+
+    # The floor still has to mean something: the cheapest model does not get to
+    # propose cutting a card from a real deck.
+    test "and the cheap one is still below the line" do
+      refute "haiku" in Consults.models_at_or_above(Settings.model_floor())
+    end
+
+    test "a run asking for a model at the floor is allowed to start" do
+      assert Consults.model_rank("sonnet") >= Consults.model_rank(Settings.model_floor())
+      assert Consults.model_rank("opus") >= Consults.model_rank(Settings.model_floor())
+    end
+  end
+
   describe "models/0" do
     test "offers the aliases the CLI accepts" do
       assert "sonnet" in Consults.models()

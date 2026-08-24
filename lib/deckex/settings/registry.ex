@@ -29,14 +29,20 @@ defmodule Deckex.Settings.Registry do
       options: ["fable", "sonnet", "opus", "haiku"],
       group: :ai
     },
+    # `sonnet`, not `fable`. A floor set to the STRONGEST model on the ladder is
+    # not a floor, it is a lock: it left the launcher with a single option and
+    # made choosing a model impossible for everyone, out of the box. The rule
+    # this setting exists for is "not the cheap model for work that cuts cards
+    # from a real deck" — sonnet says that and leaves a real choice above it.
     %{
       key: :model_floor,
       type: :string,
-      default: "fable",
+      default: "sonnet",
       label: "Modelo mínimo para mudar o deck",
       hint:
         "Análise pode rodar em qualquer modelo. Sugerir corte ou entrada de carta exige " <>
-          "pelo menos este. O pipeline recusa começar abaixo dele.",
+          "pelo menos este. O pipeline recusa começar abaixo dele — e o seletor de modelo " <>
+          "só oferece daqui para cima.",
       options: ["fable", "opus", "sonnet", "haiku"],
       group: :ai
     },

@@ -115,6 +115,46 @@ defmodule DeckexWeb.OptimizationLiveTest do
     end
   end
 
+  # The floor filters this picker, and a floor set to the strongest model left
+  # it with one option — for everyone, out of the box.
+  describe "the model picker" do
+    test "offers every model at or above the floor, and says what the floor is",
+         %{conn: conn} do
+      deck = deck()
+
+      {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}/otimizacoes")
+      html = live |> element("button[phx-click='abrir-lancador']") |> render_click()
+
+      assert html =~ ~s(<option value="opus")
+      assert html =~ ~s(<option value="sonnet")
+      assert html =~ "Piso:"
+    end
+
+    test "a run really can be launched on opus", %{conn: conn} do
+      deck = deck()
+
+      {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}/otimizacoes")
+      live |> element("button[phx-click='abrir-lancador']") |> render_click()
+
+      live
+      |> form("#launch-form",
+        contract: %{
+          "bracket_max" => "3",
+          "ceiling_card" => "",
+          "ceiling_land" => "",
+          "keep" => "",
+          "matchups" => "",
+          "notes" => "",
+          "model" => "opus"
+        }
+      )
+      |> render_submit()
+
+      assert [run] = Optimizations.list_for_deck(deck.id)
+      assert run.contract["model"] == "opus"
+    end
+  end
+
   # A run is an argument about a list, so which list it argued about is part of
   # the record — and the answer is almost always "a mais nova".
   describe "starting from a version" do
