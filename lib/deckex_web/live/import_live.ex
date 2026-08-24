@@ -134,13 +134,18 @@ defmodule DeckexWeb.ImportLive do
               >
                 A lista
               </label>
+              <%!-- The page itself stays at 1400px: a decklist is 30 characters
+                    wide and a wider column would only stretch the whitespace.
+                    What a big screen can give this form is height — past 2xl
+                    the box shows about twice the list at once, which is the
+                    difference between checking a paste and scrolling it. --%>
               <textarea
                 id="paste_decklist"
                 name="paste[decklist]"
                 rows="16"
                 required
                 placeholder={decklist_example()}
-                class="w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 font-mono text-caption text-ink placeholder:text-ink-faint focus:border-ink-faint"
+                class="w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 font-mono text-caption text-ink placeholder:text-ink-faint focus:border-ink-faint 2xl:min-h-[30rem]"
               >{@paste_form[:decklist].value}</textarea>
             </div>
 

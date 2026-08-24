@@ -55,7 +55,7 @@ defmodule DeckexWeb.CompareLive do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <div class="mx-auto max-w-[1100px] px-6 py-10 lg:px-10 lg:py-14">
+    <div class="mx-auto max-w-[1100px] px-6 py-10 lg:px-10 lg:py-14 2xl:max-w-[1400px]">
       <DeckexWeb.Layouts.flash_group flash={@flash} />
       <.live_component module={DeckexWeb.SettingsPanel} id="settings-panel" />
 
@@ -81,7 +81,14 @@ defmodule DeckexWeb.CompareLive do
       </div>
 
       <section :if={length(@decks) > 1} class="rounded-xl border border-hairline-soft bg-surface p-6">
-        <.form for={%{}} id="comparar" phx-change="comparar" class="flex flex-wrap items-end gap-3">
+        <%!-- Two pickers, not a banner: past 2xl they would each be 650px of
+              select for a deck name that is never that long. --%>
+        <.form
+          for={%{}}
+          id="comparar"
+          phx-change="comparar"
+          class="flex flex-wrap items-end gap-3 2xl:max-w-[54rem]"
+        >
           <div class="min-w-0 flex-1">
             <label for="de" class="mb-1 block text-caption text-ink-secondary">Tenho</label>
             <select id="de" name="de" class={select_class()}>
@@ -105,12 +112,23 @@ defmodule DeckexWeb.CompareLive do
           Esse é o mesmo deck dos dois lados.
         </p>
 
-        <div :if={@diff} class="mt-6">
+        <%!-- The shopping list and the list of cards that stay home are read
+              together — "what this costs" and "what I give up" — and past 2xl
+              they fit that way. The second column is narrower on purpose: one
+              side is a priced table, the other a sentence of names. --%>
+        <div
+          :if={@diff}
+          class={[
+            "mt-6",
+            (@diff.buy != [] and @diff.drop != []) &&
+              "2xl:grid 2xl:grid-cols-[minmax(0,1fr)_minmax(0,22rem)] 2xl:items-start 2xl:gap-10"
+          ]}
+        >
           <p :if={@diff.buy == [] and @diff.drop == []} class="text-body text-ink-secondary">
             As duas listas são iguais, carta por carta.
           </p>
 
-          <div :if={@diff.buy != []} class="mb-6">
+          <div :if={@diff.buy != []} class="mb-6 2xl:mb-0">
             <h2 class="mb-2 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
               Comprar ({length(@diff.buy)})
             </h2>

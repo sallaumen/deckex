@@ -17,7 +17,7 @@ defmodule DeckexWeb.SettingsLive do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <div class="mx-auto max-w-[1100px] px-6 py-10 lg:px-10 lg:py-14">
+    <div class="mx-auto max-w-[1100px] px-6 py-10 lg:px-10 lg:py-14 2xl:max-w-[1400px]">
       <%!-- Inside the LiveView's own tree, not the root layout: the layout is
             static after mount, so a flash put during an event would never
             reach the screen from there. --%>
