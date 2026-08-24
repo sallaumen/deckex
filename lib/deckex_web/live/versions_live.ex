@@ -121,7 +121,7 @@ defmodule DeckexWeb.VersionsLive do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <div class="mx-auto max-w-[1100px] px-6 py-10 lg:px-10 lg:py-14">
+    <div class="mx-auto max-w-[1100px] px-6 py-10 lg:px-10 lg:py-14 2xl:max-w-[1440px] 3xl:max-w-[1700px]">
       <DeckexWeb.Layouts.flash_group flash={@flash} />
       <.live_component module={DeckexWeb.SettingsPanel} id="settings-panel" />
 
@@ -174,159 +174,170 @@ defmodule DeckexWeb.VersionsLive do
         <p class="text-body text-ink-secondary">Nenhuma versão ainda.</p>
       </div>
 
-      <section
-        :if={length(@versions) > 1}
-        class="mb-8 rounded-xl border border-hairline-soft bg-surface p-6"
-      >
-        <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
-          Comparar
-        </h2>
+      <%!-- Two panes past 2xl: picking two versions and reading the history are
+            the same act, and stacked they were a tool you scrolled away from
+            the moment you used it. The comparison keeps its own column and
+            stays on screen — it is a control, and the timeline beside it is
+            what the control is aimed at. --%>
+      <div class={[
+        "2xl:gap-8",
+        length(@versions) > 1 &&
+          "2xl:grid 2xl:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] 2xl:items-start"
+      ]}>
+        <section
+          :if={length(@versions) > 1}
+          class="mb-8 rounded-xl border border-hairline-soft bg-surface p-6 2xl:sticky 2xl:top-8 2xl:mb-0 2xl:max-h-[calc(100vh-4rem)] 2xl:overflow-y-auto"
+        >
+          <h2 class="mb-3 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+            Comparar
+          </h2>
 
-        <.form for={%{}} id="comparar" phx-change="comparar" class="flex flex-wrap items-end gap-3">
-          <div>
-            <label for="from" class="mb-1 block text-caption text-ink-secondary">Tenho a</label>
-            <select id="from" name="from" class={select_class()}>
-              <option
-                :for={version <- @versions}
-                value={version.number}
-                selected={version.number == @from}
-              >
-                v{version.number} · {origin_label(version.origin)}
-              </option>
-            </select>
+          <.form for={%{}} id="comparar" phx-change="comparar" class="flex flex-wrap items-end gap-3">
+            <div>
+              <label for="from" class="mb-1 block text-caption text-ink-secondary">Tenho a</label>
+              <select id="from" name="from" class={select_class()}>
+                <option
+                  :for={version <- @versions}
+                  value={version.number}
+                  selected={version.number == @from}
+                >
+                  v{version.number} · {origin_label(version.origin)}
+                </option>
+              </select>
+            </div>
+
+            <div>
+              <label for="to" class="mb-1 block text-caption text-ink-secondary">Quero a</label>
+              <select id="to" name="to" class={select_class()}>
+                <option
+                  :for={version <- @versions}
+                  value={version.number}
+                  selected={version.number == @to}
+                >
+                  v{version.number} · {origin_label(version.origin)}
+                </option>
+              </select>
+            </div>
+          </.form>
+
+          <div :if={@diff} class="mt-5">
+            <p :if={@diff.buy == [] and @diff.drop == []} class="text-body text-ink-secondary">
+              Nada muda entre essas duas — as listas são iguais.
+            </p>
+
+            <div :if={@diff.buy != []} class="mb-4">
+              <h3 class="mb-2 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+                Comprar ({length(@diff.buy)})
+              </h3>
+              <ul class="divide-y divide-hairline-soft">
+                <li
+                  :for={item <- @diff.buy}
+                  class="flex flex-wrap items-baseline gap-x-2 py-1.5 first:pt-0"
+                >
+                  <span class="font-mono text-micro text-ink-faint">{item.quantity}×</span>
+                  <.card_link
+                    name={item.name}
+                    uri={item.card && item.card.scryfall_uri}
+                    class="text-ink"
+                  />
+                  <.play_rate card={item.card} />
+                  <span class="ml-auto font-mono text-caption text-ink-secondary">
+                    {Money.brl(item.price_usd)}
+                  </span>
+                </li>
+              </ul>
+
+              <div class="mt-3 flex flex-wrap items-baseline justify-between gap-3 border-t border-hairline-soft pt-3">
+                <p class="font-mono text-numeral-sm leading-none text-ink">
+                  {Money.brl(@diff.total_usd)}
+                </p>
+                <a
+                  href={~p"/decks/#{@deck.id}/versoes/#{@from}/para/#{@to}/compras.txt"}
+                  download
+                  class="-my-2 inline-flex min-h-touch items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+                >
+                  Baixar a lista de compra
+                </a>
+              </div>
+
+              <p :if={@diff.unpriced > 0} class="mt-2 text-micro text-ink-faint">
+                {@diff.unpriced} carta(s) sem preço conhecido não entram no total.
+              </p>
+            </div>
+
+            <div :if={@diff.drop != []}>
+              <h3 class="mb-2 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+                Sai do deck ({length(@diff.drop)})
+              </h3>
+              <p class="text-caption text-ink-muted">
+                {Enum.map_join(@diff.drop, ", ", & &1.name)}
+              </p>
+            </div>
           </div>
+        </section>
 
-          <div>
-            <label for="to" class="mb-1 block text-caption text-ink-secondary">Quero a</label>
-            <select id="to" name="to" class={select_class()}>
-              <option
-                :for={version <- @versions}
-                value={version.number}
-                selected={version.number == @to}
-              >
-                v{version.number} · {origin_label(version.origin)}
-              </option>
-            </select>
-          </div>
-        </.form>
-
-        <div :if={@diff} class="mt-5">
-          <p :if={@diff.buy == [] and @diff.drop == []} class="text-body text-ink-secondary">
-            Nada muda entre essas duas — as listas são iguais.
-          </p>
-
-          <div :if={@diff.buy != []} class="mb-4">
-            <h3 class="mb-2 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
-              Comprar ({length(@diff.buy)})
-            </h3>
-            <ul class="divide-y divide-hairline-soft">
-              <li
-                :for={item <- @diff.buy}
-                class="flex flex-wrap items-baseline gap-x-2 py-1.5 first:pt-0"
-              >
-                <span class="font-mono text-micro text-ink-faint">{item.quantity}×</span>
-                <.card_link
-                  name={item.name}
-                  uri={item.card && item.card.scryfall_uri}
-                  class="text-ink"
-                />
-                <.play_rate card={item.card} />
-                <span class="ml-auto font-mono text-caption text-ink-secondary">
-                  {Money.brl(item.price_usd)}
+        <ol class="space-y-3">
+          <li
+            :for={version <- @versions}
+            class="rounded-xl border border-hairline-soft bg-surface p-5"
+          >
+            <div class="flex flex-wrap items-baseline justify-between gap-3">
+              <h2 class="text-heading font-semibold text-ink">
+                v{version.number}
+                <span :if={version.label} class="text-body font-normal text-ink-secondary">
+                  — {version.label}
                 </span>
+              </h2>
+
+              <span class="font-mono text-caption text-ink-faint">
+                {origin_label(version.origin)} · {Clock.moment(version.inserted_at)} · {DeckVersion.size(
+                  version
+                )} cartas · {change_summary(version)}
+              </span>
+            </div>
+
+            <%!-- The three screens are one loop: deck → versões → a rodada que
+                fez esta. Without the way back, the label "otimização" names a
+                thing you cannot open. --%>
+            <.link
+              :if={version.optimization_id}
+              navigate={~p"/otimizacoes/#{version.optimization_id}"}
+              class="-my-2 mt-1 inline-flex min-h-touch items-center py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
+            >
+              ver a rodada →
+            </.link>
+
+            <ul :if={DeckVersion.applied(version) != []} class="mt-3 max-w-[78ch] space-y-1">
+              <li
+                :for={change <- DeckVersion.applied(version)}
+                class="text-caption text-ink-secondary"
+              >
+                <span class={[
+                  "font-mono",
+                  change["action"] == "add" && "text-sev-healthy",
+                  change["action"] == "cut" && "text-sev-critical"
+                ]}>
+                  {if change["action"] == "add", do: "+", else: "−"}
+                </span>
+                {change["card"]}
+                <span :if={change["reason"]} class="text-ink-muted">— {change["reason"]}</span>
               </li>
             </ul>
 
-            <div class="mt-3 flex flex-wrap items-baseline justify-between gap-3 border-t border-hairline-soft pt-3">
-              <p class="font-mono text-numeral-sm leading-none text-ink">
-                {Money.brl(@diff.total_usd)}
-              </p>
-              <a
-                href={~p"/decks/#{@deck.id}/versoes/#{@from}/para/#{@to}/compras.txt"}
-                download
+            <div class="mt-4 border-t border-hairline-soft pt-3">
+              <button
+                type="button"
+                phx-click="restaurar"
+                phx-value-number={version.number}
+                data-confirm={"Voltar o deck para a v#{version.number}? As versões seguintes continuam guardadas."}
                 class="-my-2 inline-flex min-h-touch items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
               >
-                Baixar a lista de compra
-              </a>
+                Voltar para esta versão
+              </button>
             </div>
-
-            <p :if={@diff.unpriced > 0} class="mt-2 text-micro text-ink-faint">
-              {@diff.unpriced} carta(s) sem preço conhecido não entram no total.
-            </p>
-          </div>
-
-          <div :if={@diff.drop != []}>
-            <h3 class="mb-2 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
-              Sai do deck ({length(@diff.drop)})
-            </h3>
-            <p class="text-caption text-ink-muted">
-              {Enum.map_join(@diff.drop, ", ", & &1.name)}
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <ol class="space-y-3">
-        <li
-          :for={version <- @versions}
-          class="rounded-xl border border-hairline-soft bg-surface p-5"
-        >
-          <div class="flex flex-wrap items-baseline justify-between gap-3">
-            <h2 class="text-heading font-semibold text-ink">
-              v{version.number}
-              <span :if={version.label} class="text-body font-normal text-ink-secondary">
-                — {version.label}
-              </span>
-            </h2>
-
-            <span class="font-mono text-caption text-ink-faint">
-              {origin_label(version.origin)} · {Clock.moment(version.inserted_at)} · {DeckVersion.size(
-                version
-              )} cartas · {change_summary(version)}
-            </span>
-          </div>
-
-          <%!-- The three screens are one loop: deck → versões → a rodada que
-                fez esta. Without the way back, the label "otimização" names a
-                thing you cannot open. --%>
-          <.link
-            :if={version.optimization_id}
-            navigate={~p"/otimizacoes/#{version.optimization_id}"}
-            class="-my-2 mt-1 inline-flex min-h-touch items-center py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
-          >
-            ver a rodada →
-          </.link>
-
-          <ul :if={DeckVersion.applied(version) != []} class="mt-3 space-y-1">
-            <li
-              :for={change <- DeckVersion.applied(version)}
-              class="text-caption text-ink-secondary"
-            >
-              <span class={[
-                "font-mono",
-                change["action"] == "add" && "text-sev-healthy",
-                change["action"] == "cut" && "text-sev-critical"
-              ]}>
-                {if change["action"] == "add", do: "+", else: "−"}
-              </span>
-              {change["card"]}
-              <span :if={change["reason"]} class="text-ink-muted">— {change["reason"]}</span>
-            </li>
-          </ul>
-
-          <div class="mt-4 border-t border-hairline-soft pt-3">
-            <button
-              type="button"
-              phx-click="restaurar"
-              phx-value-number={version.number}
-              data-confirm={"Voltar o deck para a v#{version.number}? As versões seguintes continuam guardadas."}
-              class="-my-2 inline-flex min-h-touch items-center px-1 py-2 text-caption text-ink-faint underline decoration-hairline-strong underline-offset-2 transition-colors hover:text-ink"
-            >
-              Voltar para esta versão
-            </button>
-          </div>
-        </li>
-      </ol>
+          </li>
+        </ol>
+      </div>
     </div>
     """
   end

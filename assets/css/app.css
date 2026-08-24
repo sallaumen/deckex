@@ -97,6 +97,16 @@
 
   --aspect-art: var(--frame-art-crop);
   --aspect-card: var(--frame-card);
+
+  /* Two breakpoints past Tailwind's own ceiling. `2xl` (1536px) is where the
+     stock scale stops, and the table this app is actually read on is an
+     ultra-wide: 2560px and 3440px monitors leave every page a narrow ribbon
+     with 700px of felt on each side. `3xl` is the width where a second column
+     of content earns its place (a rail beside the deck grid, the two halves of
+     a stage side by side); `4xl` is where a further column of card tiles fits
+     without the art shrinking. Values in rem to match Tailwind's own scale. */
+  --breakpoint-3xl: 120rem; /* 1920px */
+  --breakpoint-4xl: 160rem; /* 2560px */
 }
 
 /* The table is always under low light. `color-scheme: dark` is what keeps the
