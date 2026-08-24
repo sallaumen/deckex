@@ -147,7 +147,7 @@ defmodule DeckexWeb.CardRulesLive do
   @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
-    <div class="mx-auto max-w-[1100px] px-6 py-10 lg:px-10 lg:py-14">
+    <div class="mx-auto max-w-[1100px] px-6 py-10 lg:px-10 lg:py-14 2xl:max-w-[1440px] 3xl:max-w-[1700px]">
       <DeckexWeb.Layouts.flash_group flash={@flash} />
       <.live_component module={DeckexWeb.SettingsPanel} id="settings-panel" />
 
@@ -227,7 +227,12 @@ defmodule DeckexWeb.CardRulesLive do
         </p>
       </div>
 
-      <div class="space-y-8">
+      <%!-- The three groups are read against each other — "o que é
+            obrigatório" only means something next to "o que é só pedido" — so
+            on a wide screen they sit side by side. `items-start` because they
+            are never the same height and a stretched empty column is worse
+            than an uneven row. --%>
+      <div class="space-y-8 2xl:grid 2xl:grid-cols-2 2xl:items-start 2xl:gap-6 2xl:space-y-0 3xl:grid-cols-3">
         <.group
           :for={{stance, rules} <- filled(@groups)}
           stance={stance}
