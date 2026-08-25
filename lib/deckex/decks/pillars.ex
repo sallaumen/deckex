@@ -30,7 +30,12 @@ defmodule Deckex.Decks.Pillars do
   @min_name_length 4
 
   @type source :: :ia | :dossier | :review
-  @type proposal :: %{name: String.t(), reason: String.t(), source: source()}
+  @type proposal :: %{
+          name: String.t(),
+          reason: String.t(),
+          source: source(),
+          stance: CardNote.stance()
+        }
 
   @doc """
   Cards worth locking, with the sentence behind each.
@@ -68,7 +73,7 @@ defmodule Deckex.Decks.Pillars do
     for %{"carta" => written} = row <- rows,
         name = Map.get(by_key, Name.normalize(written)),
         name != nil,
-        do: %{name: name, reason: row["motivo"] || "", source: :ia}
+        do: %{name: name, reason: row["motivo"] || "", source: :ia, stance: :locked}
   end
 
   # The commander is protected by the engine already, and basic lands are not
@@ -92,18 +97,36 @@ defmodule Deckex.Decks.Pillars do
       |> Enum.filter(&is_binary/1)
       |> Enum.join(" ")
 
-    for card <- candidates(cards),
-        sentence = mentioning_sentence(prose, front_face(card.name)),
-        sentence != nil,
-        do: %{name: card.name, reason: sentence, source: :dossier}
+    found =
+      for card <- candidates(cards),
+          sentence = mentioning_sentence(prose, front_face(card.name)),
+          sentence != nil,
+          do: %{name: card.name, reason: sentence, source: :dossier}
+
+    crowd = Enum.frequencies_by(found, & &1.reason)
+
+    Enum.map(found, &Map.put(&1, :stance, dossier_stance(crowd[&1.reason])))
   end
+
+  # **One sentence naming eight cards is an observation about the deck, not
+  # eight orders.** This is the correction to the first version of this sweep,
+  # and the owner paid for the lesson: a dossier's synergy paragraph lists the
+  # cards in a package, the sweep turned every one of them into an untouchable,
+  # and three real decks came out with 22%, 29% and 32% of their cuttable cards
+  # locked. A pipeline that cannot cut a third of the deck cannot improve it —
+  # which is exactly what the `:pilares` briefing warns the model against, while
+  # the free sweep was doing it by default.
+  #
+  # A sentence written about one card is a different claim, and keeps its order.
+  defp dossier_stance(1), do: :locked
+  defp dossier_stance(_several_cards_in_one_sentence), do: :note
 
   # A note a review left behind cost the owner a run to notice and a review to
   # write. He explained the card once; the only thing missing was the order.
   defp from_reviews(notes) do
     for %CardNote{stance: :note, source: :review, note: note} = row <- notes,
         is_binary(note),
-        do: %{name: row.card_name, reason: note, source: :review}
+        do: %{name: row.card_name, reason: note, source: :review, stance: :locked}
   end
 
   defp front_face(name), do: name |> String.split("//") |> hd() |> String.trim()

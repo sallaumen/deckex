@@ -44,6 +44,36 @@ defmodule Deckex.Decks.PillarsTest do
       assert reason =~ "virando dois manas"
     end
 
+    # The correction the owner paid for: the first version of this sweep turned
+    # every card in a synergy paragraph into an untouchable, and three real
+    # decks came out with 22%, 29% and 32% of their cuttable cards locked. A
+    # pipeline that cannot cut a third of the deck cannot improve it.
+    test "one sentence naming several cards is an observation, not several orders" do
+      deck =
+        with_dossier(deck(), %{
+          "sinergias" =>
+            "O pacote de rampa é Sol Ring, Cultivate e Counterspell, e é ele que segura o plano."
+        })
+
+      proposals = Decks.pillar_proposals(deck)
+
+      assert length(proposals) == 3
+      assert Enum.all?(proposals, &(&1.stance == :note))
+    end
+
+    test "a sentence written about one card keeps its order" do
+      deck =
+        with_dossier(deck(), %{
+          "sinergias" => "Tudo passa pelo Sol Ring. Cultivate e Counterspell são só o resto."
+        })
+
+      by_name = Map.new(Decks.pillar_proposals(deck), &{&1.name, &1.stance})
+
+      assert by_name["Sol Ring"] == :locked
+      assert by_name["Cultivate"] == :note
+      assert by_name["Counterspell"] == :note
+    end
+
     test "a card named in the win lines counts the same" do
       deck =
         with_dossier(deck(), %{

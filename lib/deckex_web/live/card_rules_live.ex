@@ -20,6 +20,7 @@ defmodule DeckexWeb.CardRulesLive do
   """
   use DeckexWeb, :live_view
 
+  alias Deckex.Cards.Card
   alias Deckex.Cards.Name
   alias Deckex.Consults
   alias Deckex.Consults.Consult
@@ -65,6 +66,7 @@ defmodule DeckexWeb.CardRulesLive do
       # same for every row and the deck is ~100 cards.
       missing: CardRules.missing_from(Enum.map(rules, & &1.card_name), present),
       present: MapSet.new(present, &Name.normalize/1),
+      locked_share: locked_share(deck, rules),
       page_title: "Cartas · #{deck.name}"
     )
     |> propose()
@@ -101,6 +103,27 @@ defmodule DeckexWeb.CardRulesLive do
     do: rows
 
   defp pillar_rows(_nothing_yet), do: []
+
+  # How much of the deck a pipeline is forbidden to touch. Worth a number on the
+  # screen because it is invisible one row at a time: locking eight cards feels
+  # like nothing, and three real decks reached 22%, 29% and 32% that way.
+  #
+  # Basic lands are out of the denominator — nobody optimises by cutting a
+  # Forest, so counting them would flatter the number.
+  defp locked_share(deck, rules) do
+    locked = Enum.count(rules, &(&1.stance == :locked))
+
+    case Enum.count(cuttable(deck)) do
+      0 -> 0.0
+      cuttable -> locked / cuttable
+    end
+  end
+
+  defp cuttable(deck) do
+    deck
+    |> Decks.list_deck_cards()
+    |> Enum.reject(&(&1.board == :commander or Card.basic_land?(&1.card)))
+  end
 
   defp card_names(deck) do
     snapshot = Decks.snapshot(deck)
@@ -157,15 +180,16 @@ defmodule DeckexWeb.CardRulesLive do
     Enum.each(chosen, fn proposal ->
       {:ok, _rule} =
         Decks.put_card_rule(socket.assigns.deck, proposal.name,
-          stance: :locked,
-          note: proposal.reason
+          stance: proposal.stance,
+          note: proposal.reason,
+          source: :sweep
         )
     end)
 
     {:noreply,
      socket
      |> load(socket.assigns.deck)
-     |> put_flash(:info, locked_message(length(chosen)))}
+     |> put_flash(:info, saved_proposals_message(chosen))}
   end
 
   def handle_event("colar", %{"lote" => %{"texto" => text}}, socket) do
@@ -230,9 +254,21 @@ defmodule DeckexWeb.CardRulesLive do
     "Não achei nada novo — o dossiê não cita nenhuma carta que já não esteja decidida. A IA lê as cartas uma a uma e acha o que o texto não diz."
   end
 
-  defp locked_message(0), do: "Nenhuma marcada, nada trancado."
-  defp locked_message(1), do: "1 carta trancada."
-  defp locked_message(count), do: "#{count} cartas trancadas."
+  defp saved_proposals_message([]), do: "Nenhuma marcada, nada guardado."
+
+  defp saved_proposals_message(chosen) do
+    {orders, notes} = Enum.split_with(chosen, &(&1.stance == :locked))
+
+    [count_phrase(length(orders), "obrigatória"), count_phrase(length(notes), "observação")]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join(", e ")
+    |> Kernel.<>(".")
+  end
+
+  defp count_phrase(0, _word), do: nil
+  defp count_phrase(1, word), do: "1 #{word}"
+  defp count_phrase(count, "obrigatória"), do: "#{count} obrigatórias"
+  defp count_phrase(count, word), do: "#{count} #{word}s"
 
   defp source_label(:ia), do: "a IA leu as cartas"
   defp source_label(:dossier), do: "está no dossiê"
@@ -296,6 +332,20 @@ defmodule DeckexWeb.CardRulesLive do
       </.link>
 
       <.deck_nav deck={@deck} current={:cards} class="mt-2" />
+
+      <%!-- Invisível uma linha por vez: trancar oito cartas não parece nada, e
+            foi assim que três decks reais chegaram a 22%, 29% e 32%. Um
+            pipeline que não pode cortar um terço do deck não pode melhorar
+            o deck. --%>
+      <p
+        :if={@locked_share >= 0.15}
+        class="mt-4 rounded-lg border border-sev-warning/40 bg-sev-warning/10 px-4 py-3 text-caption text-ink"
+      >
+        <span class="font-semibold">{percent(@locked_share)} do deck está obrigatório.</span>
+        Uma otimização só pode trabalhar no que sobra — acima de mais ou menos 15% ela começa a
+        ficar sem espaço para melhorar alguma coisa. Vale rebaixar para observação o que não for
+        mesmo intocável: a IA continua lendo o motivo, só para de ser proibida de mexer.
+      </p>
 
       <header class="mt-4 mb-8">
         <h1 class="text-display font-semibold text-ink">Suas cartas</h1>
@@ -363,7 +413,7 @@ defmodule DeckexWeb.CardRulesLive do
 
         <div :if={@proposals != []} class="mt-5 border-t border-hairline-soft pt-4">
           <h3 class="mb-3 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
-            Proponho trancar ({MapSet.size(@checked)} de {length(@proposals)})
+            Proponho guardar ({MapSet.size(@checked)} de {length(@proposals)})
           </h3>
 
           <ul class="space-y-2">
@@ -378,6 +428,7 @@ defmodule DeckexWeb.CardRulesLive do
                 />
                 <span class="min-w-0">
                   <span class="text-body font-semibold text-ink">{proposal.name}</span>
+                  <.card_stance stance={proposal.stance} class="ml-2" />
                   <span class="ml-2 font-mono text-micro text-ink-faint">
                     {source_label(proposal.source)}
                   </span>
@@ -395,9 +446,9 @@ defmodule DeckexWeb.CardRulesLive do
               phx-click="trancar-marcadas"
               variant="primary"
               disabled={MapSet.size(@checked) == 0}
-              phx-disable-with="Trancando…"
+              phx-disable-with="Guardando…"
             >
-              Trancar as marcadas
+              Guardar as marcadas
             </.button>
           </div>
         </div>

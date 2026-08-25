@@ -109,7 +109,7 @@ defmodule DeckexWeb.CardRulesLiveTest do
       {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}/cartas")
       html = live |> element("button[phx-click='varrer']") |> render_click()
 
-      assert html =~ "Proponho trancar"
+      assert html =~ "Proponho guardar"
       assert html =~ "Sol Ring"
       assert html =~ "virando dois manas"
       assert html =~ "está no dossiê"
@@ -125,7 +125,7 @@ defmodule DeckexWeb.CardRulesLiveTest do
       live |> element("button[phx-click='varrer']") |> render_click()
       html = live |> element("button[phx-click='trancar-marcadas']") |> render_click()
 
-      assert html =~ "1 carta trancada"
+      assert html =~ "1 obrigatória."
 
       assert [%{card_name: "Sol Ring", stance: :locked, note: "Tudo passa pelo Sol Ring."}] =
                Decks.card_notes(deck)
@@ -138,20 +138,38 @@ defmodule DeckexWeb.CardRulesLiveTest do
 
       {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}/cartas")
       html = live |> element("button[phx-click='varrer']") |> render_click()
-      assert html =~ "Proponho trancar (1 de 1)"
+      assert html =~ "Proponho guardar (1 de 1)"
 
       html =
         live
         |> element("input[phx-click='marcar-proposta'][phx-value-card='Sol Ring']")
         |> render_click()
 
-      assert html =~ "Proponho trancar (0 de 1)"
+      assert html =~ "Proponho guardar (0 de 1)"
 
       assert live
              |> element("button[phx-click='trancar-marcadas']")
              |> render() =~ "disabled"
 
       assert Decks.card_notes(deck) == []
+    end
+
+    # Invisible one row at a time: locking eight cards feels like nothing, and
+    # that is how a real deck ended up with a third of it untouchable.
+    test "a deck locked past the point of being optimisable says so",
+         %{conn: conn, deck: deck} do
+      {:ok, _rules} = Decks.put_card_rules(deck, "Sol Ring\nCultivate", :locked)
+
+      {:ok, _live, html} = live(conn, ~p"/decks/#{deck.id}/cartas")
+
+      assert html =~ "do deck está obrigatório"
+      assert html =~ "sem espaço para melhorar"
+    end
+
+    test "a deck with room left says nothing about it", %{conn: conn, deck: deck} do
+      {:ok, _live, html} = live(conn, ~p"/decks/#{deck.id}/cartas")
+
+      refute html =~ "do deck está obrigatório"
     end
 
     # An empty sweep is not a failure — it says which of the two sources came up
@@ -216,7 +234,7 @@ defmodule DeckexWeb.CardRulesLiveTest do
 
       {:ok, _live, html} = live(conn, ~p"/decks/#{deck.id}/cartas")
 
-      assert html =~ "Proponho trancar"
+      assert html =~ "Proponho guardar"
       assert html =~ "metade do combo"
       assert html =~ "a IA leu as cartas"
     end
