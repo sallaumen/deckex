@@ -162,6 +162,40 @@ defmodule Deckex.CombosTest do
       assert combos["one_card_away_total"] == 25
     end
 
+    # The live API answers `notablePrerequisites` as a prose string while the
+    # schema page reads like a list. The first real request crashed on it, and
+    # the mock had been lying with a list this whole time.
+    test "prerequisites survive arriving as prose instead of a list" do
+      deck = deck()
+
+      prose =
+        combo(["Sol Ring", "Cultivate"], ["Mana infinita"])
+        |> Map.put("notablePrerequisites", "Sol Ring não está enjoado.\nVocê tem 3 de vida.")
+
+      expect(Deckex.Spellbook.Mock, :find_combos, fn _main, _commanders ->
+        {:ok, %{included: [prose], almost: []}}
+      end)
+
+      {:ok, saved} = Combos.refresh(deck)
+
+      assert [%{"prerequisites" => ["Sol Ring não está enjoado.", "Você tem 3 de vida."]}] =
+               Combos.for_deck(saved)["assembled"]
+    end
+
+    test "a combo with no prerequisites at all is still stored" do
+      deck = deck()
+
+      bare = Map.delete(combo(["Sol Ring", "Cultivate"], ["X"]), "notablePrerequisites")
+
+      expect(Deckex.Spellbook.Mock, :find_combos, fn _main, _commanders ->
+        {:ok, %{included: [bare], almost: []}}
+      end)
+
+      {:ok, saved} = Combos.refresh(deck)
+
+      assert [%{"prerequisites" => []}] = Combos.for_deck(saved)["assembled"]
+    end
+
     test "a deck nobody has asked about reads as empty, never as nil" do
       assert Combos.for_deck(deck()) == %{"assembled" => [], "one_card_away" => []}
       refute Combos.asked?(deck())
