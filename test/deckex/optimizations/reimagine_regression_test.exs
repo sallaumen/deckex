@@ -24,9 +24,9 @@ defmodule Deckex.Optimizations.ReimagineRegressionTest do
   setup :verify_on_exit!
 
   @recipe [
-    %{"kind" => "lens", "lens" => "visao", "label" => "Visões"},
+    %{"kind" => "visao", "lens" => "visao", "label" => "Visões"},
     %{"kind" => "reconstruction", "lens" => "full", "label" => "Reconstrução"},
-    %{"kind" => "checkpoint", "lens" => "full", "label" => "Estabilização"}
+    %{"kind" => "critico", "lens" => "critico", "label" => "Estabilização"}
   ]
 
   @visoes [
@@ -131,13 +131,14 @@ defmodule Deckex.Optimizations.ReimagineRegressionTest do
     # Sol Ring is already in the list: the singleton rule, still doing its job.
     assert refusals["Sol Ring"]
 
-    # Stage 3: every stage so far applied nothing, so the checkpoint is
-    # skipped by the convergence rule and the run ends honestly.
-    {:ok, final} = Optimizations.fetch(optimization.id)
+    # Stage 3: the critic reads the result and closes the run. It runs even
+    # when the rebuild applied nothing — a round where every proposal was
+    # refused is exactly the round somebody should be judging.
+    {:ok, final} = beat(rebuilt.id, stage([], []))
 
+    assert List.last(final.steps).kind == :critico
     assert final.status == :done
-    assert List.last(final.steps).status == :skipped
-    assert final.outcome == "estabilizou"
+    assert final.outcome =~ "sem mudança"
 
     # The copy is still exactly 100 cards, and the commander swap kept it so.
     assert Optimizations.card_count(Optimizations.current_list(final)) ==

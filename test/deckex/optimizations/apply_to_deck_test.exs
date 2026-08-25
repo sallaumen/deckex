@@ -24,7 +24,9 @@ defmodule Deckex.Optimizations.ApplyToDeckTest do
   # pipeline does it: the changelog and the resulting list, both stored.
   defp run_over(deck, opts \\ []) do
     {:ok, run} =
-      Optimizations.start(deck, %{}, [%{"kind" => "lens", "lens" => "full", "label" => "Tudo"}])
+      Optimizations.start(deck, %{}, [
+        %{"kind" => "execucao", "lens" => "execucao", "label" => "Tudo"}
+      ])
 
     [step] = run.steps
 

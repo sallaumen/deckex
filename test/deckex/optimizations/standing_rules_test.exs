@@ -21,8 +21,8 @@ defmodule Deckex.Optimizations.StandingRulesTest do
   setup :verify_on_exit!
 
   @two_lenses [
-    %{"kind" => "lens", "lens" => "mana_ramp", "label" => "Mana"},
-    %{"kind" => "lens", "lens" => "speed_curve", "label" => "Early game"}
+    %{"kind" => "execucao", "lens" => "execucao", "label" => "Mana"},
+    %{"kind" => "execucao", "lens" => "execucao", "label" => "Early game"}
   ]
 
   defp deck do

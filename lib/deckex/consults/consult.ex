@@ -25,12 +25,14 @@ defmodule Deckex.Consults.Consult do
     :upgrade,
     :scout,
     :bracket,
-    :alinhamento,
     :visao,
     :balanco,
     :revisao,
     :livre,
-    :pilares
+    :pilares,
+    :plano,
+    :execucao,
+    :critico
   ]
 
   @type t :: %__MODULE__{}

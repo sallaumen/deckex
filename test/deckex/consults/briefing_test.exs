@@ -179,7 +179,7 @@ defmodule Deckex.Consults.BriefingTest do
     # direction nine stages then execute — was told "the deck passed every
     # lens" about a deck with two criticals.
     test "a whole-deck lens sees every finding" do
-      for lens <- [:visao, :upgrade, :budget, :matchup, :alinhamento, :full] do
+      for lens <- [:visao, :upgrade, :budget, :matchup, :execucao, :critico, :full] do
         briefing = build(lens, [])
 
         refute briefing =~ "passed every lens",
@@ -269,21 +269,6 @@ defmodule Deckex.Consults.BriefingTest do
       assert briefing =~ "context, not the goal"
     end
 
-    test "alinhamento measures against the vision when there is one, the dossier otherwise" do
-      with_vision =
-        put_in(@optimization.contract["visao"], %{
-          "nome" => "Mais rápido",
-          "tese" => "t",
-          "custo" => "c"
-        })
-
-      assert build(:alinhamento, optimization: with_vision) =~
-               "**Mais rápido** — is the reference"
-
-      assert build(:alinhamento, optimization: @optimization) =~
-               "dossier above is the **fixed reference**"
-    end
-
     test "the copy's card count lands with its direction" do
       briefing = build(:full, optimization: @optimization)
 
@@ -324,14 +309,7 @@ defmodule Deckex.Consults.BriefingTest do
     end
   end
 
-  describe "the alinhamento and multi-matchup tasks" do
-    test "alinhamento treats the dossier as the fixed reference" do
-      briefing = build(:alinhamento, dossier: @dossier)
-
-      assert briefing =~ "fixed reference"
-      assert briefing =~ "If nothing drifted, say so and propose nothing"
-    end
-
+  describe "the multi-matchup task" do
     test "matchup accepts a list of targets" do
       briefing = build(:matchup, against: ["um aggro rápido", "um controle pesado"])
 

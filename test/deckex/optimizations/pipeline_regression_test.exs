@@ -4,9 +4,10 @@ defmodule Deckex.Optimizations.PipelineRegressionTest do
   reference deck. The reference deck validates; it must never become the shape
   the code fits (spec §8).
 
-  Four scripted stages: an add with an over-ceiling companion, a revert, a
-  flip-flop attempt, and a checkpoint that converges. Every stage record is
-  asserted, and the deck page never learns any of it happened.
+  The three real stages, scripted: a plan that proposes nothing, an execution
+  with one clean add and one over the ceiling, and a critic that reverts the
+  add and then tries to put it back — the flip-flop the engine kills. Every
+  stage record is asserted, and the deck page never learns any of it happened.
   """
   use Deckex.DataCase, async: true
 
@@ -23,10 +24,9 @@ defmodule Deckex.Optimizations.PipelineRegressionTest do
   setup :verify_on_exit!
 
   @recipe [
-    %{"kind" => "lens", "lens" => "mana_ramp", "label" => "Mana"},
-    %{"kind" => "lens", "lens" => "speed_curve", "label" => "Early game"},
-    %{"kind" => "checkpoint", "lens" => "full", "label" => "Estabilização 1"},
-    %{"kind" => "checkpoint", "lens" => "full", "label" => "Estabilização 2"}
+    %{"kind" => "execucao", "lens" => "execucao", "label" => "Execução"},
+    %{"kind" => "critico", "lens" => "critico", "label" => "Crítico"},
+    %{"kind" => "critico", "lens" => "critico", "label" => "Segunda leitura"}
   ]
 
   defp beat(optimization_id, cuts, adds) do
@@ -49,7 +49,7 @@ defmodule Deckex.Optimizations.PipelineRegressionTest do
     Optimizations.fetch(optimization_id)
   end
 
-  test "four stages, one revert, one dead flip-flop, and an honest convergence" do
+  test "an add over the ceiling, a revert, and a dead flip-flop" do
     CatalogueFixture.seed!(~w(sol_ring forest cultivate rhystic_study llanowar_elves))
 
     stub(Deckex.Scryfall.Mock, :fetch_by_names, fn names ->
@@ -78,29 +78,29 @@ defmodule Deckex.Optimizations.PipelineRegressionTest do
     # card again, which now trips BOTH the ceiling and nothing else.
     {:ok, _} = beat(optimization.id, ["Cultivate"], [])
 
-    # Stage 3 (checkpoint): real changes happened, so it runs; it tries to
-    # re-add Cultivate — the flip-flop — and changes nothing else.
+    # Stage 3: tries to re-add Cultivate — the flip-flop — and changes nothing
+    # else. A card may enter and leave one round once.
     {:ok, _} = beat(optimization.id, [], ["Cultivate"])
 
     {:ok, final} = Optimizations.fetch(optimization.id)
-    [mana, curve, checkpoint1, checkpoint2] = final.steps
+    [execucao, critico, segunda] = final.steps
 
     # Stage records, one by one.
-    assert [%{"action" => "add", "card" => "Cultivate"}] = mana.applied
-    assert [%{"card" => "Rhystic Study", "problems" => [ceiling_problem]}] = mana.rejected
+    assert [%{"action" => "add", "card" => "Cultivate"}] = execucao.applied
+    assert [%{"card" => "Rhystic Study", "problems" => [ceiling_problem]}] = execucao.rejected
     assert ceiling_problem =~ "teto"
 
-    assert [%{"action" => "cut", "card" => "Cultivate"}] = curve.applied
+    assert [%{"action" => "cut", "card" => "Cultivate"}] = critico.applied
 
-    assert checkpoint1.status == :done
-    assert checkpoint1.applied == []
-    assert [%{"card" => "Cultivate", "problems" => [flip_problem]}] = checkpoint1.rejected
+    assert segunda.status == :done
+    assert segunda.applied == []
+    assert [%{"card" => "Cultivate", "problems" => [flip_problem]}] = segunda.rejected
     assert flip_problem =~ "já entrou e saiu"
 
-    # The final checkpoint saw an unchanged picture and was skipped.
-    assert checkpoint2.status == :skipped
     assert final.status == :done
-    assert final.outcome == "estabilizou"
+    # Measured, not asserted: the run ended exactly where it started, and the
+    # outcome says so rather than claiming success.
+    assert final.outcome =~ "sem mudança"
 
     # The net result: the sandbox ends exactly where it started.
     assert Optimizations.current_list(final) |> Enum.sort_by(& &1["name"]) ==

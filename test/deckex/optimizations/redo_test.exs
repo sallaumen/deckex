@@ -36,9 +36,9 @@ defmodule Deckex.Optimizations.RedoTest do
   end
 
   @recipe [
-    %{"kind" => "lens", "lens" => "mana_ramp", "label" => "Mana"},
-    %{"kind" => "lens", "lens" => "speed_curve", "label" => "Early game"},
-    %{"kind" => "lens", "lens" => "interaction", "label" => "Interação"}
+    %{"kind" => "execucao", "lens" => "execucao", "label" => "Mana"},
+    %{"kind" => "execucao", "lens" => "execucao", "label" => "Early game"},
+    %{"kind" => "execucao", "lens" => "execucao", "label" => "Interação"}
   ]
 
   defp answer(cuts, adds) do

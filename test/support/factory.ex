@@ -76,8 +76,8 @@ defmodule Deckex.Factory do
         "model" => "sonnet"
       },
       recipe: [
-        %{"kind" => "lens", "lens" => "mana_ramp", "label" => "Mana"},
-        %{"kind" => "checkpoint", "lens" => "full", "label" => "Estabilização"}
+        %{"kind" => "execucao", "lens" => "execucao", "label" => "Mana"},
+        %{"kind" => "critico", "lens" => "critico", "label" => "Estabilização"}
       ],
       list_original: [%{"name" => "Sol Ring", "quantity" => 1}],
       commanders: []
@@ -88,9 +88,9 @@ defmodule Deckex.Factory do
     %OptimizationStep{
       optimization: build(:optimization),
       position: 1,
-      kind: :lens,
-      lens: "mana_ramp",
-      label: "Mana",
+      kind: :execucao,
+      lens: "execucao",
+      label: "Execução",
       status: :pending,
       list_before: [%{"name" => "Sol Ring", "quantity" => 1}]
     }

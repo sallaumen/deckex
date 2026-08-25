@@ -17,8 +17,8 @@ defmodule Deckex.Optimizations.AdvanceTest do
   setup :verify_on_exit!
 
   @two_lenses [
-    %{"kind" => "lens", "lens" => "mana_ramp", "label" => "Mana"},
-    %{"kind" => "lens", "lens" => "speed_curve", "label" => "Early game"}
+    %{"kind" => "execucao", "lens" => "execucao", "label" => "Mana"},
+    %{"kind" => "execucao", "lens" => "execucao", "label" => "Early game"}
   ]
 
   # A hundred cards, because the pipeline now judges the count: a five-card
@@ -81,7 +81,9 @@ defmodule Deckex.Optimizations.AdvanceTest do
   test "a revert is legitimate disagreement; a second flip is churn and dies" do
     stub_scryfall()
 
-    recipe = @two_lenses ++ [%{"kind" => "lens", "lens" => "interaction", "label" => "Interação"}]
+    recipe =
+      @two_lenses ++ [%{"kind" => "execucao", "lens" => "execucao", "label" => "Interação"}]
+
     {:ok, optimization} = Optimizations.start(deck(), %{}, recipe)
 
     # Stage 1 adds Cultivate; stage 2 cuts it (the revert — allowed); stage 3
@@ -145,23 +147,23 @@ defmodule Deckex.Optimizations.AdvanceTest do
     assert Enum.any?(problems, &(&1 =~ "Bracket 4, acima do contrato"))
   end
 
-  test "a checkpoint over an unchanged picture is skipped and the run stabilizes" do
+  # The outcome is measured, not asserted. "Jamais deixar o deck pior" cannot
+  # be a sentence in a prompt — a model that believes it improved the deck will
+  # say so either way — so the engine computes both reports and the run reports
+  # the number it found.
+  test "a run that changed nothing says exactly that, and finishes" do
     stub_scryfall()
 
-    recipe =
-      @two_lenses ++ [%{"kind" => "checkpoint", "lens" => "full", "label" => "Estabilização"}]
-
-    {:ok, optimization} = Optimizations.start(deck(), %{}, recipe)
+    {:ok, optimization} = Optimizations.start(deck(), %{}, @two_lenses)
 
     expect(Deckex.AI.Mock, :complete, 2, fn _p, _s, _o -> answer([], []) end)
     {:ok, _} = beat(optimization.id)
     {:ok, final} = beat(optimization.id)
 
-    [_first, _second, checkpoint] = final.steps
-    assert checkpoint.status == :skipped
     assert final.status == :done
-    assert final.outcome == "estabilizou"
+    assert final.outcome =~ "sem mudança"
     assert final.finished_at != nil
+    assert Optimizations.criticals_delta(final) == {5, 5}
   end
 
   # A run may not end on a list that cannot go on a table. The recipe here
@@ -171,8 +173,8 @@ defmodule Deckex.Optimizations.AdvanceTest do
     stub_scryfall()
 
     recipe = [
-      %{"kind" => "lens", "lens" => "mana_ramp", "label" => "Mana"},
-      %{"kind" => "checkpoint", "lens" => "full", "label" => "Estabilização"}
+      %{"kind" => "execucao", "lens" => "execucao", "label" => "Mana"},
+      %{"kind" => "critico", "lens" => "critico", "label" => "Estabilização"}
     ]
 
     {:ok, optimization} = Optimizations.start(deck(), %{}, recipe)
@@ -199,7 +201,7 @@ defmodule Deckex.Optimizations.AdvanceTest do
     {:ok, final} = beat(optimization.id)
 
     assert final.status == :done
-    assert final.outcome == "completo"
+    assert final.outcome =~ "completo"
     assert Optimizations.card_count(Optimizations.current_list(final)) == 100
   end
 
@@ -208,7 +210,7 @@ defmodule Deckex.Optimizations.AdvanceTest do
   test "a closing answer that misses 100 is refused, and the run says where it stopped" do
     stub_scryfall()
 
-    recipe = [%{"kind" => "lens", "lens" => "mana_ramp", "label" => "Mana"}]
+    recipe = [%{"kind" => "execucao", "lens" => "execucao", "label" => "Mana"}]
 
     {:ok, optimization} = Optimizations.start(deck(), %{}, recipe)
 

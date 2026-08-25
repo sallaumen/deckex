@@ -59,7 +59,7 @@ defmodule DeckexWeb.MesaLiveTest do
 
       {:ok, run} =
         Optimizations.start(deck, %{}, [
-          %{"kind" => "lens", "lens" => "visao", "label" => "Visões"}
+          %{"kind" => "visao", "lens" => "visao", "label" => "Visões"}
         ])
 
       run |> Optimization.changeset(%{status: :awaiting_choice}) |> Repo.update!()
@@ -73,7 +73,9 @@ defmodule DeckexWeb.MesaLiveTest do
       deck = deck()
 
       {:ok, _run} =
-        Optimizations.start(deck, %{}, [%{"kind" => "lens", "lens" => "full", "label" => "Tudo"}])
+        Optimizations.start(deck, %{}, [
+          %{"kind" => "execucao", "lens" => "execucao", "label" => "Tudo"}
+        ])
 
       {:ok, _live, html} = live(conn, ~p"/")
 
@@ -98,8 +100,8 @@ defmodule DeckexWeb.MesaLiveTest do
 
       {:ok, _run} =
         Optimizations.start(deck, %{}, [
-          %{"kind" => "lens", "lens" => "mana_ramp", "label" => "Mana"},
-          %{"kind" => "lens", "lens" => "speed_curve", "label" => "Early game"}
+          %{"kind" => "execucao", "lens" => "execucao", "label" => "Mana"},
+          %{"kind" => "execucao", "lens" => "execucao", "label" => "Early game"}
         ])
 
       {:ok, _live, html} = live(conn, ~p"/")

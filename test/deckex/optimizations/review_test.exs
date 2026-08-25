@@ -24,7 +24,9 @@ defmodule Deckex.Optimizations.ReviewTest do
 
   defp finished_run(deck) do
     {:ok, run} =
-      Optimizations.start(deck, %{}, [%{"kind" => "lens", "lens" => "full", "label" => "Tudo"}])
+      Optimizations.start(deck, %{}, [
+        %{"kind" => "execucao", "lens" => "execucao", "label" => "Tudo"}
+      ])
 
     [step] = run.steps
 
@@ -151,7 +153,9 @@ defmodule Deckex.Optimizations.ReviewTest do
       deck = deck()
 
       {:ok, running} =
-        Optimizations.start(deck, %{}, [%{"kind" => "lens", "lens" => "full", "label" => "Tudo"}])
+        Optimizations.start(deck, %{}, [
+          %{"kind" => "execucao", "lens" => "execucao", "label" => "Tudo"}
+        ])
 
       assert {:error, %Error{code: :optimization_not_done}} =
                Optimizations.review(running, "qualquer coisa")

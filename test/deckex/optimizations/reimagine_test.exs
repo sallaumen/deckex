@@ -13,7 +13,7 @@ defmodule Deckex.Optimizations.ReimagineTest do
   setup :verify_on_exit!
 
   @recipe [
-    %{"kind" => "lens", "lens" => "visao", "label" => "Visões"},
+    %{"kind" => "visao", "lens" => "visao", "label" => "Visões"},
     %{"kind" => "reconstruction", "lens" => "full", "label" => "Reconstrução"}
   ]
 

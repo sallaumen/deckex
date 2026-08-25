@@ -49,7 +49,7 @@ defmodule DeckexWeb.FlashVisibilityTest do
 
     {:ok, _running} =
       Optimizations.start(deck, %{}, [
-        %{"kind" => "lens", "lens" => "mana_ramp", "label" => "Mana"}
+        %{"kind" => "execucao", "lens" => "execucao", "label" => "Mana"}
       ])
 
     {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}/otimizacoes")

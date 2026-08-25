@@ -350,6 +350,21 @@ for *what* we are building and *why*. This file is *how*.
   when the format itself satisfies the condition. A finding names only the
   cards it counted; naming the rest is how a stage spends a paid answer arguing
   with the engine instead of working it.
+- **A round is plan, execute, judge — three stages, divided by phase and not by
+  lens.** Dividing by lens is what made stages contradict each other: each had a
+  partial view and a partial mandate, so each optimised its own number while the
+  next disagreed. `:plano` reads everything, proposes nothing, and writes both
+  the round's plan and the deck's dossier (which is why no scout stage exists);
+  `:execucao` makes every change against that plan, in one answer, from one
+  author; `:critico` judges and is the only stage that may correct the result.
+  The plan travels **verbatim** into both stages after it — a plan summarised is
+  a plan the next stage reinterprets.
+- **"Never leave the deck worse" is measured, never promised.** A model that
+  believes it improved the deck will say so either way, so the engine computes
+  both reports from the same baselines: `criticals_delta/1` is the number the
+  run reports, `effect/1` is the finding-by-finding list handed to the critic as
+  its first job, and applying a run that measured worse says the number in the
+  confirmation before it does anything.
 - **A round of one stage changes only what was asked.** `:livre` has no
   checkpoint after it to catch an overreach and no validation to argue with it,
   so its briefing asks for narrowness rather than ambition. The audit, the
