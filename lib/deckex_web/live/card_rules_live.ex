@@ -28,6 +28,7 @@ defmodule DeckexWeb.CardRulesLive do
   alias Deckex.Decks.CardRules
   alias Deckex.Error
   alias Deckex.Events
+  alias DeckexWeb.Clock
 
   @impl Phoenix.LiveView
   def mount(%{"id" => deck_id}, _session, socket) do
@@ -89,6 +90,12 @@ defmodule DeckexWeb.CardRulesLive do
 
   defp answered?(%Consult{status: :done, response: %{}}), do: true
   defp answered?(_pending_or_absent), do: false
+
+  defp asking?(%Consult{status: status}), do: status in [:pending, :running]
+  defp asking?(_nothing_in_flight), do: false
+
+  defp answered_at(%Consult{status: :done, updated_at: at}), do: Clock.moment(at)
+  defp answered_at(_not_answered), do: nil
 
   defp pillar_rows(%Consult{status: :done, response: %{"pilares" => rows}}) when is_list(rows),
     do: rows
@@ -322,14 +329,24 @@ defmodule DeckexWeb.CardRulesLive do
 
           <%!-- Um combo que ninguém escreveu ainda não deixa rastro em prosa
                 nenhuma. Achar isso é ler as cartas, e ler as cartas custa. --%>
+          <%!-- Some enquanto uma pergunta está no ar, e volta quando a resposta
+                chega: o deck muda, a lista muda, e uma resposta de ontem sobre
+                uma lista que não existe mais não pode ser a última palavra
+                para sempre. --%>
           <.button
-            :if={is_nil(@consult)}
+            :if={not asking?(@consult)}
             type="button"
             phx-click="perguntar-ia"
             phx-disable-with="Perguntando…"
           >
-            Perguntar para a IA (1 consulta)
+            {if @consult,
+              do: "Perguntar de novo (1 consulta)",
+              else: "Perguntar para a IA (1 consulta)"}
           </.button>
+
+          <span :if={answered_at(@consult)} class="text-micro text-ink-faint">
+            última resposta {answered_at(@consult)}
+          </span>
 
           <span
             :if={@consult && @consult.status in [:pending, :running]}
