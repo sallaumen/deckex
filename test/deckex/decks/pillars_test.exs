@@ -157,6 +157,31 @@ defmodule Deckex.Decks.PillarsTest do
       assert Decks.pillar_proposals(deck) == []
     end
 
+    # Nineteen rows of "make this an observation" about cards that were already
+    # observations, each carrying the same sentence as the row it duplicated.
+    test "a card that is already an observation is not proposed as one again" do
+      deck = deck()
+      {:ok, _rule} = Decks.put_card_note(deck, "Sol Ring", "citado no dossiê")
+
+      deck =
+        with_dossier(deck, %{
+          "sinergias" => "O pacote é Sol Ring, Cultivate e Counterspell juntos."
+        })
+
+      refute "Sol Ring" in Enum.map(Decks.pillar_proposals(deck), & &1.name)
+    end
+
+    # Upward is a different claim, and the model is allowed to make it once.
+    test "the model may still argue an observation is load-bearing" do
+      deck = deck()
+      {:ok, _rule} = Decks.put_card_note(deck, "Sol Ring", "achei que era só rampa")
+
+      rows = [%{"carta" => "Sol Ring", "motivo" => "é metade do combo, não é rampa"}]
+
+      assert [%{name: "Sol Ring", stance: :locked, source: :ia}] =
+               Decks.pillar_proposals(deck, rows)
+    end
+
     test "a card he asked for is a decision too" do
       deck = deck()
       {:ok, _rule} = Decks.put_card_rules(deck, "Sol Ring", :wanted)

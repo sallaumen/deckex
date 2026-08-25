@@ -54,12 +54,24 @@ defmodule Deckex.Decks.Pillars do
   @spec propose([%{card: Card.t(), board: atom()}], map() | nil, [CardNote.t()], [map()]) ::
           [proposal()]
   def propose(cards, dossier, notes, ai_rows \\ []) do
-    decided = MapSet.new(notes, &(&1.stance != :note and &1.card_name))
+    stances = Map.new(notes, &{&1.card_name, &1.stance})
 
     (from_ai(cards, ai_rows) ++ from_dossier(cards, dossier) ++ from_reviews(notes))
-    |> Enum.reject(&MapSet.member?(decided, &1.name))
+    |> Enum.reject(&settled?(Map.get(stances, &1.name), &1.stance))
     |> Enum.uniq_by(& &1.name)
   end
+
+  # A proposal has to say something the deck's rules do not already say.
+  # Proposing "make this an observation" about a card that is already an
+  # observation is how nineteen rows of nothing ended up on the screen, each
+  # carrying the same sentence as the row it duplicated.
+  #
+  # The one case worth reopening is upward: "you left this as an observation,
+  # and here is why it is actually load-bearing" is an argument, and the model
+  # is allowed to make it once.
+  defp settled?(nil, _proposed), do: false
+  defp settled?(:note, :locked), do: false
+  defp settled?(_already_decided, _proposed), do: true
 
   # A model naming a card the deck does not hold is proposing an add, and this
   # screen does not add cards. Resolved through the normalizer so a spelling
