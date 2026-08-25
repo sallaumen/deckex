@@ -319,6 +319,15 @@ for *what* we are building and *why*. This file is *how*.
   — there was only an omission. **Nothing is truncated**, and the commander's
   text is included: half a card's text produces a *new* misreading, and the
   long cards are the ones being misread.
+- **The briefing carries what the catalogue knows, not a quarter of it.** For a
+  long time it sent name, mana cost and type line — four fields out of twenty —
+  and every judgement of whether a card was good came out of the model's memory.
+  A card line now carries its rules text, its body, the roles the app itself
+  classified it with, the Game Changer flag, and `edhrec_rank`: the format's own
+  count of how many decks run the card, downloaded with every import since the
+  first one and never once sent. The rank is **evidence, never a verdict** — the
+  prompt says so, because read one way it deletes exactly the build-arounds that
+  make a deck someone's.
 - **The owner's description is intent; the list is fact.** `decks.description`
   is his words and no consult ever rewrites it — unlike the dossier, which is a
   model's reading. The briefing states which of the two settles what: the list

@@ -70,6 +70,71 @@ defmodule Deckex.Consults.CardTextTest do
     end
   end
 
+  # The catalogue held twenty fields per card and the briefing sent four. The
+  # play rate is the one that stings: it is the format's own count of how many
+  # decks run a card, downloaded with every import since the first one, and
+  # asking a model whether a card is good while withholding it left "good" a
+  # matter of the model's memory.
+  describe "what else the catalogue already knew" do
+    test "carries the play rate, and glosses what the number means" do
+      text =
+        briefing([
+          AnalysisFixture.entry(name: "Sol Ring", edhrec_rank: 1),
+          AnalysisFixture.entry(name: "Prize Pig", edhrec_rank: 5401)
+        ])
+
+      assert text =~ "EDHREC #1"
+      assert text =~ "a staple of the format"
+      assert text =~ "EDHREC #5401"
+      assert text =~ "rarely played"
+    end
+
+    test "says so plainly when the format has no count for a card" do
+      assert briefing([AnalysisFixture.entry(name: "Carta Nova")]) =~ "play rate: unknown"
+    end
+
+    # Read one way it deletes exactly the engines that make a deck someone's:
+    # Sam, Loyal Attendant sits past rank six thousand and is half a combo.
+    test "tells the stage a low rank is not a cut on sight" do
+      text = briefing([AnalysisFixture.entry(name: "Sol Ring", edhrec_rank: 1)])
+
+      assert text =~ "evidence, never a verdict"
+      assert text =~ "not a cut on"
+    end
+
+    # The fragility lens counts blockers by toughness, and the stage answering
+    # it could not see a single creature's body.
+    test "carries a creature's body" do
+      text =
+        briefing([
+          AnalysisFixture.entry(
+            name: "Muralha",
+            type_line: "Creature — Wall",
+            power: "0",
+            toughness: "6"
+          )
+        ])
+
+      assert text =~ "0/6"
+    end
+
+    # Every measurement above is counted from these, and the stage told "0
+    # wincons" could neither trust the count nor correct it.
+    test "carries the app's own classification of each card" do
+      text = briefing([AnalysisFixture.entry(name: "Cultivate", roles: [:ramp, :fixing])])
+
+      assert text =~ "roles: fixing, ramp"
+    end
+
+    # One more of these moves the deck a bracket, and the stage adding it had
+    # no way to know which card was the one.
+    test "marks a Game Changer where it sits" do
+      text = briefing([AnalysisFixture.entry(name: "Rhystic Study", game_changer: true)])
+
+      assert text =~ "GAME CHANGER"
+    end
+  end
+
   describe "the commander" do
     # The one card in play every single game, and the briefing used to name it
     # and stop. Its text is the deck's whole premise.

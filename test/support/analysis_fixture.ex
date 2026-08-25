@@ -26,6 +26,7 @@ defmodule Deckex.AnalysisFixture do
       color_identity: Keyword.get(attrs, :color_identity, []),
       produced_mana: Keyword.get(attrs, :produced_mana, []),
       game_changer: Keyword.get(attrs, :game_changer, false),
+      edhrec_rank: Keyword.get(attrs, :edhrec_rank),
       # Legal by default, because a real card is. The schema default is `false`
       # — right for a database column that must be filled from Scryfall, wrong
       # for a fixture whose every card would otherwise be banned. Nothing
