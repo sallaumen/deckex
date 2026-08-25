@@ -39,7 +39,7 @@ defmodule Deckex.Spellbook do
       "id" => combo["id"],
       "cards" => card_names(combo),
       "produces" => features(combo),
-      "prerequisites" => Enum.map(combo["notablePrerequisites"] || [], &to_string/1),
+      "prerequisites" => prerequisites(combo["notablePrerequisites"]),
       "steps" => String.trim(to_string(combo["description"] || ""))
     }
   end
@@ -67,6 +67,23 @@ defmodule Deckex.Spellbook do
   @spec ok?({:ok, term()} | {:error, Error.t()}) :: boolean()
   def ok?({:ok, _answer}), do: true
   def ok?({:error, %Error{}}), do: false
+
+  # The live API answers this one as a **string** — a prose paragraph, newline
+  # separated — while the schema page reads like a list, and the first real
+  # request crashed on it. Both shapes are accepted rather than one guessed at:
+  # this field is written by contributors and a version that changes its mind
+  # must not take a background job down with it.
+  defp prerequisites(nil), do: []
+  defp prerequisites(notes) when is_list(notes), do: Enum.map(notes, &to_string/1)
+
+  defp prerequisites(prose) when is_binary(prose) do
+    prose
+    |> String.split(~r/\r?\n/)
+    |> Enum.map(&String.trim/1)
+    |> Enum.reject(&(&1 == ""))
+  end
+
+  defp prerequisites(_unexpected), do: []
 
   defp card_names(combo) do
     combo
