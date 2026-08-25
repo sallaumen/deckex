@@ -177,6 +177,26 @@ defmodule DeckexWeb.CardRulesLiveTest do
       assert [%{lens: :pilares, status: :pending}] = Consults.list_for_deck(deck)
     end
 
+    # The deck changes, the list changes, and an answer from yesterday about a
+    # list that no longer exists cannot be the last word forever.
+    test "he can ask again once an answer has landed", %{conn: conn, deck: deck} do
+      {:ok, consult} = Consults.request(deck, :pilares)
+
+      {:ok, _live, html} = live(conn, ~p"/decks/#{deck.id}/cartas")
+      refute html =~ "Perguntar"
+      assert html =~ "A IA está lendo as cartas"
+
+      consult
+      |> Ecto.Changeset.change(%{status: :done, response: %{"pilares" => []}})
+      |> Repo.update!()
+
+      {:ok, reloaded, html} = live(conn, ~p"/decks/#{deck.id}/cartas")
+
+      assert html =~ "Perguntar de novo (1 consulta)"
+      assert html =~ "última resposta"
+      assert has_element?(reloaded, "button[phx-click='perguntar-ia']")
+    end
+
     test "the answer becomes proposals in the model's own words",
          %{conn: conn, deck: deck} do
       {:ok, consult} = Consults.request(deck, :pilares)
