@@ -17,6 +17,11 @@ defmodule Deckex.Decks.CardNote do
       request; a stage may still decline, but it has to say so by name.
     * `:note` — what this table has always held: his words, no order attached.
 
+  `source` says where the row came from: `:manual` he typed, `:review` a review
+  stage taught, `:sweep` he accepted from the "achar as óbvias" proposals. The
+  third exists because the first version of that sweep locked a third of a real
+  deck and nothing in the data could tell those rows apart afterwards.
+
   A locked or wanted card may carry no text at all. An order does not need a
   justification to be an order — though the text is the part that stops the
   next run making the same mistake, so the screen asks for it.
@@ -41,7 +46,7 @@ defmodule Deckex.Decks.CardNote do
     field :card_name, :string
     field :note, :string
     field :stance, Ecto.Enum, values: @stances, default: :note
-    field :source, Ecto.Enum, values: [:review, :manual], default: :manual
+    field :source, Ecto.Enum, values: [:review, :manual, :sweep], default: :manual
 
     timestamps()
   end
