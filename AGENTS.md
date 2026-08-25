@@ -204,6 +204,17 @@ for *what* we are building and *why*. This file is *how*.
   `:rule`-sourced roles that no longer match, or a tightened rule is invisible
   and the catalogue only ever accumulates verdicts nothing would give today.
   `:ai` roles were paid for and `:manual` ones are the user's; neither is ours.
+- **Commander Spellbook is asked; EDHREC is not.** The difference is not
+  convenience, it is permission: Spellbook publishes a documented REST API,
+  its backend is MIT-licensed, and `find-my-combos` exists to be sent a
+  decklist. One request per deck whose list actually changed, debounced by the
+  worker into one per minute, with an identifying User-Agent. A combo is the
+  strongest statement this app can make about two cards being connected — not
+  "played together often" but "these, together, do this" — and it is the one
+  thing no per-card measurement was ever going to see. The **one card away**
+  half is the half an optimization wants, deduped to one line per card to add
+  and capped at twenty, with the total said out loud: an app that trims a list
+  without saying so has claimed there were twenty when there were ninety.
 - **We never request anything from EDHREC.** Their terms forbid scripted
   requests and reproduction (verified 2026-08-14). Reachable is not permitted —
   the Moxfield law, applied to a second site. No scraping, no pages, no lists,

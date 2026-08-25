@@ -12,7 +12,8 @@ defmodule Deckex.Decks.Deck do
 
   @fields ~w(name moxfield_url moxfield_public_id source color_identity status
              raw_decklist last_synced_at last_error notes archived_at description
-             dossier dossier_source dossier_stale dossier_updated_at)a
+             dossier dossier_source dossier_stale dossier_updated_at
+             combos combos_stale combos_updated_at)a
   @required ~w(name source status)a
 
   @type t :: %__MODULE__{}
@@ -40,6 +41,12 @@ defmodule Deckex.Decks.Deck do
     field :dossier_source, Ecto.Enum, values: [:scout, :manual]
     field :dossier_stale, :boolean, default: false
     field :dossier_updated_at, :utc_datetime
+
+    # The known combos this list assembles, and the ones it is one card from.
+    # Derived from the list like the dossier, and stale for the same reasons.
+    field :combos, :map
+    field :combos_stale, :boolean, default: false
+    field :combos_updated_at, :utc_datetime
 
     timestamps()
   end

@@ -67,6 +67,7 @@ defmodule DeckexWeb.DeckLive do
       drifted?: Versions.drifted?(deck),
       pending_edits: Edits.changelog(deck),
       card_notes: Decks.card_notes(deck),
+      combos: Deckex.Combos.for_deck(deck),
       ai_totals: Ledger.totals_for_deck(deck),
       page_title: deck.name
     )
@@ -1051,6 +1052,54 @@ defmodule DeckexWeb.DeckLive do
                   </span>
                 </li>
               </ul>
+            </div>
+          </section>
+
+          <%!-- Toda medição deste app lê uma carta por vez, e foi assim que
+                uma etapa cortou a Sam: sozinha ela é uma 2/4 que ninguém
+                joga. O que ela faz com o Prize Pig não está no texto de
+                nenhuma das duas nem no rank de nenhuma das duas. --%>
+          <section :if={@combos["assembled"] != [] or @combos["one_card_away"] != []}>
+            <div class="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <h2 class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+                Combos
+              </h2>
+              <span class="font-mono text-micro text-ink-faint">
+                Commander Spellbook{if @deck.combos_stale, do: " · a lista mudou, atualizando"}
+              </span>
+            </div>
+
+            <div class="space-y-4 rounded-xl border border-hairline-soft bg-surface p-6">
+              <div :if={@combos["assembled"] != []}>
+                <h3 class="mb-2 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+                  O deck já monta ({length(@combos["assembled"])})
+                </h3>
+                <ul class="space-y-1.5">
+                  <li :for={combo <- @combos["assembled"]} class="text-caption text-ink">
+                    <span class="font-semibold">{Enum.join(combo["cards"], " + ")}</span>
+                    <span class="text-ink-muted">→ {Enum.join(combo["produces"], ", ")}</span>
+                  </li>
+                </ul>
+              </div>
+
+              <%!-- A metade mais útil: cada linha é uma carta só que transforma
+                    cartas já compradas numa linha. --%>
+              <div :if={@combos["one_card_away"] != []} class="border-t border-hairline-soft pt-4">
+                <h3 class="mb-2 text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+                  A uma carta ({length(@combos["one_card_away"])})
+                </h3>
+                <ul class="space-y-1.5">
+                  <li :for={combo <- @combos["one_card_away"]} class="text-caption text-ink">
+                    <span class="font-semibold text-sev-info">+ {combo["missing"]}</span>
+                    <span class="text-ink-muted">
+                      com {combo["cards"] |> List.delete(combo["missing"]) |> Enum.join(" + ")} → {Enum.join(
+                        combo["produces"],
+                        ", "
+                      )}
+                    </span>
+                  </li>
+                </ul>
+              </div>
             </div>
           </section>
 

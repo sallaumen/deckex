@@ -41,6 +41,8 @@ defmodule Deckex.Consults.Briefing do
 
     #{card_notes_block(opts[:card_notes])}
 
+    #{combos_block(opts[:combos])}
+
     #{optimization_block(opts[:optimization])}
 
     #{plan_block(get_in(opts, [:optimization, :plan]))}
@@ -584,6 +586,85 @@ defmodule Deckex.Consults.Briefing do
     in `leitura`.
     """
   end
+
+  # Every measurement in this app reads one card at a time, and that is exactly
+  # how a stage cut Sam, Loyal Attendant: alone she is a 2/4 nobody plays, and
+  # the line she makes with Prize Pig lives in neither card's text nor either
+  # card's rank. A combo database is the one source that answers "what do these
+  # do together" as a fact rather than as an inference.
+  defp combos_block(nil), do: ""
+
+  defp combos_block(%{"assembled" => [], "one_card_away" => []}), do: ""
+
+  defp combos_block(combos) do
+    """
+    ## Combos conhecidos nesta lista
+
+    From Commander Spellbook, matched against the decklist below.
+
+    #{assembled_lines(combos["assembled"])}
+    #{one_away_lines(combos["one_card_away"], combos["one_card_away_total"])}
+    """
+  end
+
+  defp assembled_lines([]), do: ""
+
+  defp assembled_lines(combos) do
+    """
+    **The deck already assembles these (#{length(combos)}).** Every piece is in
+    the list. Treat those pieces as load-bearing: cutting one of these cards
+    does not lose a card, it loses the line — and the owner may not know he
+    owns it.
+
+    #{Enum.map_join(combos, "\n", &combo_line/1)}
+    """
+  end
+
+  defp one_away_lines([], _total), do: ""
+
+  defp one_away_lines(combos, total) do
+    """
+    **One card away (#{length(combos)}#{of_total(combos, total)}).** The deck holds every piece but one,
+    and the missing card is named. This is the sharpest answer available to
+    "what should this deck add": each of these turns cards already bought into
+    a line. Weigh them against the plan — a combo this deck does not want is
+    still a combo it does not want.
+
+    #{Enum.map_join(combos, "\n", &missing_line/1)}
+    """
+  end
+
+  # A trimmed list that does not say it was trimmed reads as the whole answer.
+  defp of_total(combos, total) when is_integer(total) and total > length(combos) do
+    " shown, of #{total} — the ones that produce the most"
+  end
+
+  defp of_total(_combos, _total), do: ""
+
+  defp combo_line(combo) do
+    "- #{Enum.join(combo["cards"], " + ")} → #{produces(combo)}#{prerequisite_note(combo)}"
+  end
+
+  defp missing_line(combo) do
+    "- **add #{combo["missing"]}** → with #{others(combo)} this produces #{produces(combo)}"
+  end
+
+  defp others(combo) do
+    combo["cards"] |> List.delete(combo["missing"]) |> Enum.join(" + ")
+  end
+
+  defp produces(combo) do
+    case combo["produces"] do
+      [] -> "a known line"
+      features -> Enum.join(features, ", ")
+    end
+  end
+
+  defp prerequisite_note(%{"prerequisites" => [_ | _] = notes}) do
+    " (needs: #{Enum.join(notes, "; ")})"
+  end
+
+  defp prerequisite_note(_none), do: ""
 
   # Above the dossier, and the order is the argument: the dossier is a model's
   # reading of the list, this is the person who built it saying what he was
