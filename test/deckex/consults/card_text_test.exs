@@ -135,6 +135,78 @@ defmodule Deckex.Consults.CardTextTest do
     end
   end
 
+  # `oracle_text` on a two-faced card is the FRONT only, and for sixteen cards
+  # in the owner's decks that meant the briefing described a different card
+  # than the one in the list — a W/B dual land read as mono-white, and a card
+  # whose back face reads "noncreature spells you control can't be countered"
+  # read as a one-shot counterspell. `card_faces` was in the catalogue the
+  # whole time.
+  describe "a card with two faces" do
+    test "carries both faces, each named" do
+      text =
+        briefing([
+          AnalysisFixture.entry(
+            name: "Brightclimb Pathway // Grimclimb Pathway",
+            oracle_text: "{T}: Add {W}.",
+            card_faces: [
+              %{"name" => "Brightclimb Pathway", "oracle_text" => "{T}: Add {W}."},
+              %{"name" => "Grimclimb Pathway", "oracle_text" => "{T}: Add {B}."}
+            ]
+          )
+        ])
+
+      assert text =~ "Brightclimb Pathway**"
+      assert text =~ "Add {W}"
+      assert text =~ "Grimclimb Pathway**"
+      assert text =~ "Add {B}"
+    end
+
+    # A land that reads as mono-white when it taps for black is a false fact,
+    # and a stage counting colour sources acts on it.
+    test "the back face is not silently dropped" do
+      text =
+        briefing([
+          AnalysisFixture.entry(
+            name: "Malevolent Hermit // Benevolent Geist",
+            oracle_text: "Counter target noncreature spell unless its controller pays {3}.",
+            card_faces: [
+              %{
+                "name" => "Malevolent Hermit",
+                "oracle_text" =>
+                  "Counter target noncreature spell unless its controller pays {3}."
+              },
+              %{
+                "name" => "Benevolent Geist",
+                "oracle_text" => "Noncreature spells you control can't be countered."
+              }
+            ]
+          )
+        ])
+
+      assert text =~ "can't be countered"
+    end
+
+    test "a face with no text of its own does not print an empty heading" do
+      text =
+        briefing([
+          AnalysisFixture.entry(
+            name: "Dusk // Dawn",
+            oracle_text: "Destroy all creatures with power 3 or greater.",
+            card_faces: [
+              %{
+                "name" => "Dusk",
+                "oracle_text" => "Destroy all creatures with power 3 or greater."
+              },
+              %{"name" => "Dawn", "oracle_text" => ""}
+            ]
+          )
+        ])
+
+      assert text =~ "power 3 or greater"
+      refute text =~ "**Dawn**"
+    end
+  end
+
   describe "the commander" do
     # The one card in play every single game, and the briefing used to name it
     # and stop. Its text is the deck's whole premise.

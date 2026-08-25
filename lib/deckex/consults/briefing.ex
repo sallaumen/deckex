@@ -1082,7 +1082,7 @@ defmodule Deckex.Consults.Briefing do
         body(entry.card) <>
         "\n  " <>
         facts(entry) <>
-        oracle_lines(entry.card.oracle_text)
+        oracle_lines(entry.card)
     end)
   end
 
@@ -1128,12 +1128,36 @@ defmodule Deckex.Consults.Briefing do
   defp changer_fact(%{game_changer: true}), do: "**GAME CHANGER**"
   defp changer_fact(_ordinary), do: ""
 
+  # **Both faces.** `oracle_text` on a two-faced card is the FRONT only, and
+  # for sixteen cards in the owner's decks that meant the briefing described a
+  # different card than the one in the list: Brightclimb Pathway read as a
+  # mono-white land when it is a W/B dual, and Malevolent Hermit's whole back
+  # face — "noncreature spells you control can't be countered" — was invisible
+  # to a stage being asked whether the deck had protection.
+  #
+  # `card_faces` was in the catalogue the entire time, fetched with every card.
+  defp oracle_lines(card) do
+    case faces(card) do
+      [] -> ""
+      [single] -> quoted(single.text)
+      several -> Enum.map_join(several, "", &("\n  **#{&1.name}** —" <> quoted(&1.text)))
+    end
+  end
+
+  defp faces(%{card_faces: [_ | _] = faces} = card) do
+    faces
+    |> Enum.map(&%{name: &1["name"] || card.name, text: &1["oracle_text"] || ""})
+    |> Enum.reject(&(&1.text == ""))
+  end
+
+  defp faces(%{oracle_text: text}) when is_binary(text) and text != "",
+    do: [%{name: nil, text: text}]
+
+  defp faces(_textless), do: []
+
   # Indented under its card so a hundred of them still read as a list rather
   # than as one wall of rules text.
-  defp oracle_lines(nil), do: ""
-  defp oracle_lines(""), do: ""
-
-  defp oracle_lines(text) do
+  defp quoted(text) do
     "\n" <> Enum.map_join(String.split(text, "\n"), "\n", &"  > #{&1}")
   end
 
