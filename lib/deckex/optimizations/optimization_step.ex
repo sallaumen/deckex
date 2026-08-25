@@ -26,8 +26,12 @@ defmodule Deckex.Optimizations.OptimizationStep do
   schema "optimization_steps" do
     field :position, :integer
 
+    # One kind per job, and the job is a *phase*, not a lens. Dividing stages
+    # by lens is what made them contradict: each had a partial view and a
+    # partial mandate, so each optimised its own number and the next one
+    # disagreed. A measured run applied 44 changes and undid 16 of them.
     field :kind, Ecto.Enum,
-      values: [:lens, :checkpoint, :validation, :reconstruction, :balance, :revisao]
+      values: [:plano, :execucao, :critico, :visao, :reconstruction, :balance, :revisao, :livre]
 
     field :lens, :string
     field :label, :string

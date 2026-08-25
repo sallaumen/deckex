@@ -109,6 +109,83 @@ defmodule Deckex.Consults.Schemas do
     }
   end
 
+  def for_lens(:plano) do
+    %{
+      "type" => "object",
+      "properties" => %{
+        "leitura" => %{
+          "type" => "string",
+          "description" =>
+            "2-4 frases, pt-BR: o que este deck faz de verdade, lendo as cartas — não o que o dossiê antigo diz."
+        },
+        "prioridades" => %{
+          "type" => "array",
+          "description" =>
+            "Os problemas desta lista em ordem de quanto custam partidas, o pior primeiro. Três a cinco.",
+          "items" => %{
+            "type" => "object",
+            "properties" => %{
+              "problema" => %{"type" => "string", "description" => "Uma frase, pt-BR."},
+              "porque_importa" => %{
+                "type" => "string",
+                "description" => "Uma frase, pt-BR: a partida que este problema faz você perder."
+              },
+              "como_resolver" => %{
+                "type" => "string",
+                "description" =>
+                  "Uma frase, pt-BR: a forma da solução. Pode nomear cartas como exemplo, mas isto não é a lista de mudanças."
+              }
+            },
+            "required" => ["problema", "porque_importa", "como_resolver"]
+          }
+        },
+        "nao_mexer" => %{
+          "type" => "string",
+          "description" =>
+            "Uma frase, pt-BR: o que esta rodada NÃO deve tocar, e por quê. É tão importante quanto o resto."
+        },
+        "plano" => %{
+          "type" => "string",
+          "description" => "Campo do dossiê: o plano do deck, pt-BR."
+        },
+        "sinergias" => %{
+          "type" => "string",
+          "description" =>
+            "Campo do dossiê: as interações que dão identidade, nomeando cartas, pt-BR."
+        },
+        "linhas_de_vitoria" => %{
+          "type" => "string",
+          "description" => "Campo do dossiê: como este deck fecha uma partida, pt-BR."
+        },
+        "fraquezas" => %{
+          "type" => "string",
+          "description" =>
+            "Campo do dossiê: só as fraquezas que os números acima NÃO mostram, pt-BR."
+        }
+      },
+      "required" => [
+        "leitura",
+        "prioridades",
+        "nao_mexer",
+        "plano",
+        "sinergias",
+        "linhas_de_vitoria",
+        "fraquezas"
+      ]
+    }
+  end
+
+  def for_lens(:critico) do
+    base = for_lens(:full)
+
+    put_in(base, ["properties", "veredito"], %{
+      "type" => "string",
+      "description" =>
+        "2-5 frases, pt-BR: o deck melhorou? Onde piorou? Que carta boa saiu e não devia? Julgue o resultado antes de propor qualquer correção."
+    })
+    |> Map.put("required", ["veredito", "leitura", "diagnosis"])
+  end
+
   def for_lens(:visao) do
     %{
       "type" => "object",

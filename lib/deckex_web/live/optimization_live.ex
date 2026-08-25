@@ -127,10 +127,10 @@ defmodule DeckexWeb.OptimizationLive do
     "#{stage_counter(optimization)} · Otimização · #{deck.name}"
   end
 
-  defp page_title(%{status: status} = optimization, deck) do
+  defp page_title(%{status: status}, deck) do
     prefix =
       case status do
-        :done -> "Concluída#{if optimization.outcome == "estabilizou", do: " (estabilizou)"}"
+        :done -> "Concluída"
         :awaiting_choice -> "Escolha uma direção"
         :paused -> "Pausada"
         :failed -> "Falhou"
@@ -351,14 +351,31 @@ defmodule DeckexWeb.OptimizationLive do
   # Spelled out because it writes over the deck's cards: the number is the one
   # thing that decides whether this is safe to click, and the sentence after it
   # is the reason it is — the list being replaced does not disappear.
-  defp apply_warning(deck, card_count, applied) do
+  defp apply_warning(deck, card_count, applied, optimization) do
     repeat =
       if applied, do: "Esta rodada já virou a v#{applied.number} deste deck. ", else: ""
 
-    repeat <>
+    regression(optimization) <>
+      repeat <>
       "Aplicar esta otimização em #{deck.name}? " <>
       "O deck passa a ter #{card_count} cartas, e a lista de agora fica guardada como versão."
   end
+
+  # A run that measured worse is still applicable — it is his deck and the
+  # engine's criticals are not the whole truth about a list — but it is not
+  # applicable by accident. The number goes in the dialog, first.
+  defp regression(%{status: :done} = optimization) do
+    case Optimizations.criticals_delta(optimization) do
+      {before, now} when now > before ->
+        "ATENÇÃO: esta rodada deixou o deck PIOR pelo que o motor mede — " <>
+          "críticos #{before}→#{now}. "
+
+      _same_or_better ->
+        ""
+    end
+  end
+
+  defp regression(_not_finished), do: ""
 
   defp elapsed_label(started_at, now) do
     minutes = DateTime.diff(now, started_at, :minute)
@@ -373,7 +390,7 @@ defmodule DeckexWeb.OptimizationLive do
   defp status_label(:pending), do: "na fila"
   defp status_label(:running), do: "consultando…"
   defp status_label(:done), do: "feita"
-  defp status_label(:skipped), do: "pulada — nada mudou desde o último checkpoint"
+  defp status_label(:skipped), do: "pulada"
   defp status_label(:failed), do: "falhou"
 
   defp from_label(%{contract: %{"from_version" => number}}) when is_integer(number),
@@ -575,7 +592,7 @@ defmodule DeckexWeb.OptimizationLive do
               type="button"
               phx-click="aplicar-no-deck"
               phx-disable-with="Aplicando…"
-              data-confirm={apply_warning(@deck, @card_count, @applied_version)}
+              data-confirm={apply_warning(@deck, @card_count, @applied_version, @optimization)}
               variant={if @applied_version, do: nil, else: "primary"}
             >
               {if @applied_version, do: "Aplicar de novo", else: "Aplicar no deck"}

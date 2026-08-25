@@ -105,7 +105,9 @@ defmodule DeckexWeb.VersionsLiveTest do
       deck = deck()
 
       {:ok, run} =
-        Optimizations.start(deck, %{}, [%{"kind" => "lens", "lens" => "full", "label" => "Tudo"}])
+        Optimizations.start(deck, %{}, [
+          %{"kind" => "execucao", "lens" => "execucao", "label" => "Tudo"}
+        ])
 
       {:ok, _} = Decks.add_card(deck, "Cultivate")
 

@@ -75,7 +75,7 @@ defmodule Deckex.Consults.ModelFloorTest do
     end
 
     test "at the floor it launches", %{deck: deck} do
-      recipe = [%{"kind" => "lens", "lens" => "mana_ramp", "label" => "Mana"}]
+      recipe = [%{"kind" => "execucao", "lens" => "execucao", "label" => "Mana"}]
 
       assert {:ok, _run} = Optimizations.start(deck, %{"model" => "fable"}, recipe)
     end

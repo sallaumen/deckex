@@ -1,18 +1,27 @@
 defmodule Deckex.Optimizations do
   @moduledoc """
-  The Otimizador: a pipeline of AI stages over a sandbox copy of a deck.
+  The Otimizador: three AI stages over a sandbox copy of a deck.
 
-  Each stage consults a model through one lens, the engine audits the answer,
-  and the clean changes are applied automatically — **to the sandbox, never to
-  the real deck**. Later stages see everything earlier stages did and may
-  revert it once, with a reason; the audit's flip-flop guard stops churn.
+  **Plan, execute, judge.** One stage reads the deck and decides what the round
+  is for; one stage makes every change against that plan; one stage judges the
+  result with the engine's before-and-after in hand and is the only one allowed
+  to correct it. The engine audits every answer and applies the clean changes
+  **to the sandbox, never to the real deck**.
 
-  See `docs/superpowers/specs/2026-08-14-otimizador-design.md`.
+  The earlier design divided the work by lens instead — mana, curve,
+  interaction, consistency, plus checkpoints to reconcile them — and that is
+  what made the stages contradict each other: each had a partial view and a
+  partial mandate. A measured run applied 44 changes and undid 16, and the
+  reverts were correct; the later stages were spending their budget fixing the
+  earlier ones. See `recipe/2`.
   """
 
+  alias Deckex.Analysis
   alias Deckex.Analysis.Bracket
   alias Deckex.Analysis.CardEntry
   alias Deckex.Analysis.DeckSnapshot
+  alias Deckex.Analysis.Report
+  alias Deckex.Analysis.ReportDiff
   alias Deckex.Budget
   alias Deckex.Cards
   alias Deckex.Cards.Name
@@ -72,60 +81,60 @@ defmodule Deckex.Optimizations do
   end
 
   @doc """
-  The default recipe — spec §4's nine stages, as data.
+  The stages, as data. Three of them, and each answers a different *kind* of
+  question.
 
-  The scout stage is included only when the deck's dossier is missing or
-  stale, decided here at build time: a skipped scout never appears as a stage
-  at all.
+  The old recipe had nine or ten, divided by lens — mana, curve, interaction,
+  consistency, then checkpoints to clean up after them. That division is what
+  made them contradict: every stage had a partial view and a partial mandate,
+  so each optimised its own number while the next one disagreed. A measured run
+  applied 44 changes and undid 16 of them, and the reverts were *right* — the
+  later stages were spending their budget correcting the earlier ones.
+
+  So the division is by **phase of work** instead:
+
+    1. `:plano` reads everything and changes nothing. It writes the diagnosis,
+       the priority order, and what this round is going to do — and it rewrites
+       the deck's dossier while it is there, which is why there is no scout
+       stage any more. Everything after it is bound to this document; it is the
+       through-line the old recipe never had.
+    2. `:execucao` makes **every** change, against that plan. One author means
+       an internally consistent answer by construction, and there is no later
+       lens stage left to revert it.
+    3. `:critico` judges the result with both measured reports in hand, and is
+       the only stage that may correct it.
+
+  `:livre` is one stage and `:revisao` is one stage; neither is automatic, so
+  neither counts against the three.
   """
   @spec recipe(Deck.t()) :: [map()]
   def recipe(%Deck{} = deck), do: recipe(deck, :refine)
 
   @doc """
-  The stages, as data.
+  The stages for one mode.
 
-  `:refine` opens with a scout only when the dossier is missing or stale.
-  `:reimagine` opens with the visions and never scouts: a reimagining does not
-  need the deck's current purpose written down first, and the dossier — when
-  there is one — is passed as context regardless.
-
-  Stages 3-10 of the reimagine recipe are the refine recipe verbatim, and that
-  is the point: once the direction is chosen and the big swap is done, making
-  the new deck good is the work the Otimizador already does well.
+  `:reimagine` replaces the plan with the owner's chosen direction — a vision
+  he picked IS the plan — and rebuilds against it before the same critic reads
+  the result.
   """
   @spec recipe(Deck.t(), :livre | :refine | :reimagine) :: [map()]
   def recipe(%Deck{} = _deck, :livre) do
-    [%{"kind" => "lens", "lens" => "livre", "label" => "Ajuste direto"}]
+    [%{"kind" => "livre", "lens" => "livre", "label" => "Ajuste direto"}]
   end
 
-  def recipe(%Deck{} = deck, :refine) do
-    scout =
-      if deck.dossier == nil or deck.dossier_stale do
-        [%{"kind" => "lens", "lens" => "scout", "label" => "Dossiê"}]
-      else
-        []
-      end
-
-    scout ++ tuning_stages()
+  def recipe(%Deck{} = _deck, :refine) do
+    [
+      %{"kind" => "plano", "lens" => "plano", "label" => "Plano"},
+      %{"kind" => "execucao", "lens" => "execucao", "label" => "Execução"},
+      %{"kind" => "critico", "lens" => "critico", "label" => "Crítico"}
+    ]
   end
 
   def recipe(%Deck{} = _deck, :reimagine) do
     [
-      %{"kind" => "lens", "lens" => "visao", "label" => "Visões"},
-      %{"kind" => "reconstruction", "lens" => "full", "label" => "Reconstrução"}
-    ] ++ tuning_stages()
-  end
-
-  defp tuning_stages do
-    [
-      %{"kind" => "lens", "lens" => "mana_ramp", "label" => "Mana"},
-      %{"kind" => "lens", "lens" => "speed_curve", "label" => "Early game"},
-      %{"kind" => "lens", "lens" => "interaction", "label" => "Interação"},
-      %{"kind" => "lens", "lens" => "consistency", "label" => "Consistência"},
-      %{"kind" => "checkpoint", "lens" => "full", "label" => "Estabilização 1"},
-      %{"kind" => "validation", "lens" => "matchup", "label" => "Matchups"},
-      %{"kind" => "validation", "lens" => "alinhamento", "label" => "Propósito"},
-      %{"kind" => "checkpoint", "lens" => "full", "label" => "Estabilização 2"}
+      %{"kind" => "visao", "lens" => "visao", "label" => "Visões"},
+      %{"kind" => "reconstruction", "lens" => "execucao", "label" => "Reconstrução"},
+      %{"kind" => "critico", "lens" => "critico", "label" => "Crítico"}
     ]
   end
 
@@ -706,6 +715,11 @@ defmodule Deckex.Optimizations do
           contract: optimization.contract,
           changelog: changelog(optimization, step),
           stage_kind: step.kind,
+          # The through-line, carried verbatim rather than summarised, and the
+          # engine's own before/after so the critic answers to a measurement
+          # instead of to its own impression.
+          plan: plan_of(optimization),
+          effect: if(step.kind == :critico, do: effect(optimization)),
           card_count: sandbox_size(optimization, step.list_before),
           # Only the ones he actually wrote on: a card marked and left without
           # a word is a card he read twice and had nothing to say about.
@@ -863,7 +877,7 @@ defmodule Deckex.Optimizations do
   # A vision answer proposes no changes and picks no direction — the owner
   # does that. The pipeline stops here rather than spending the next stage
   # against a direction nobody chose.
-  defp vision_step?(%OptimizationStep{lens: "visao"}), do: true
+  defp vision_step?(%OptimizationStep{kind: :visao}), do: true
   defp vision_step?(_step), do: false
 
   @doc "A stage's consult failed for good: the run pauses, paid work stays."
@@ -1005,45 +1019,11 @@ defmodule Deckex.Optimizations do
     end
   end
 
-  # Convergence (spec §4): a checkpoint is skipped when every stage since the
-  # previous checkpoint — inclusive — applied zero changes. A second look at
-  # an unchanged picture buys noise with money.
-  defp next_runnable(optimization, done_step) do
+  defp next_runnable(optimization, _done_step) do
     case Enum.find(optimization.steps, &(&1.status == :pending)) do
-      nil ->
-        :finished
-
-      %{kind: :checkpoint} = next ->
-        if stable_since_last_checkpoint?(optimization, next) do
-          skipped = next |> OptimizationStep.changeset(%{status: :skipped}) |> Repo.update!()
-          {:ok, refreshed} = fetch(optimization.id)
-
-          next_runnable(refreshed, %{skipped | list_before: done_step && list_after(done_step)})
-        else
-          {:ok, next}
-        end
-
-      next ->
-        {:ok, next}
+      nil -> :finished
+      next -> {:ok, next}
     end
-  end
-
-  defp stable_since_last_checkpoint?(optimization, upcoming) do
-    prior =
-      optimization.steps
-      |> Enum.filter(&(&1.position < upcoming.position and &1.status in [:done, :skipped]))
-      |> Enum.reverse()
-
-    # The segment ends at the previous checkpoint — inclusive — and never
-    # reaches past it: what a lens did BEFORE that checkpoint was already that
-    # checkpoint's business, not this one's.
-    segment =
-      case Enum.split_while(prior, &(&1.kind != :checkpoint)) do
-        {lenses, [checkpoint | _older]} -> [checkpoint | lenses]
-        {lenses, []} -> lenses
-      end
-
-    segment != [] and Enum.all?(segment, &(&1.applied == []))
   end
 
   # A run may not end on a list that cannot go on a table. The ordinary stages
@@ -1158,18 +1138,75 @@ defmodule Deckex.Optimizations do
   # list at 103 cards did not finish the job, and an outcome of "completo" on
   # an illegal deck is the app lying to the person who has to shuffle it.
   defp outcome_for(optimization) do
-    count = sandbox_size(optimization, current_list(optimization))
-
-    cond do
-      count != Balance.target() ->
-        "fechou em #{count} cartas, não em #{Balance.target()}"
-
-      match?(%{kind: :checkpoint, status: :skipped}, List.last(optimization.steps)) ->
-        "estabilizou"
-
-      true ->
-        "completo"
+    case sandbox_size(optimization, current_list(optimization)) do
+      count when count != 100 -> "fechou em #{count} cartas, não em #{Balance.target()}"
+      _hundred -> verdict(criticals_delta(optimization))
     end
+  end
+
+  # The plan stage's own answer, read back off its consult. Every stage after
+  # it gets it verbatim — a plan summarised is a plan the next stage gets to
+  # reinterpret, which is the whole failure this recipe replaced.
+  defp plan_of(%Optimization{steps: steps}) do
+    with %OptimizationStep{consult_id: consult_id} when is_binary(consult_id) <-
+           Enum.find(steps, &(&1.kind == :plano and &1.status == :done)),
+         {:ok, %{response: %{} = response}} <- Consults.fetch(consult_id) do
+      response
+    else
+      _no_plan_yet -> nil
+    end
+  end
+
+  @doc """
+  What the round did to the deck's critical findings: `{before, now}`.
+
+  Measured, not asserted. "Jamais deixar o deck pior" cannot be a sentence in a
+  prompt — a model that believes it improved the deck will say so either way —
+  so the engine computes both reports from the same baselines and the number is
+  what the run reports and what the critic is answerable to.
+  """
+  @spec criticals_delta(Optimization.t()) :: {non_neg_integer(), non_neg_integer()}
+  def criticals_delta(%Optimization{} = optimization) do
+    {before_report, after_report} = reports_around(optimization)
+
+    {Report.critical_count(before_report), Report.critical_count(after_report)}
+  end
+
+  @doc """
+  Which findings the round closed, opened and left standing.
+
+  This is the critic's mandate, and it is the reason the critic can be held to
+  "never worse": it is handed the exact list of what its own round broke, by
+  code, rather than being asked to notice.
+  """
+  @spec effect(Optimization.t()) :: ReportDiff.t()
+  def effect(%Optimization{} = optimization) do
+    {before_report, after_report} = reports_around(optimization)
+
+    ReportDiff.diff(before_report, after_report)
+  end
+
+  defp reports_around(%Optimization{} = optimization) do
+    {:ok, deck} = Decks.fetch_deck(optimization.deck_id)
+    commanders = current_commanders(optimization)
+    baselines = Settings.baselines()
+
+    {
+      optimization.list_original |> snapshot_for(commanders, deck) |> Analysis.report(baselines),
+      optimization
+      |> current_list()
+      |> snapshot_for(commanders, deck)
+      |> Analysis.report(baselines)
+    }
+  end
+
+  # Said as a fact, in the owner's language, because it is the line he reads
+  # before deciding whether to apply half an hour of model time to his deck.
+  defp verdict({same, same}), do: "completo · críticos #{same}, sem mudança"
+  defp verdict({before, now}) when now < before, do: "completo · críticos #{before}→#{now}"
+
+  defp verdict({before, now}) do
+    "ATENÇÃO: o deck saiu pior — críticos #{before}→#{now}"
   end
 
   defp fork_list(optimization, nil), do: current_list(optimization)

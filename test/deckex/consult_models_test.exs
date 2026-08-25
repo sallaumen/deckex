@@ -116,12 +116,14 @@ defmodule Deckex.ConsultModelsTest do
           lens not in [
             :finding,
             :scout,
-            :alinhamento,
             :visao,
             :balanco,
             :revisao,
             :livre,
-            :pilares
+            :pilares,
+            :plano,
+            :execucao,
+            :critico
           ] do
         assert Map.has_key?(labels, lens), "sem rótulo para #{lens}"
       end

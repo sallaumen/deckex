@@ -174,7 +174,7 @@ defmodule Deckex.Optimizations.SandboxTest do
 
       {:ok, run} =
         Optimizations.start(source, %{}, [
-          %{"kind" => "lens", "lens" => "full", "label" => "Tudo"}
+          %{"kind" => "execucao", "lens" => "execucao", "label" => "Tudo"}
         ])
 
       {:ok, saved} = Optimizations.save_as_deck(run)
@@ -194,7 +194,7 @@ defmodule Deckex.Optimizations.SandboxTest do
 
       {:ok, run} =
         Optimizations.start(source, %{}, [
-          %{"kind" => "lens", "lens" => "full", "label" => "Tudo"}
+          %{"kind" => "execucao", "lens" => "execucao", "label" => "Tudo"}
         ])
 
       {:ok, saved} = Optimizations.save_as_deck(run)

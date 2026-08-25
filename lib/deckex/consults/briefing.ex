@@ -153,16 +153,6 @@ defmodule Deckex.Consults.Briefing do
     """
   end
 
-  defp task_block(:alinhamento, opts) do
-    """
-    #{alignment_target(get_in(opts, [:optimization, :contract]) || %{})}
-
-    Propose changes ONLY where the optimization drifted from it — a card that
-    serves the plan poorly, a line of victory that got weakened, an identity
-    the changes diluted. If nothing drifted, say so and propose nothing.
-    """
-  end
-
   defp task_block(:visao, _opts) do
     """
     Propose **three different directions** this deck could take to become
@@ -319,6 +309,100 @@ defmodule Deckex.Consults.Briefing do
     """
   end
 
+  # Reads everything, changes nothing. The whole reason this stage exists is
+  # that the old recipe had nobody deciding what a round was *for* — every
+  # stage started cutting immediately, from its own partial view, and the
+  # stages after it spent their budget disagreeing.
+  defp task_block(:plano, _opts) do
+    """
+    Plan this round. **Propose no cuts and no adds** — a later stage makes every
+    change, and it will be bound to what you write here.
+
+    Two things, both required.
+
+    **The plan.** Name the three to five problems that actually cost this deck
+    games, worst first, reading the card text above rather than the old dossier.
+    For each: what it is, which game it loses, and the *shape* of the fix. You
+    may name cards as examples; you are not choosing them.
+
+    Then `nao_mexer`: what this round must leave alone. That field is not
+    filler. A round that improves the curve by dismantling the engine is the
+    failure this pipeline keeps producing, and you are the only stage in a
+    position to forbid it before it happens.
+
+    **The dossier.** Rewrite the deck's four standing fields — `plano`,
+    `sinergias`, `linhas_de_vitoria`, `fraquezas` — from the list as it is now.
+    They outlive this round and every future briefing carries them, so a card
+    named there that is not in the decklist above is a mistake that costs
+    somebody a paragraph later.
+    """
+  end
+
+  defp task_block(:execucao, opts) do
+    """
+    #{plan_block(get_in(opts, [:optimization, :plan]))}
+
+    Make **every** change this round is going to make, in one answer. Nothing
+    runs after you except a critic reading the result — there is no second pass
+    to finish a job you left half done, and no later stage that will revert
+    you.
+
+    - Work the plan above, in its order. The first problem is the one that costs
+      the most games.
+    - Respect `nao_mexer`. A change it forbids is a change the owner throws the
+      whole round out for.
+    - **#{Balance.target()} cards exactly** when you are done: every add is paid
+      for by a cut, unless the count above says the list is off and needs
+      closing.
+    - Aim for **8 to 15 changes**. Fewer does not pay for the round; more than
+      twenty is a different deck, and he cannot judge twenty-five cards one by
+      one.
+    - Every cut names what it was failing to do, and every add names the
+      problem from the plan it answers.
+    """
+  end
+
+  # The stage the owner asked for by name: complete, detailed, wants the deck
+  # perfect, does not let a good card slip out, and **may not leave the deck
+  # worse than it found it**. That last one is measured by the engine and
+  # handed to it below, because a model asked to promise it will simply promise.
+  defp task_block(:critico, opts) do
+    optimization = opts[:optimization] || %{}
+
+    """
+    A round just ran on this deck. **Judge it, then fix it.** You are the last
+    stage; what you leave is what the owner sees.
+
+    #{plan_block(optimization[:plan])}
+
+    #{effect_block(optimization[:effect])}
+
+    ## What to do
+
+    Write `veredito` **first**, before proposing anything: did this deck get
+    better? Where did it get worse? Which good card went out that should not
+    have, and which obvious card is still missing? Say it plainly — an
+    approving verdict on a round that broke something is worth nothing to him.
+
+    Then correct it. Your changes are held to a harder standard than the ones
+    above, because nobody checks you:
+
+    - **The deck may not end worse than it started.** Every finding listed as
+      *introduced* above is damage this round did, and closing it is your first
+      job. If you cannot close one without breaking something worse, say which
+      in `veredito` and say why.
+    - A card cut above that you would put back: put it back, and pay for it by
+      cutting what the round should have cut instead.
+    - A card the deck plainly wants and nobody suggested: add it. "The previous
+      stage did not think of it" is not a reason to leave it out.
+    - Change nothing that is merely *different from your taste*. The round
+      already argued these cards; re-litigating them costs the owner a stage
+      and moves nothing.
+
+    Land on exactly #{Balance.target()} cards.
+    """
+  end
+
   defp task_block(:scout, _opts) do
     """
     Read this deck and write its strategic dossier — nothing else.
@@ -339,6 +423,55 @@ defmodule Deckex.Consults.Briefing do
     Work the findings above. For each one, name specific cards to **cut** from
     the list and specific cards to **add**, and say why in one sentence each.
     """
+  end
+
+  # The through-line. Carried verbatim into both stages after it, because a plan
+  # summarised is a plan the next stage gets to reinterpret.
+  defp plan_block(nil), do: ""
+
+  defp plan_block(plan) do
+    priorities =
+      plan
+      |> Map.get("prioridades", [])
+      |> Enum.with_index(1)
+      |> Enum.map_join("\n", fn {item, index} ->
+        "#{index}. **#{item["problema"]}** — #{item["porque_importa"]} " <>
+          "Forma da solução: #{item["como_resolver"]}"
+      end)
+
+    """
+    ## O plano desta rodada
+
+    #{plan["leitura"]}
+
+    #{priorities}
+
+    **Não mexer:** #{plan["nao_mexer"]}
+    """
+  end
+
+  # Measured by the engine from the same baselines, before and after. This is
+  # what makes "never leave the deck worse" a rule rather than a wish: the
+  # critic is handed the list of what its own round broke, by code, instead of
+  # being asked to notice.
+  defp effect_block(nil), do: ""
+
+  defp effect_block(effect) do
+    """
+    ## O que a rodada fez, medido pelo motor
+
+    #{finding_lines("Resolveu", effect.resolved, "these are the round's real gains")}
+    #{finding_lines("INTRODUZIU", effect.introduced, "**this is damage this round did, and closing it is your first job**")}
+    #{finding_lines("Continua aberto", effect.remaining, "the round did not reach these")}
+    """
+  end
+
+  defp finding_lines(_label, [], _note), do: ""
+
+  defp finding_lines(label, findings, note) do
+    body = Enum.map_join(findings, "\n", &"- #{&1.code} — #{&1.title}")
+
+    "**#{label} (#{length(findings)})** — #{note}:\n#{body}\n"
   end
 
   # A round launched with no text is not an empty request: it is "do what I
@@ -370,22 +503,6 @@ defmodule Deckex.Consults.Briefing do
 
   defp balance_order(_count, gap) do
     "Add exactly **#{gap}** card(s) and cut none."
-  end
-
-  defp alignment_target(%{"visao" => vision}) when is_map(vision) do
-    """
-    The chosen direction — **#{vision["nome"]}** — is the reference. Compare
-    the current list against it: does this deck now do what that direction
-    promised? The old dossier is not the target; abandoning it was the point.
-    """
-  end
-
-  defp alignment_target(_no_vision) do
-    """
-    The dossier above is the **fixed reference**: it was written before any of
-    this optimization's changes. Compare the current list against it. Does
-    this deck still do what its dossier says it does?
-    """
   end
 
   # The bracket is the vocabulary players actually use at a table, and the
@@ -559,6 +676,19 @@ defmodule Deckex.Consults.Briefing do
   # The scout only reads, so most of the consulting rules are noise to it.
   # Read-only, like the scout: every rule about cuts, adds, ceilings and colour
   # identity is noise to a stage that proposes no change.
+  # Read-only: every rule about cuts, adds, ceilings and colour identity is
+  # noise to a stage that is forbidden from proposing a change.
+  defp rules_block(:plano, _report, _opts) do
+    """
+    Search the web where it helps you understand what a card does in this deck.
+
+    Propose no cuts and no adds. Name cards only as examples of a solution's
+    shape, and only cards that make sense in this colour identity.
+
+    Answer in **Portuguese (pt-BR)**, but never translate a card name.
+    """
+  end
+
   defp rules_block(:pilares, _report, _opts) do
     """
     Search the web where it helps you understand what a card does in this deck,
@@ -857,8 +987,8 @@ defmodule Deckex.Consults.Briefing do
   # about the whole deck and must see the whole diagnosis — this used to be
   # inverted, and the cost was severe: `:visao`, which sets the direction nine
   # stages then execute, was told "the deck passed every lens" about a deck
-  # with two criticals. `:upgrade`, `:budget`, `:matchup` and `:alinhamento`
-  # were blind the same way.
+  # with two criticals. `:upgrade`, `:budget` and `:matchup` were blind the
+  # same way.
   @narrow_lenses [:speed_curve, :mana_ramp, :interaction, :consistency]
 
   defp scoped_findings(report, lens, _code) when lens in @narrow_lenses do

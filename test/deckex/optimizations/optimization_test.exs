@@ -13,7 +13,7 @@ defmodule Deckex.Optimizations.OptimizationTest do
 
     assert fetched.status == :running
     assert fetched.contract["ceilings"]["land"] == 200
-    assert [%{position: 1, kind: :lens, lens: "mana_ramp"}] = fetched.steps
+    assert [%{position: 1, kind: :execucao, lens: "execucao"}] = fetched.steps
     assert step.feedback == %{}
   end
 
@@ -45,13 +45,13 @@ defmodule Deckex.Optimizations.OptimizationTest do
   end
 
   describe "the reimagine recipe" do
-    test "opens with the visions and closes with two checkpoints" do
+    test "opens with the visions, rebuilds, and closes with the critic" do
       recipe = Deckex.Optimizations.recipe(insert(:deck), :reimagine)
 
-      assert hd(recipe)["lens"] == "visao"
+      assert hd(recipe)["kind"] == "visao"
       assert Enum.at(recipe, 1)["kind"] == "reconstruction"
-      assert List.last(recipe)["kind"] == "checkpoint"
-      assert length(recipe) == 10
+      assert List.last(recipe)["kind"] == "critico"
+      assert length(recipe) == 3
     end
 
     test "it never scouts — a reimagining does not need the old purpose written down" do
@@ -63,7 +63,7 @@ defmodule Deckex.Optimizations.OptimizationTest do
     test "refine is unchanged" do
       deck = insert(:deck, dossier: %{"plano" => "x"}, dossier_stale: false)
 
-      assert length(Deckex.Optimizations.recipe(deck, :refine)) == 8
+      assert length(Deckex.Optimizations.recipe(deck, :refine)) == 3
       assert Deckex.Optimizations.recipe(deck) == Deckex.Optimizations.recipe(deck, :refine)
     end
   end

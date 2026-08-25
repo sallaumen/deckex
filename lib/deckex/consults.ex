@@ -95,7 +95,10 @@ defmodule Deckex.Consults do
   #
   # `:visao` is deliberately NOT here: it carries no cuts and no adds either,
   # but it names what the owner will buy and steers nine stages after it.
-  @reads_only [:scout, :bracket, :pilares]
+  # `:plano` belongs here for the same reason: it reads the whole deck and is
+  # forbidden from proposing a single card change. The stages that DO change
+  # the deck — `:execucao` and `:critico` — are deliberately not here.
+  @reads_only [:scout, :bracket, :pilares, :plano]
 
   @doc """
   The models allowed to propose a card change, strongest first.
@@ -308,9 +311,14 @@ defmodule Deckex.Consults do
 
   # A scout's answer IS the dossier. Writing it here — in the background job
   # that already ran — is what lets the deck page only ever read.
-  defp deliver_dossier(%Consult{lens: :scout} = consult) do
+  #
+  # The plan stage writes it too, and that is why there is no scout stage in
+  # the recipe any more: a stage that has just read the whole deck to plan the
+  # round can emit the four dossier fields for almost nothing, and a dossier
+  # rewritten on every run is a dossier that cannot go stale between runs.
+  defp deliver_dossier(%Consult{lens: lens} = consult) when lens in [:scout, :plano] do
     {:ok, deck} = Decks.fetch_deck(consult.deck_id)
-    {:ok, _deck} = Decks.put_dossier(deck, consult.response)
+    {:ok, _deck} = Decks.put_dossier(deck, Map.take(consult.response, Decks.dossier_fields()))
 
     consult
   end

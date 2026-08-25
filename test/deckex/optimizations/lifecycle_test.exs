@@ -51,9 +51,22 @@ defmodule Deckex.Optimizations.LifecycleTest do
   end
 
   describe "recipe/1" do
-    test "includes the scout only when the dossier is missing or stale" do
+    # Three, divided by phase of work rather than by lens. The old recipe's
+    # nine lens-and-checkpoint stages each had a partial view and a partial
+    # mandate, and a measured run applied 44 changes and undid 16 of them —
+    # the later stages spending their budget correcting the earlier ones.
+    test "is a plan, an execution and a critic" do
+      assert [
+               %{"kind" => "plano", "label" => "Plano"},
+               %{"kind" => "execucao", "label" => "Execução"},
+               %{"kind" => "critico", "label" => "Crítico"}
+             ] = Optimizations.recipe(deck())
+    end
+
+    # The plan stage rewrites the dossier while it is reading the deck to plan
+    # the round, so there is no scout stage left to schedule or skip.
+    test "does not depend on whether the dossier is fresh" do
       bare = deck()
-      assert %{"lens" => "scout"} = hd(Optimizations.recipe(bare))
 
       {:ok, fresh} =
         Decks.put_dossier(bare, %{
@@ -63,16 +76,12 @@ defmodule Deckex.Optimizations.LifecycleTest do
           "fraquezas" => "f"
         })
 
-      refute Enum.any?(Optimizations.recipe(fresh), &(&1["lens"] == "scout"))
-
-      {:ok, _card} = Decks.add_card(fresh, "Forest")
-      {:ok, stale} = Decks.fetch_deck(fresh.id)
-      assert %{"lens" => "scout"} = hd(Optimizations.recipe(stale))
+      assert Optimizations.recipe(bare) == Optimizations.recipe(fresh)
+      refute Enum.any?(Optimizations.recipe(bare), &(&1["lens"] == "scout"))
     end
 
-    test "ends with the second stabilization checkpoint" do
-      assert %{"kind" => "checkpoint", "label" => "Estabilização 2"} =
-               List.last(Optimizations.recipe(deck()))
+    test "the critic is last, because nothing may run after the judgement" do
+      assert %{"kind" => "critico"} = List.last(Optimizations.recipe(deck()))
     end
   end
 
@@ -101,11 +110,11 @@ defmodule Deckex.Optimizations.LifecycleTest do
     end
 
     test "a recipe override replaces the default, for tests and variants" do
-      recipe = [%{"kind" => "checkpoint", "lens" => "full", "label" => "Só uma"}]
+      recipe = [%{"kind" => "critico", "lens" => "critico", "label" => "Só uma"}]
 
       {:ok, optimization} = Optimizations.start(deck(), %{}, recipe)
 
-      assert [%{label: "Só uma", kind: :checkpoint}] = optimization.steps
+      assert [%{label: "Só uma", kind: :critico}] = optimization.steps
     end
   end
 
