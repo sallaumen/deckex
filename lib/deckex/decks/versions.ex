@@ -20,6 +20,7 @@ defmodule Deckex.Decks.Versions do
 
   alias Deckex.Cards
   alias Deckex.Cards.Name
+  alias Deckex.Combos
   alias Deckex.Decks.Deck
   alias Deckex.Decks.DeckCard
   alias Deckex.Decks.DeckQuery
@@ -29,6 +30,7 @@ defmodule Deckex.Decks.Versions do
   alias Deckex.Events
   alias Deckex.Money
   alias Deckex.Repo
+  alias Deckex.Workers.ComboWorker
 
   @doc "Every version of a deck, newest first."
   @spec list(Deck.t()) :: [DeckVersion.t()]
@@ -234,7 +236,7 @@ defmodule Deckex.Decks.Versions do
     :ok = Edits.clear(deck)
 
     {:ok, restored} = DeckQuery.fetch_deck(deck.id)
-    restored = stale_dossier(restored, was)
+    restored = list_replaced(restored, was)
 
     Events.broadcast_deck_updated(restored)
 
@@ -254,17 +256,27 @@ defmodule Deckex.Decks.Versions do
   #
   # A restore that lands on the identical list changed nothing, and saying it
   # did would send the owner to regenerate a dossier that is still correct.
-  defp stale_dossier(%Deck{dossier: nil} = deck, _was), do: deck
-  defp stale_dossier(%Deck{dossier_stale: true} = deck, _was), do: deck
-
-  defp stale_dossier(%Deck{} = deck, {was_commanders, was_rows}) do
+  defp list_replaced(%Deck{} = deck, {was_commanders, was_rows}) do
     {commanders, rows} = working_state(deck)
 
     if commanders == was_commanders and normalize(rows) == normalize(was_rows) do
       deck
     else
-      deck |> Deck.changeset(%{dossier_stale: true}) |> Repo.update!()
+      # The combos refresh themselves — one request, debounced — while the
+      # dossier only flags itself, because regenerating that one costs a
+      # consult and is the owner's call.
+      :ok = Combos.mark_stale(deck)
+      {:ok, _job} = ComboWorker.enqueue(deck.id)
+
+      stale_dossier(deck)
     end
+  end
+
+  defp stale_dossier(%Deck{dossier: nil} = deck), do: deck
+  defp stale_dossier(%Deck{dossier_stale: true} = deck), do: deck
+
+  defp stale_dossier(%Deck{} = deck) do
+    deck |> Deck.changeset(%{dossier_stale: true}) |> Repo.update!()
   end
 
   defp insert_card!(deck, card, quantity, board) do

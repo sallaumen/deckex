@@ -32,6 +32,7 @@ config :deckex, Oban, testing: :manual
 config :deckex, Deckex.Scryfall.Client, adapter: Deckex.Scryfall.Mock
 config :deckex, Deckex.AI.Client, adapter: Deckex.AI.Mock
 config :deckex, Deckex.Moxfield.Client, adapter: Deckex.Moxfield.Mock
+config :deckex, Deckex.Spellbook.Client, adapter: Deckex.Spellbook.Mock
 
 config :deckex, Deckex.Moxfield.Http, req_options: [plug: {Req.Test, Deckex.Moxfield.Http}]
 
