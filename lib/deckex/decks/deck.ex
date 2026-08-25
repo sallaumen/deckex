@@ -11,7 +11,7 @@ defmodule Deckex.Decks.Deck do
   import Ecto.Changeset
 
   @fields ~w(name moxfield_url moxfield_public_id source color_identity status
-             raw_decklist last_synced_at last_error notes archived_at
+             raw_decklist last_synced_at last_error notes archived_at description
              dossier dossier_source dossier_stale dossier_updated_at)a
   @required ~w(name source status)a
 
@@ -29,6 +29,11 @@ defmodule Deckex.Decks.Deck do
     field :last_error, :string
     field :notes, :string
     field :archived_at, :utc_datetime
+
+    # His words about what this deck is for. Not the dossier: the dossier is
+    # the app's reading and a consult rewrites it, this is his and nothing
+    # overwrites it.
+    field :description, :string
 
     # The scout's strategic reading — see the 2026-08-14 meta-prompt spec.
     field :dossier, :map

@@ -35,6 +35,8 @@ defmodule Deckex.Consults.Briefing do
 
     #{bracket_block(report)}
 
+    #{description_block(opts[:description])}
+
     #{dossier_block(lens, opts)}
 
     #{card_notes_block(opts[:card_notes])}
@@ -52,19 +54,23 @@ defmodule Deckex.Consults.Briefing do
   end
 
   defp deck_block(report, snapshot) do
-    commanders =
-      case snapshot.commanders do
-        [] -> "none declared"
-        entries -> Enum.map_join(entries, ", ", & &1.card.name)
-      end
-
     """
     ## The deck
 
     - Name: #{report.deck_name}
-    - Commander: #{commanders}
     - Colour identity: #{identity(report)}
+    #{commander_block(snapshot.commanders)}
     """
+  end
+
+  # The one card that is in play every single game, and for most of this app's
+  # life the briefing named it and stopped. Its text is the deck's whole
+  # premise; a stage that has to remember what the commander does is a stage
+  # guessing at the plan it is being asked to serve.
+  defp commander_block([]), do: "- Commander: none declared"
+
+  defp commander_block(entries) do
+    "\n### Commander\n\n#{card_entries(entries)}"
   end
 
   defp measurements_block(report, lens) do
@@ -432,6 +438,28 @@ defmodule Deckex.Consults.Briefing do
     """
   end
 
+  # Above the dossier, and the order is the argument: the dossier is a model's
+  # reading of the list, this is the person who built it saying what he was
+  # going for. When the two disagree about *intent*, he is not wrong — it is
+  # his deck. When they disagree about *fact*, the list settles it.
+  defp description_block(nil), do: ""
+  defp description_block(""), do: ""
+
+  defp description_block(description) do
+    """
+    ## O que o dono diz que este deck é
+
+    #{description}
+
+    These are his words about his own deck, and they are the **intent** — what
+    he is trying to build. Nothing here is a measurement, so the list can
+    contradict it on facts and the list wins on those; say so plainly when it
+    does. But it cannot contradict him on what he *wants*. A change that makes
+    the deck better at something he did not ask for, at the cost of the thing
+    he did, is a change he will throw out along with the rest of the round.
+    """
+  end
+
   # The owner correcting a card is the most expensive knowledge this app holds
   # — it cost him a run to notice and a review to say. It goes in every
   # briefing about this deck, above every measurement, because a model that
@@ -780,17 +808,45 @@ defmodule Deckex.Consults.Briefing do
     "## Findings\n\n#{body}"
   end
 
+  # **With the rules text.** For most of this app's life the decklist was a
+  # hundred lines of name, mana cost and type line, and every model that ever
+  # read one was working from memory about what the cards actually do. That is
+  # the single cause behind the worst failures the owner has hit: a stage cut
+  # Jaheira without knowing she turns Food into mana creatures; a stage cut Sam,
+  # Loyal Attendant — "Creature — Halfling Peasant", said the briefing —
+  # without knowing she makes Food abilities cost {1} less, which is half of an
+  # infinite combo with Prize Pig; a stage invented Austere Command's modes and
+  # the next stage had to spend itself undoing the add.
+  #
+  # Every one of those texts was already in the catalogue, fetched from
+  # Scryfall at import and never sent. A hundred-card deck costs about 3.5k
+  # tokens of rules text against the 30-90k a stage already spends. There is no
+  # trade-off here; there was only an omission.
+  #
+  # Nothing is truncated. Half a card's text is how you produce a *new*
+  # misreading, and the long cards are exactly the ones being misread.
   defp decklist_block(snapshot) do
-    lines =
-      snapshot.main
-      |> Enum.sort_by(& &1.card.name)
-      |> Enum.map_join("\n", fn entry ->
-        cost = entry.card.mana_cost || "no cost"
+    "## The full decklist\n\n#{card_entries(snapshot.main)}"
+  end
 
-        "#{entry.quantity} #{entry.card.name} — #{cost} — #{entry.card.type_line}"
-      end)
+  defp card_entries(entries) do
+    entries
+    |> Enum.sort_by(& &1.card.name)
+    |> Enum.map_join("\n\n", fn entry ->
+      cost = entry.card.mana_cost || "no cost"
 
-    "## The full decklist\n\n```\n#{lines}\n```"
+      "#{entry.quantity} **#{entry.card.name}** — #{cost} — #{entry.card.type_line}" <>
+        oracle_lines(entry.card.oracle_text)
+    end)
+  end
+
+  # Indented under its card so a hundred of them still read as a list rather
+  # than as one wall of rules text.
+  defp oracle_lines(nil), do: ""
+  defp oracle_lines(""), do: ""
+
+  defp oracle_lines(text) do
+    "\n" <> Enum.map_join(String.split(text, "\n"), "\n", &"  > #{&1}")
   end
 
   defp scoped_findings(report, :finding, code) when is_binary(code) do

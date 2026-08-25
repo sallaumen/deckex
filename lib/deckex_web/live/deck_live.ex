@@ -120,6 +120,12 @@ defmodule DeckexWeb.DeckLive do
     {:noreply, start_consult(socket, :scout, [])}
   end
 
+  def handle_event("descricao", %{"descricao" => description}, socket) do
+    {:ok, saved} = Decks.put_description(socket.assigns.deck, description)
+
+    {:noreply, assign_deck(socket, saved)}
+  end
+
   def handle_event("salvar-dossie", %{"dossier" => params}, socket) do
     {:ok, _deck} = Decks.edit_dossier(socket.assigns.deck, params)
     {:ok, fresh} = Decks.fetch_deck(socket.assigns.deck.id)
@@ -409,6 +415,12 @@ defmodule DeckexWeb.DeckLive do
 
   defp dossier_source_label(:scout), do: "escrito pelo scout"
   defp dossier_source_label(:manual), do: "editado por você"
+
+  # A function, not an inline string: the formatter mangles multi-line
+  # attribute literals (the placeholder law from the import screen).
+  defp descricao_placeholder do
+    "ex.: deck de comida com a Sam e o Frodo. A graça é o loop de Food — a Sam faz as habilidades de Food custarem {1} a menos, e com o Prize Pig isso vira mana infinita. Não é pra ser um deck justo, mas também não quero cEDH."
+  end
 
   defp blank_to_nil(nil), do: nil
   defp blank_to_nil(""), do: nil
@@ -1040,6 +1052,42 @@ defmodule DeckexWeb.DeckLive do
                 </li>
               </ul>
             </div>
+          </section>
+
+          <%!-- Acima do dossiê de propósito, e a ordem é o argumento: o dossiê
+                é a leitura de um modelo sobre a lista, isto é quem montou o
+                deck dizendo o que queria. Quando os dois discordam sobre
+                intenção, ele não está errado — o deck é dele. --%>
+          <section>
+            <div class="mb-3 flex flex-wrap items-baseline gap-x-3">
+              <h2 class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
+                Sua descrição
+              </h2>
+              <span class="font-mono text-micro text-ink-faint">
+                entra em toda consulta deste deck
+              </span>
+            </div>
+
+            <.form
+              for={%{}}
+              id="descricao"
+              phx-change="descricao"
+              class="rounded-xl border border-hairline-soft bg-surface p-6"
+            >
+              <label for="deck-descricao" class="sr-only">O que é esse deck</label>
+              <textarea
+                id="deck-descricao"
+                name="descricao"
+                rows="4"
+                phx-debounce="blur"
+                placeholder={descricao_placeholder()}
+                class="w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-caption text-ink placeholder:text-ink-faint"
+              >{@deck.description}</textarea>
+              <p class="mt-2 max-w-[70ch] text-micro text-ink-muted">
+                O que o deck quer fazer, o que não pode sair, o que você não quer que mexam. Salva
+                sozinho quando você sai do campo.
+              </p>
+            </.form>
           </section>
 
           <section>

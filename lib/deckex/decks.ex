@@ -517,6 +517,28 @@ defmodule Deckex.Decks do
   @spec card_rules(Deck.t()) :: CardRules.groups()
   def card_rules(%Deck{} = deck), do: deck |> card_notes() |> CardRules.split()
 
+  @doc """
+  Records what the owner says this deck is for, in his own words.
+
+  Blank erases it rather than storing an empty paragraph: a description nobody
+  wrote should read as absent everywhere, not as a heading with nothing under
+  it.
+  """
+  @spec put_description(Deck.t(), String.t() | nil) :: {:ok, Deck.t()}
+  def put_description(%Deck{} = deck, description) do
+    trimmed =
+      case String.trim(description || "") do
+        "" -> nil
+        text -> text
+      end
+
+    saved = deck |> Deck.changeset(%{description: trimmed}) |> Repo.update!()
+
+    Events.broadcast_deck_updated(saved)
+
+    {:ok, saved}
+  end
+
   @doc "The cards this deck's rules protect from being cut, by name."
   @spec locked_cards(Deck.t()) :: [String.t()]
   def locked_cards(%Deck{} = deck), do: deck |> card_notes() |> CardRules.names(:locked)
