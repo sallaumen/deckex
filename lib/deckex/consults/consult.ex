@@ -32,6 +32,7 @@ defmodule Deckex.Consults.Consult do
     :pilares,
     :plano,
     :execucao,
+    :reconstrucao,
     :critico
   ]
 
