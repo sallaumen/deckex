@@ -133,7 +133,7 @@ defmodule Deckex.Optimizations do
   def recipe(%Deck{} = _deck, :reimagine) do
     [
       %{"kind" => "visao", "lens" => "visao", "label" => "Visões"},
-      %{"kind" => "reconstruction", "lens" => "execucao", "label" => "Reconstrução"},
+      %{"kind" => "reconstruction", "lens" => "reconstrucao", "label" => "Reconstrução"},
       %{"kind" => "critico", "lens" => "critico", "label" => "Crítico"}
     ]
   end

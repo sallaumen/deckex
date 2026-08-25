@@ -123,6 +123,7 @@ defmodule Deckex.ConsultModelsTest do
             :pilares,
             :plano,
             :execucao,
+            :reconstrucao,
             :critico
           ] do
         assert Map.has_key?(labels, lens), "sem rótulo para #{lens}"

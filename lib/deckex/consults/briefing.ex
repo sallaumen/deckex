@@ -403,6 +403,40 @@ defmodule Deckex.Consults.Briefing do
     """
   end
 
+  # The reimagine rebuild. It shares `:execucao`'s place in the recipe and
+  # nothing else: a stage told to turn a chosen direction into a deck cannot
+  # also be told to keep to eight changes, and shipping both instructions in
+  # one prompt is exactly the contradiction this recipe was rewritten to end.
+  defp task_block(:reconstrucao, opts) do
+    """
+    #{vision_task(get_in(opts, [:optimization, :contract, "visao"]))}
+
+    Turn it into a deck, in one answer. **You have more room here than any
+    other stage** — cut everything that does not serve the direction and add
+    what does, however many cards that takes.
+
+    Everything else still holds: the colour identity, the ceilings, the cards
+    the owner locked, the salt contract, and exactly #{Balance.target()} cards
+    when you are done.
+
+    Every cut names what it served that the new direction does not need, and
+    every add names the part of the direction it builds.
+    """
+  end
+
+  defp vision_task(nil) do
+    "The owner picked a direction for this deck; it is stated in the run's contract above."
+  end
+
+  defp vision_task(vision) do
+    """
+    The owner picked this direction, and it is what you are building:
+
+    > **#{vision["nome"]}** — #{vision["tese"]}
+    > O que o deck perde por isso: #{vision["custo"]}
+    """
+  end
+
   defp task_block(:scout, _opts) do
     """
     Read this deck and write its strategic dossier — nothing else.
@@ -892,16 +926,8 @@ defmodule Deckex.Consults.Briefing do
     "\nWhat earlier stages did:\n\n#{body}\n"
   end
 
-  defp stage_kind_line(:checkpoint) do
-    "\nThis is a **stabilization checkpoint**: look at the whole picture. Reverting earlier changes that did not earn their place is exactly your job."
-  end
-
   defp stage_kind_line(:reconstruction) do
     "\nThis is the **reconstruction**: the stage that turns the chosen direction into a deck. You have more room here than any other stage — cut what does not serve the direction and add what does. The ceilings, the colour identity, the salt contract and the flip-flop rule all still hold."
-  end
-
-  defp stage_kind_line(:validation) do
-    "\nThis is a **validation stage**: your job is to find what the tuning missed, not to tune further."
   end
 
   defp stage_kind_line(_lens), do: ""

@@ -296,12 +296,21 @@ defmodule Deckex.Consults.BriefingTest do
       assert briefing =~ "enter and leave this optimization once"
     end
 
-    test "a checkpoint is invited to revert; a validation is told to test" do
-      checkpoint = build(:full, optimization: @optimization)
-      assert checkpoint =~ "stabilization checkpoint"
+    # The rebuild is the one stage where "8 to 15 changes" is the wrong
+    # instruction, so it does not share the execution stage's task. Shipping
+    # both in one prompt is the contradiction this recipe was rewritten to end.
+    test "the reconstruction is given room, and never the execution's budget" do
+      rebuild = build(:reconstrucao, optimization: @optimization)
 
-      validation = build(:full, optimization: %{@optimization | stage_kind: :validation})
-      assert validation =~ "find what the tuning missed"
+      assert rebuild =~ "more room here than any"
+      refute rebuild =~ "8 to 15 changes"
+    end
+
+    test "the execution is held to a budget the owner can read card by card" do
+      execution = build(:execucao, optimization: @optimization)
+
+      assert execution =~ "8 to 15 changes"
+      refute execution =~ "more room here than any"
     end
 
     test "outside a pipeline there is no block at all" do
