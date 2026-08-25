@@ -43,6 +43,10 @@ defmodule Deckex.Consults.Briefing do
 
     #{optimization_block(opts[:optimization])}
 
+    #{plan_block(get_in(opts, [:optimization, :plan]))}
+
+    #{effect_block(get_in(opts, [:optimization, :effect]))}
+
     #{decklist_block(snapshot)}
 
     ## What to do
@@ -338,10 +342,8 @@ defmodule Deckex.Consults.Briefing do
     """
   end
 
-  defp task_block(:execucao, opts) do
+  defp task_block(:execucao, _opts) do
     """
-    #{plan_block(get_in(opts, [:optimization, :plan]))}
-
     Make **every** change this round is going to make, in one answer. Nothing
     runs after you except a critic reading the result — there is no second pass
     to finish a job you left half done, and no later stage that will revert
@@ -351,12 +353,13 @@ defmodule Deckex.Consults.Briefing do
       the most games.
     - Respect `nao_mexer`. A change it forbids is a change the owner throws the
       whole round out for.
-    - **#{Balance.target()} cards exactly** when you are done: every add is paid
-      for by a cut, unless the count above says the list is off and needs
-      closing.
-    - Aim for **8 to 15 changes**. Fewer does not pay for the round; more than
-      twenty is a different deck, and he cannot judge twenty-five cards one by
-      one.
+    - **#{Balance.target()} cards exactly** when you are done. If the count in
+      the run block above says the list is already off that number, closing the
+      gap is part of your job; otherwise every add is paid for by a cut.
+    - Aim for **8 to 15 cuts and 8 to 15 adds** — that is eight to fifteen
+      *swaps*, not eight to fifteen cards touched. Fewer does not pay for the
+      round; more than twenty swaps is a different deck, and he cannot judge
+      forty cards one by one.
     - Every cut names what it was failing to do, and every add names the
       problem from the plan it answers.
     """
@@ -366,18 +369,11 @@ defmodule Deckex.Consults.Briefing do
   # perfect, does not let a good card slip out, and **may not leave the deck
   # worse than it found it**. That last one is measured by the engine and
   # handed to it below, because a model asked to promise it will simply promise.
-  defp task_block(:critico, opts) do
-    optimization = opts[:optimization] || %{}
-
+  defp task_block(:critico, _opts) do
     """
     A round just ran on this deck. **Judge it, then fix it.** You are the last
-    stage; what you leave is what the owner sees.
-
-    #{plan_block(optimization[:plan])}
-
-    #{effect_block(optimization[:effect])}
-
-    ## What to do
+    stage; what you leave is what the owner sees. The plan it was working to
+    and the engine's before-and-after are both above.
 
     Write `veredito` **first**, before proposing anything: did this deck get
     better? Where did it get worse? Which good card went out that should not
@@ -421,19 +417,6 @@ defmodule Deckex.Consults.Briefing do
 
     Every cut names what it served that the new direction does not need, and
     every add names the part of the direction it builds.
-    """
-  end
-
-  defp vision_task(nil) do
-    "The owner picked a direction for this deck; it is stated in the run's contract above."
-  end
-
-  defp vision_task(vision) do
-    """
-    The owner picked this direction, and it is what you are building:
-
-    > **#{vision["nome"]}** — #{vision["tese"]}
-    > O que o deck perde por isso: #{vision["custo"]}
     """
   end
 
@@ -529,6 +512,19 @@ defmodule Deckex.Consults.Briefing do
         > #{String.replace(request, "\n", "\n> ")}
         """
     end
+  end
+
+  defp vision_task(nil) do
+    "The owner picked a direction for this deck; it is stated in the run's contract above."
+  end
+
+  defp vision_task(vision) do
+    """
+    The owner picked this direction, and it is what you are building:
+
+    > **#{vision["nome"]}** — #{vision["tese"]}
+    > O que o deck perde por isso: #{vision["custo"]}
+    """
   end
 
   defp balance_order(count, gap) when count > 100 do
@@ -763,6 +759,16 @@ defmodule Deckex.Consults.Briefing do
       best card that fits under the ceiling. If that turns out to be a card
       everyone already plays, it is not a boring suggestion — it is the answer,
       and it is cheap because it was reprinted, not because it is weak.#{budget_shape_lines(opts[:budget])}
+    - **The play rate is evidence, never a verdict.** It is how many Commander
+      decks run the card, and it answers a question price cannot: Arcane Signet
+      costs two reais and is one of the most-played cards in the format, while
+      a thirty-six-real card can sit past rank five thousand. Read it in both
+      directions. A staple missing from a deck that wants it is the cheapest
+      fix on the table. A rarely-played card in the list is **not a cut on
+      sight** — it is either a build-around this deck is built on or a card
+      nobody thought about, and the difference is what the deck is trying to
+      do, which you can read above. Cutting every low-ranked card would delete
+      exactly the engines that make a deck someone's.
     - Prefer answers that work against **anything** over answers aimed at one
       deck. This is a four-player pod where every archetype turns up; a card
       that only beats the deck you guessed is dead against the other two.
@@ -992,9 +998,54 @@ defmodule Deckex.Consults.Briefing do
       cost = entry.card.mana_cost || "no cost"
 
       "#{entry.quantity} **#{entry.card.name}** — #{cost} — #{entry.card.type_line}" <>
+        body(entry.card) <>
+        "\n  " <>
+        facts(entry) <>
         oracle_lines(entry.card.oracle_text)
     end)
   end
+
+  defp body(%{power: nil}), do: ""
+  defp body(%{toughness: nil}), do: ""
+  defp body(%{power: power, toughness: toughness}), do: " — #{power}/#{toughness}"
+
+  # Everything else the catalogue already knows and the briefing used to throw
+  # away. `edhrec_rank` in particular: the format's own count of how many decks
+  # play a card, downloaded with every card since the first import and never
+  # once sent. Asking a model whether a card is good while withholding the one
+  # measurement of what the format thinks is how "good" stayed a matter of the
+  # model's memory.
+  defp facts(entry) do
+    [play_rate_fact(entry.card.edhrec_rank), roles_fact(entry.roles), changer_fact(entry.card)]
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.join(" · ")
+  end
+
+  defp play_rate_fact(nil), do: "play rate: unknown"
+
+  defp play_rate_fact(rank) do
+    "play rate: EDHREC ##{rank} (#{rank_gloss(rank)})"
+  end
+
+  # The same cuts `Deckex.Cards.PlayRate` renders in the UI, said in the
+  # briefing's language.
+  defp rank_gloss(rank) when rank <= 500, do: "a staple of the format"
+  defp rank_gloss(rank) when rank <= 2_000, do: "played often"
+  defp rank_gloss(rank) when rank <= 10_000, do: "rarely played"
+  defp rank_gloss(_rank), do: "almost nobody plays it"
+
+  # The app's own classification, which every measurement above is counted
+  # from. A stage told "0 wincons" could not see which cards were classified as
+  # what, so it could neither trust the count nor correct it.
+  defp roles_fact(roles) do
+    case Enum.sort(roles) do
+      [] -> ""
+      kinds -> "roles: #{Enum.join(kinds, ", ")}"
+    end
+  end
+
+  defp changer_fact(%{game_changer: true}), do: "**GAME CHANGER**"
+  defp changer_fact(_ordinary), do: ""
 
   # Indented under its card so a hundred of them still read as a list rather
   # than as one wall of rules text.

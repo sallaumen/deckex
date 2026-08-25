@@ -303,13 +303,14 @@ defmodule Deckex.Consults.BriefingTest do
       rebuild = build(:reconstrucao, optimization: @optimization)
 
       assert rebuild =~ "more room here than any"
-      refute rebuild =~ "8 to 15 changes"
+      refute rebuild =~ "8 to 15 cuts"
     end
 
     test "the execution is held to a budget the owner can read card by card" do
       execution = build(:execucao, optimization: @optimization)
 
-      assert execution =~ "8 to 15 changes"
+      assert execution =~ "8 to 15 cuts and 8 to 15 adds"
+      assert execution =~ "not eight to fifteen"
       refute execution =~ "more room here than any"
     end
 
