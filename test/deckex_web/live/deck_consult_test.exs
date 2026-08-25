@@ -178,6 +178,26 @@ defmodule DeckexWeb.DeckConsultTest do
     assert html =~ ~p"/decks/#{deck.id}/cartas"
   end
 
+  # His words about his own deck, on the deck's own page, above the dossier —
+  # the dossier is a model's reading of the list, this is the person who built
+  # it saying what he was going for.
+  test "the description is written on the deck page and reaches every consult",
+       %{conn: conn, deck: deck} do
+    {:ok, live, html} = live(conn, ~p"/decks/#{deck.id}")
+
+    assert html =~ "Sua descrição"
+
+    live
+    |> form("#descricao", %{descricao: "deck de comida, o loop é a graça"})
+    |> render_change()
+
+    {:ok, saved} = Decks.fetch_deck(deck.id)
+    assert saved.description == "deck de comida, o loop é a graça"
+
+    {:ok, consult} = Consults.request(saved, :full)
+    assert consult.briefing =~ "deck de comida, o loop é a graça"
+  end
+
   test "the exact prompt is available to copy", %{conn: conn, deck: deck} do
     {:ok, _consult} = Consults.request(deck, :full)
 

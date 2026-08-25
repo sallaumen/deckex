@@ -308,6 +308,21 @@ for *what* we are building and *why*. This file is *how*.
   stage and cut by a later one nets to nothing, and the history reads as what
   happened to the deck rather than as a diary of the run — the same fold
   `consolidated_diff/2` already applies to the shopping list.
+- **A card in a briefing carries its rules text.** For most of this app's life
+  the decklist was a hundred lines of name, mana cost and type line, and every
+  model that read one was guessing from memory at what the cards do. That is
+  the single cause behind the worst failures on record: Jaheira cut without her
+  Food-to-mana line, Sam cut as "Creature — Halfling Peasant" with no hint that
+  she is half an infinite combo, Austere Command added on invented modes and
+  removed by the next stage. A hundred-card deck is ~3.5k tokens of oracle text
+  against the 30–90k a stage already spends, so there is no trade-off to weigh
+  — there was only an omission. **Nothing is truncated**, and the commander's
+  text is included: half a card's text produces a *new* misreading, and the
+  long cards are the ones being misread.
+- **The owner's description is intent; the list is fact.** `decks.description`
+  is his words and no consult ever rewrites it — unlike the dossier, which is a
+  model's reading. The briefing states which of the two settles what: the list
+  wins on facts, and he wins on what he is trying to build.
 - **The owner says it once, not once per round.** A card's stance
   (`deck_card_notes.stance`) belongs to the deck: `:locked` is merged into
   every run's protection list at launch *and* read live by the audit, so a lock
