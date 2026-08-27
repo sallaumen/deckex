@@ -2,11 +2,14 @@ defmodule Deckex.Consults.Schemas do
   @moduledoc """
   The JSON schema a consult's answer must satisfy.
 
-  Three shapes now. The scout writes the strategic dossier — four prose fields,
+  Four shapes now. The scout writes the strategic dossier — four prose fields,
   no cuts, no adds: a scout that suggests cards has become a consultant, and
   the consultant already exists. The `:visao` lens writes three directions —
   name, thesis, honest cost, key cards — and likewise proposes no changes: it
-  is asked what the deck could become, not what to do this turn. Every other lens shares the diagnosis/cuts/
+  is asked what the deck could become, not what to do this turn. The `:cardapio`
+  lens writes **vacancies** rather than changes — a need, and two or three cards
+  that would answer it — because in that mode the owner is the executor and a
+  single named card would leave him nothing to do but agree. Every other lens shares the diagnosis/cuts/
   adds shape, opened by a required `leitura`: the model's own reading of the
   deck, confronted with the dossier when one was injected. The mandated
   disagreement makes `leitura` double as a stale-dossier detector.
@@ -241,6 +244,32 @@ defmodule Deckex.Consults.Schemas do
     }
   end
 
+  def for_lens(:cardapio) do
+    %{
+      "type" => "object",
+      "properties" => %{
+        "leitura" => %{
+          "type" => "string",
+          "description" =>
+            "2-4 frases, pt-BR: sua leitura do deck lendo as cartas, e o que o plano desta rodada te mandou resolver."
+        },
+        "cortes" => %{
+          "type" => "array",
+          "description" =>
+            "Vagas de corte. Cada uma nomeia cartas que ESTÃO na lista, e o dono escolhe qual sai — ou nenhuma.",
+          "items" => vacancy("sair do deck")
+        },
+        "adicoes" => %{
+          "type" => "array",
+          "description" =>
+            "Vagas de entrada. Cada uma nomeia cartas que NÃO estão na lista, e o dono escolhe qual entra — ou nenhuma.",
+          "items" => vacancy("entrar no deck")
+        }
+      },
+      "required" => ["leitura", "cortes", "adicoes"]
+    }
+  end
+
   def for_lens(_lens) do
     %{
       "type" => "object",
@@ -295,6 +324,54 @@ defmodule Deckex.Consults.Schemas do
         }
       },
       "required" => ["leitura", "diagnosis", "cuts", "adds"]
+    }
+  end
+
+  # A vacancy is a reason with candidates, and the reason is the load-bearing
+  # half: refusing `Arcane Signet` is a judgement about a card, while refusing
+  # "sua curva quer mais aceleração de 2 mana" is a judgement about the deck —
+  # and the owner is the one qualified to make the second.
+  #
+  # Two candidates minimum. One candidate is not a vacancy, it is a suggestion,
+  # and the lens that produces suggestions already exists.
+  defp vacancy(kind) do
+    %{
+      "type" => "object",
+      "properties" => %{
+        "grupo" => %{
+          "type" => "string",
+          "description" =>
+            "pt-BR, 1-3 palavras: o motivo que agrupa esta vaga com as outras iguais a ela — \"Ramp\", \"Remoção pontual\", \"Terreno lento\". Vagas do mesmo motivo usam exatamente o mesmo texto aqui."
+        },
+        "vaga" => %{
+          "type" => "string",
+          "description" =>
+            "Uma ou duas frases, pt-BR: a NECESSIDADE, não a carta. O que falta (ou sobra) no deck, com o número que você mediu, e qual jogo isso custa. Qualquer um dos candidatos abaixo tem que responder a esta mesma frase."
+        },
+        "candidatos" => %{
+          "type" => "array",
+          "minItems" => 2,
+          "maxItems" => 3,
+          "description" =>
+            "Escolhas de verdade diferentes entre si para #{kind}, da sua maior convicção para a menor. Três impressões da mesma ideia não são três candidatos.",
+          "items" => %{
+            "type" => "object",
+            "properties" => %{
+              "carta" => %{
+                "type" => "string",
+                "description" => "Exact card name, untranslated."
+              },
+              "porque" => %{
+                "type" => "string",
+                "description" =>
+                  "Uma frase, pt-BR: por que ESTA carta e não as outras da mesma vaga. O trade-off, não o elogio."
+              }
+            },
+            "required" => ["carta", "porque"]
+          }
+        }
+      },
+      "required" => ["grupo", "vaga", "candidatos"]
     }
   end
 end

@@ -18,7 +18,7 @@ defmodule Deckex.Optimizations.OptimizationStep do
   alias Deckex.Optimizations.Optimization
 
   @fields ~w(optimization_id position kind lens label status model consult_id
-             list_before applied rejected feedback)a
+             list_before applied rejected feedback selections)a
   @required ~w(optimization_id position kind lens label status)a
 
   @type t :: %__MODULE__{}
@@ -31,7 +31,17 @@ defmodule Deckex.Optimizations.OptimizationStep do
     # partial mandate, so each optimised its own number and the next one
     # disagreed. A measured run applied 44 changes and undid 16 of them.
     field :kind, Ecto.Enum,
-      values: [:plano, :execucao, :critico, :visao, :reconstruction, :balance, :revisao, :livre]
+      values: [
+        :plano,
+        :execucao,
+        :critico,
+        :visao,
+        :cardapio,
+        :reconstruction,
+        :balance,
+        :revisao,
+        :livre
+      ]
 
     field :lens, :string
     field :label, :string
@@ -43,6 +53,11 @@ defmodule Deckex.Optimizations.OptimizationStep do
     field :applied, {:array, :map}, default: []
     field :rejected, {:array, :map}, default: []
     field :feedback, :map, default: %{}
+
+    # What the owner chose on the Bancada, keyed `"<action>:<index>"`. A `null`
+    # value is an explicit skip and an absent key is undecided — the board
+    # shows the two differently, so they may not collapse into one.
+    field :selections, :map, default: %{}
 
     belongs_to :optimization, Optimization
     belongs_to :consult, Consult

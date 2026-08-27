@@ -32,9 +32,22 @@ defmodule Deckex.Consults.Suggestions do
   def for_consult(%Consult{response: nil}), do: []
 
   def for_consult(%Consult{} = consult) do
-    rows = unresolved(consult)
+    consult |> unresolved() |> attach_cards()
+  end
 
-    Enum.map(rows, &attach(&1, resolve(rows)))
+  @doc """
+  Joins suggestions to the catalogue, in one query for the whole list.
+
+  Public because a consult is not the only thing that produces suggestions any
+  more: on the Bancada the owner does, one vacancy at a time, and his choices
+  are held to exactly the same resolution — a card the catalogue has never seen
+  is unresolved whoever named it.
+  """
+  @spec attach_cards([Suggestion.t()]) :: [Suggestion.t()]
+  def attach_cards(rows) do
+    cards = resolve(rows)
+
+    Enum.map(rows, &attach(&1, cards))
   end
 
   @doc """

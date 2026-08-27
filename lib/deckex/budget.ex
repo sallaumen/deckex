@@ -88,6 +88,23 @@ defmodule Deckex.Budget do
   end
 
   @doc """
+  The same policy with both limits removed — the tiers still classify, nothing
+  is ever refused for lack of room.
+
+  The Bancada uses it to ask the per-card question on its own. The quota is a
+  property of the whole answer, so charging forty candidates against it would
+  refuse most of them for a limit none of them had reached; the real quota is
+  applied to the cards he actually chose.
+  """
+  @spec unlimited(policy()) :: policy()
+  def unlimited(policy) do
+    %{
+      expensive: %{policy.expensive | max: nil},
+      exception: %{policy.exception | max: nil}
+    }
+  end
+
+  @doc """
   How many cards of each tier `entries` already holds.
 
   Counts copies, not names: `quantity` is one for everything but basic lands,

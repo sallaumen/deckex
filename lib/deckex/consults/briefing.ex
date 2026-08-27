@@ -344,6 +344,48 @@ defmodule Deckex.Consults.Briefing do
     """
   end
 
+  # The Bancada's menu. The stage that would have made the changes instead lays
+  # out **vacancies**, and the owner fills them. Two instructions carry the
+  # whole difference: a vacancy names a need rather than a card, and the
+  # candidates under it have to be genuinely different answers to that need —
+  # a model that names one card and two worse printings of it has handed him a
+  # decision with no alternative in it.
+  defp task_block(:cardapio, opts) do
+    cuts = get_in(opts, [:optimization, :contract, "vagas_corte"]) || 10
+    adds = get_in(opts, [:optimization, :contract, "vagas_entrada"]) || 20
+    reserve = max(cuts, adds) - cuts
+
+    """
+    Lay out this round's **vacancies**. You are not choosing cards this time —
+    the owner is, one vacancy at a time, on a screen built for it. Your job is
+    to give him decisions worth making.
+
+    A **vacancy is a need, not a card**: one or two sentences naming what this
+    deck lacks or carries dead weight of, with the number you measured and the
+    game it costs. Under it go two or three cards that would each answer *that
+    same sentence*. If a candidate only makes sense once you have read its own
+    name, the vacancy was written about the card and needs rewriting.
+
+    - **#{adds} vagas de entrada**, naming cards that are **not** in the list.
+    - **#{cuts + reserve} vagas de corte**, naming cards that **are** in the
+      list.#{reserve_note(reserve, cuts)}
+    - Two or three candidates each, ordered by your own conviction, and they
+      must be real alternatives — different costs, different failure modes,
+      different things given up. Three cards that do the same thing at the same
+      cost is one candidate written three times.
+    - `grupo` is what sorts the board. Vacancies answering the same kind of
+      problem carry the **exact same** `grupo` string; two spellings of one
+      motive split a column in half.
+    - Work the plan above, in its order, and respect `nao_mexer`.
+
+    **He will not take all of them, and you should not want him to.** The deck
+    is at #{count_of(opts)} cards and every card in is a card out, so twenty
+    entries would need twenty cuts. Propose the #{adds} best independent
+    choices — each one has to stand on its own, because he may take two of them
+    and skip the rest.
+    """
+  end
+
   defp task_block(:execucao, _opts) do
     """
     Make **every** change this round is going to make, in one answer. Nothing
@@ -446,6 +488,17 @@ defmodule Deckex.Consults.Briefing do
 
   # The through-line. Carried verbatim into both stages after it, because a plan
   # summarised is a plan the next stage gets to reinterpret.
+  defp reserve_note(0, _cuts), do: ""
+
+  defp reserve_note(reserve, cuts) do
+    " As #{cuts} primeiras são as suas de maior convicção; as outras " <>
+      "#{reserve} são reserva, para quando ele levar mais entradas do que cortes."
+  end
+
+  defp count_of(opts) do
+    get_in(opts, [:optimization, :card_count]) || Balance.target()
+  end
+
   defp plan_block(nil), do: ""
 
   defp plan_block(plan) do
@@ -892,7 +945,7 @@ defmodule Deckex.Consults.Briefing do
 
     - Maximum bracket: **#{contract["bracket_max"]}** — an add that moves the deck past it will be rejected by the engine.
     #{land_ceiling_line(contract["ceilings"])}
-    #{salt_line(contract["salt"])}#{keep_line(contract["keep"])}#{notes_line(contract["notes"])}#{count_line(optimization[:card_count])}
+    #{salt_line(contract["salt"])}#{keep_line(contract["keep"])}#{notes_line(contract["notes"])}#{count_line(optimization[:card_count], stage_kind)}
     #{changelog_lines(changelog)}
     You may revert an earlier stage's change, but engage its stated reason.
     Each card may enter and leave this optimization once — the engine enforces
@@ -957,9 +1010,19 @@ defmodule Deckex.Consults.Briefing do
   # Stating the count was never enough: a stage that knows the copy is at 105
   # and is asked for nothing in particular tends to swap card-for-card and
   # leave it at 105. `Balance` turns the gap into a number for this stage.
-  defp count_line(nil), do: ""
+  defp count_line(nil, _stage_kind), do: ""
 
-  defp count_line(count), do: "\n- " <> Balance.instruction(count)
+  # The cardápio ends nothing — the owner does — so it is told the count as a
+  # fact and never as a target. "Aim to end this stage at 98" is a directive to
+  # a stage that applies no change, and a model handed one either ignores it or
+  # obeys it by proposing fewer vacancies than he asked for.
+  defp count_line(count, :cardapio) do
+    "\n- The copy has **#{count} cards** and a Commander deck has exactly " <>
+      "#{Balance.target()}. The owner closes the gap by choosing; you only have " <>
+      "to make sure he has enough of both kinds of vacancy to close it."
+  end
+
+  defp count_line(count, _stage_kind), do: "\n- " <> Balance.instruction(count)
 
   # Only the avoided half is a rule; the wanted half is an invitation, and the
   # briefing says which is which so the model does not read a preference as a

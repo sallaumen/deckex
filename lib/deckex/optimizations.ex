@@ -28,7 +28,10 @@ defmodule Deckex.Optimizations do
   alias Deckex.Consults
   alias Deckex.Consults.Audit
   alias Deckex.Consults.ConsultQuery
+  alias Deckex.Consults.Suggestion
   alias Deckex.Consults.Suggestions
+  alias Deckex.Consults.Vacancies
+  alias Deckex.Consults.Vacancy
   alias Deckex.Consults.Visions
   alias Deckex.Decks
   alias Deckex.Decks.Deck
@@ -38,6 +41,7 @@ defmodule Deckex.Optimizations do
   alias Deckex.Error
   alias Deckex.Events
   alias Deckex.Optimizations.Balance
+  alias Deckex.Optimizations.Curation
   alias Deckex.Optimizations.Mark
   alias Deckex.Optimizations.Optimization
   alias Deckex.Optimizations.OptimizationQuery
@@ -116,8 +120,12 @@ defmodule Deckex.Optimizations do
   `:reimagine` replaces the plan with the owner's chosen direction — a vision
   he picked IS the plan — and rebuilds against it before the same critic reads
   the result.
+
+  `:curadoria` keeps the plan and replaces the *executor*: the second stage
+  lays out vacancies with candidates and the owner fills them. Same three
+  consults, same guards; the act of choosing is his.
   """
-  @spec recipe(Deck.t(), :livre | :refine | :reimagine) :: [map()]
+  @spec recipe(Deck.t(), :livre | :refine | :reimagine | :curadoria) :: [map()]
   def recipe(%Deck{} = _deck, :livre) do
     [%{"kind" => "livre", "lens" => "livre", "label" => "Ajuste direto"}]
   end
@@ -126,6 +134,19 @@ defmodule Deckex.Optimizations do
     [
       %{"kind" => "plano", "lens" => "plano", "label" => "Plano"},
       %{"kind" => "execucao", "lens" => "execucao", "label" => "Execução"},
+      %{"kind" => "critico", "lens" => "critico", "label" => "Crítico"}
+    ]
+  end
+
+  # The owner executes. `:plano` is reused verbatim — it reads everything and
+  # proposes nothing, which is exactly what a menu needs behind it — and the
+  # stage that would have made the changes becomes a stage that lays out
+  # vacancies for him to fill. The critic still runs, and in this mode its
+  # answer is offered rather than applied: see `gate_step?/2`.
+  def recipe(%Deck{} = _deck, :curadoria) do
+    [
+      %{"kind" => "plano", "lens" => "plano", "label" => "Plano"},
+      %{"kind" => "cardapio", "lens" => "cardapio", "label" => "Cardápio"},
       %{"kind" => "critico", "lens" => "critico", "label" => "Crítico"}
     ]
   end
@@ -224,21 +245,42 @@ defmodule Deckex.Optimizations do
     fetch(optimization.id)
   end
 
-  @doc "Stops advancing after the consult in flight lands. Paid work is kept."
+  @doc """
+  Stops advancing after the consult in flight lands. Paid work is kept.
+
+  A run waiting at a gate is already stopped, and pausing it would lose the one
+  fact that matters about it — that it is waiting on its owner. Resuming from
+  `:paused` runs the next pending stage, which for a board still being filled
+  in would be the critic reading choices nobody had finished making.
+  """
   @spec pause(Optimization.t()) :: {:ok, Optimization.t()}
+  def pause(%Optimization{status: :awaiting_choice} = optimization), do: {:ok, optimization}
   def pause(%Optimization{} = optimization), do: transition(optimization, :paused)
 
   @doc "Resumes a paused run: the next pending (or failed) stage runs again."
   @spec resume(Optimization.t()) :: {:ok, Optimization.t()}
   def resume(%Optimization{status: :awaiting_choice} = optimization) do
-    if chosen_vision(optimization) do
-      do_resume(optimization)
-    else
-      {:error,
-       Error.new(
-         :vision_not_chosen,
-         "Essa rodada está esperando: escolha uma direção para continuar."
-       )}
+    case open_gate(optimization) do
+      %OptimizationStep{kind: :visao} ->
+        if chosen_vision(optimization) do
+          do_resume(optimization)
+        else
+          {:error,
+           Error.new(
+             :vision_not_chosen,
+             "Essa rodada está esperando: escolha uma direção para continuar."
+           )}
+        end
+
+      %OptimizationStep{} ->
+        {:error,
+         Error.new(
+           :board_open,
+           "Essa rodada está esperando você na Bancada: escolha as cartas e feche a rodada."
+         )}
+
+      nil ->
+        do_resume(optimization)
     end
   end
 
@@ -302,7 +344,7 @@ defmodule Deckex.Optimizations do
   """
   @spec ask_again(Optimization.t()) :: {:ok, Optimization.t()} | {:error, Error.t()}
   def ask_again(%Optimization{} = optimization) do
-    case Enum.find(optimization.steps, &vision_step?/1) do
+    case Enum.find(optimization.steps, &(&1.kind == :visao)) do
       nil ->
         {:error, Error.new(:no_vision_step, "Essa rodada não tem etapa de visões.")}
 
@@ -789,7 +831,8 @@ defmodule Deckex.Optimizations do
           applied: [],
           rejected: [],
           consult_id: nil,
-          list_before: nil
+          list_before: nil,
+          selections: %{}
         })
         |> Repo.update!()
       end
@@ -799,9 +842,13 @@ defmodule Deckex.Optimizations do
     |> Optimization.changeset(%{status: :running, outcome: nil, finished_at: nil})
     |> Repo.update!()
 
+    # The board's keys are positions in an answer that is about to be replaced.
+    # Carrying his old choices into a new cardápio would map "the second
+    # candidate of vacancy four" onto whatever card happens to land there —
+    # a selection he never made, on a card he never saw.
     {:ok, _step} =
       step
-      |> OptimizationStep.changeset(%{model: model, status: :pending})
+      |> OptimizationStep.changeset(%{model: model, status: :pending, selections: %{}})
       |> Repo.update!()
       |> run_step()
 
@@ -853,7 +900,18 @@ defmodule Deckex.Optimizations do
     optimization = step.optimization
     {:ok, deck} = Decks.fetch_deck(optimization.deck_id)
 
-    {applied, rejected} = judge(consult, step, optimization, deck)
+    {applied, rejected} =
+      if gate_step?(step, optimization) do
+        # A gate proposes and stops. Its cards still have to reach the
+        # catalogue, though — the board shows art, a price and a play rate
+        # beside every candidate, and a page render may never fetch. This is a
+        # worker, which always could.
+        Consults.refresh_catalogue(consult)
+
+        {[], []}
+      else
+        judge(consult, step, optimization, deck)
+      end
 
     done =
       step
@@ -862,7 +920,7 @@ defmodule Deckex.Optimizations do
 
     {:ok, refreshed} = fetch(optimization.id)
 
-    if vision_step?(done) do
+    if gate_open?(done, optimization, consult) do
       {:ok, _waiting} = transition(refreshed, :awaiting_choice)
     else
       settle(refreshed, done)
@@ -874,11 +932,286 @@ defmodule Deckex.Optimizations do
     :ok
   end
 
-  # A vision answer proposes no changes and picks no direction — the owner
-  # does that. The pipeline stops here rather than spending the next stage
-  # against a direction nobody chose.
-  defp vision_step?(%OptimizationStep{kind: :visao}), do: true
-  defp vision_step?(_step), do: false
+  @doc """
+  Whether this stage hands the run to the owner instead of advancing it.
+
+  Three of them, one reason. A vision answer picks no direction and the next
+  stage would be built against a direction nobody chose. A cardápio answer is a
+  menu, and a menu that serves itself is not a menu. And in `:curadoria` the
+  **critic** is a gate too: the mode exists so the last word is his, and a
+  critic that silently corrected his curation would take it straight back.
+  """
+  @spec gate_step?(OptimizationStep.t(), Optimization.t()) :: boolean()
+  def gate_step?(%OptimizationStep{kind: :visao}, _optimization), do: true
+  def gate_step?(%OptimizationStep{kind: :cardapio}, _optimization), do: true
+
+  def gate_step?(%OptimizationStep{kind: :critico}, %Optimization{mode: :curadoria}), do: true
+
+  def gate_step?(_step, _optimization), do: false
+
+  # A gate with nothing on it is not a gate. A critic that found nothing to
+  # correct has said the useful thing already, and parking the run on an empty
+  # board would make him click through a screen to be told so.
+  defp gate_open?(%OptimizationStep{kind: :visao} = step, optimization, _consult) do
+    gate_step?(step, optimization)
+  end
+
+  defp gate_open?(step, optimization, consult) do
+    gate_step?(step, optimization) and
+      Vacancies.for_consult(consult, optimization.contract) != []
+  end
+
+  @doc """
+  The stage waiting on the owner right now, or nil.
+
+  The **last** completed gate, not the first: a `:curadoria` run passes through
+  two of them, and after the cardápio is closed that step is still done and
+  still a gate. Where the run stopped is the only thing that says which board
+  is open.
+  """
+  @spec open_gate(Optimization.t()) :: OptimizationStep.t() | nil
+  def open_gate(%Optimization{status: :awaiting_choice} = optimization) do
+    optimization.steps
+    |> Enum.filter(&(&1.status == :done and gate_step?(&1, optimization)))
+    |> List.last()
+  end
+
+  def open_gate(%Optimization{}), do: nil
+
+  @doc """
+  The vacancies the open gate is offering, joined to the catalogue.
+
+  Read from the gate's own consult, so the board and the timeline can never
+  disagree about what was proposed.
+  """
+  @spec vacancies(Optimization.t(), OptimizationStep.t()) :: [Vacancy.t()]
+  def vacancies(%Optimization{}, %OptimizationStep{consult_id: nil}), do: []
+
+  def vacancies(%Optimization{} = optimization, %OptimizationStep{} = step) do
+    case Consults.fetch(step.consult_id) do
+      {:ok, consult} -> Vacancies.for_consult(consult, optimization.contract)
+      {:error, %Error{}} -> []
+    end
+  end
+
+  @doc """
+  Everything the board shows about the choices made so far.
+
+  Recomputed on every click, and deliberately so: the whole point of the screen
+  is that the deck's own numbers move because of something he just did. All of
+  it is `Deckex.Analysis` and `Deckex.Consults.Audit`, both pure and both
+  already built — this is the first place they run live rather than once, at
+  the end of a stage.
+
+  The balance guard is off here (`card_count: nil`). Mid-triage a net of +5
+  means nothing, and the board's own gate — landing on exactly 100 — is
+  stricter than the guard would be.
+  """
+  @spec preview(Optimization.t(), OptimizationStep.t(), Deck.t(), [Vacancy.t()]) :: map()
+  def preview(
+        %Optimization{} = optimization,
+        %OptimizationStep{} = step,
+        %Deck{} = deck,
+        vacancies
+      ) do
+    suggestions = Curation.chosen(step, vacancies)
+    audit = audit_for(optimization, step, deck, suggestions, card_count: nil, history: [])
+    starting = sandbox_size(optimization, step.list_before)
+
+    %{
+      audit: audit,
+      chosen: suggestions,
+      starting: starting,
+      count: Curation.count(step, vacancies, starting),
+      undecided: Curation.undecided(step, vacancies),
+      spend_usd: Suggestions.total_usd(suggestions),
+      occupancy: occupancy_of(optimization, step, deck, suggestions),
+      blocker: Curation.blocker(step, vacancies, starting)
+    }
+  end
+
+  @doc """
+  The engine's verdict on **every** candidate on the board, whether chosen or not.
+
+  A board that only warned after the click would be warning too late: he has
+  already committed the second of his two exception slots by the time the
+  screen tells him the card is illegal in these colours.
+
+  Only the per-card guards run here — identity, singleton, legality, the price
+  ceiling, the bracket, the salt contract, the keep-list, and whether a cut is
+  even in the list. The set-dependent ones are deliberately switched off: the
+  quota is a property of the whole answer, and charging every candidate against
+  it would refuse forty cards for a limit none of them had reached. Those
+  surface in `preview/4`, on the cards he actually chose.
+
+  Depends on nothing that changes while he works, so it is computed once.
+  """
+  @spec preflight(Optimization.t(), OptimizationStep.t(), Deck.t(), [Vacancy.t()]) :: Audit.t()
+  def preflight(
+        %Optimization{} = optimization,
+        %OptimizationStep{} = step,
+        %Deck{} = deck,
+        vacancies
+      ) do
+    suggestions =
+      vacancies
+      |> Enum.flat_map(fn vacancy ->
+        Enum.map(vacancy.candidatos, fn candidate ->
+          %Suggestion{
+            action: vacancy.action,
+            name: candidate.name,
+            reason: "",
+            card: candidate.card,
+            price_usd: candidate.price_usd,
+            resolved?: candidate.resolved?
+          }
+        end)
+      end)
+      |> Enum.uniq_by(&{&1.action, &1.name})
+
+    audit_for(optimization, step, deck, suggestions,
+      card_count: nil,
+      history: [],
+      budget: nil,
+      budget_policy:
+        Budget.unlimited(Budget.from_contract(optimization.contract["forma_do_gasto"]))
+    )
+  end
+
+  @doc """
+  Why the engine would refuse this candidate, or what it wants him to know.
+
+  `{:problem, sentence}` disables the card — it is the same refusal a model's
+  answer would get. `{:note, sentence}` changes nothing and is shown anyway:
+  spending one of two exception slots on a seven-hundred-real card is his
+  decision to make, and he can only make it if somebody says so.
+  """
+  @spec verdict(Audit.t(), :cut | :add, String.t()) ::
+          {:problem, String.t()} | {:note, String.t()} | nil
+  def verdict(%Audit{} = audit, action, name) do
+    cond do
+      problem = audit.problems |> Map.get({action, name}, []) |> List.first() ->
+        {:problem, problem}
+
+      note = audit.notes |> Map.get({action, name}, []) |> List.first() ->
+        {:note, note}
+
+      true ->
+        nil
+    end
+  end
+
+  # How many of the owner's expensive slots this board would be using, counted
+  # over the whole list rather than per card — the price rule is a count, and a
+  # board that judged card by card would let three suggestions each be told
+  # there was room for the last one.
+  defp occupancy_of(optimization, step, deck, suggestions) do
+    policy = Budget.from_contract(optimization.contract["forma_do_gasto"])
+    snapshot = snapshot_for(step.list_before, current_commanders(optimization), deck)
+
+    start = Budget.occupancy(snapshot.main ++ snapshot.commanders, policy)
+
+    %{occupancy: Enum.reduce(suggestions, start, &charge(&1, &2, policy)), policy: policy}
+  end
+
+  defp charge(suggestion, occupancy, policy) do
+    Budget.charge(
+      occupancy,
+      Budget.tier(suggestion.price_usd, policy),
+      if(suggestion.action == :add, do: 1, else: -1)
+    )
+  end
+
+  @doc """
+  Records one decision on the board. A `nil` name is an explicit skip.
+
+  One small write per click and no consult: the triage of thirty vacancies
+  takes minutes, and losing it to a closed tab would be the kind of failure
+  nobody forgives a screen for.
+  """
+  @spec select(OptimizationStep.t(), Vacancy.t(), String.t() | nil) ::
+          {:ok, OptimizationStep.t()}
+  def select(%OptimizationStep{} = step, %Vacancy{} = vacancy, name) do
+    {:ok,
+     step
+     |> OptimizationStep.changeset(%{selections: Curation.put(step, vacancy, name)})
+     |> Repo.update!()}
+  end
+
+  @doc "Puts one vacancy back to undecided."
+  @spec unselect(OptimizationStep.t(), Vacancy.t()) :: {:ok, OptimizationStep.t()}
+  def unselect(%OptimizationStep{} = step, %Vacancy{} = vacancy) do
+    {:ok,
+     step
+     |> OptimizationStep.changeset(%{selections: Curation.clear(step, vacancy)})
+     |> Repo.update!()}
+  end
+
+  @doc """
+  Closes the board: audits what the owner chose and advances the run.
+
+  His choices go through **the same** `audit_for`/`split` every stage's answer
+  goes through, and are written to the step as `applied` and `rejected` in the
+  same shape. From here the run is indistinguishable from any other one — the
+  sandbox advances, the critic reads it, and the version records why each card
+  moved.
+
+  The flip-flop guard is handed an empty history on purpose: it exists to stop
+  two models arguing in circles, and the party choosing here is not a model.
+  """
+  @spec commit(Optimization.t(), [Vacancy.t()]) :: {:ok, Optimization.t()} | {:error, Error.t()}
+  def commit(%Optimization{id: id}, vacancies) do
+    # Read fresh. The board is a session that lasts minutes and writes one
+    # selection per click, so the copy the caller is holding was already stale
+    # by the second click — auditing it would judge a board nobody assembled.
+    {:ok, optimization} = fetch(id)
+
+    with {:ok, step} <- committable_gate(optimization),
+         :ok <- committable_board(optimization, step, vacancies) do
+      {:ok, deck} = Decks.fetch_deck(optimization.deck_id)
+
+      suggestions = Curation.chosen(step, vacancies)
+      audit = audit_for(optimization, step, deck, suggestions, history: [])
+      {applied, rejected} = split(suggestions, audit)
+
+      step
+      |> OptimizationStep.changeset(%{applied: applied, rejected: rejected})
+      |> Repo.update!()
+
+      {:ok, running} = transition(optimization, :running)
+      {:ok, refreshed} = fetch(running.id)
+
+      settle(refreshed, Enum.find(refreshed.steps, &(&1.id == step.id)))
+
+      result = fetch(optimization.id)
+      {:ok, final} = result
+      Events.broadcast_optimization(final)
+
+      result
+    end
+  end
+
+  defp committable_gate(%Optimization{} = optimization) do
+    case open_gate(optimization) do
+      %OptimizationStep{kind: :visao} ->
+        {:error, Error.new(:not_a_board, "Essa rodada está esperando uma direção, não cartas.")}
+
+      %OptimizationStep{} = step ->
+        {:ok, step}
+
+      nil ->
+        {:error, Error.new(:no_open_board, "Essa rodada não tem nenhuma bancada aberta.")}
+    end
+  end
+
+  defp committable_board(optimization, step, vacancies) do
+    starting = sandbox_size(optimization, step.list_before)
+
+    case Curation.blocker(step, vacancies, starting) do
+      nil -> :ok
+      message -> {:error, Error.new(:board_not_closable, message)}
+    end
+  end
 
   @doc "A stage's consult failed for good: the run pauses, paid work stays."
   @spec mark_failed(Consults.Consult.t()) :: :ok
@@ -907,8 +1240,35 @@ defmodule Deckex.Optimizations do
     # before the verdict.
     Consults.refresh_catalogue(consult)
 
-    snapshot = snapshot_for(step.list_before, current_commanders(optimization), deck)
     suggestions = Suggestions.for_consult(consult)
+
+    audit = audit_for(optimization, step, deck, suggestions)
+
+    split(suggestions, audit)
+  end
+
+  @doc """
+  The engine's verdict on a set of suggestions, in this run's own terms.
+
+  One place assembles it, because the Bancada needs exactly the same verdict a
+  stage gets — live, on every click — and a second assembly would drift from
+  this one and start telling the owner a different story than the audit that
+  actually decides.
+
+  `card_count: nil` turns the balance guard off, which is what the board wants
+  while he is still choosing: mid-triage the net is meaningless, and the board
+  enforces landing on exactly 100 at commit, which is stricter than the guard.
+  """
+  @spec audit_for(Optimization.t(), OptimizationStep.t(), Deck.t(), [Suggestion.t()], keyword()) ::
+          Audit.t()
+  def audit_for(
+        %Optimization{} = optimization,
+        %OptimizationStep{} = step,
+        %Deck{} = deck,
+        suggestions,
+        opts \\ []
+      ) do
+    snapshot = snapshot_for(step.list_before, current_commanders(optimization), deck)
 
     roles =
       suggestions
@@ -921,40 +1281,46 @@ defmodule Deckex.Optimizations do
       land: optimization.contract["ceilings"]["land"]
     }
 
-    audit =
-      Audit.run(
-        snapshot,
-        suggestions,
-        roles,
-        Settings.baselines(),
-        ceilings,
-        budget_policy: Budget.from_contract(optimization.contract["forma_do_gasto"]),
-        # The count the stage started from. Without it the engine has no idea
-        # which direction is "further from 100", and the balance guard is off.
-        card_count: sandbox_size(optimization, step.list_before),
-        balance_mode: if(step.kind == :balance, do: :closing, else: :stage),
-        history: history(optimization, step),
-        exempt: exempt_for(optimization, step),
-        # Read live, exactly like the commanders beside it. The contract froze
-        # what he asked for at launch; a card he locks at stage four — usually
-        # because he just watched a stage try to cut it — is protected from
-        # stage five, not from the next run. A rule the owner states while
-        # watching is the whole reason he watches.
-        keep:
-          Enum.uniq(
-            (optimization.contract["keep"] || []) ++
-              Decks.locked_cards(deck) ++ current_commanders(optimization)
-          ),
-        bracket_max: optimization.contract["bracket_max"],
-        avoid: Salt.avoided(optimization.contract["salt"]),
-        budget: optimization.contract["orcamento_total"],
-        spent: spent_so_far(optimization)
-      )
-
-    split(suggestions, audit)
+    Audit.run(
+      snapshot,
+      suggestions,
+      roles,
+      Settings.baselines(),
+      ceilings,
+      budget_policy:
+        Keyword.get_lazy(opts, :budget_policy, fn ->
+          Budget.from_contract(optimization.contract["forma_do_gasto"])
+        end),
+      # The count the stage started from. Without it the engine has no idea
+      # which direction is "further from 100", and the balance guard is off.
+      card_count: Keyword.get(opts, :card_count, sandbox_size(optimization, step.list_before)),
+      balance_mode: if(step.kind == :balance, do: :closing, else: :stage),
+      # The flip-flop guard exists to stop two models arguing in circles, and
+      # a person with new information is not churn — the law the review stage
+      # already states. On the Bancada the choices are his, so the caller
+      # hands it an empty history.
+      history: Keyword.get(opts, :history, history(optimization, step)),
+      exempt: exempt_for(optimization, step),
+      # Read live, exactly like the commanders beside it. The contract froze
+      # what he asked for at launch; a card he locks at stage four — usually
+      # because he just watched a stage try to cut it — is protected from
+      # stage five, not from the next run. A rule the owner states while
+      # watching is the whole reason he watches.
+      keep:
+        Enum.uniq(
+          (optimization.contract["keep"] || []) ++
+            Decks.locked_cards(deck) ++ current_commanders(optimization)
+        ),
+      bracket_max: optimization.contract["bracket_max"],
+      avoid: Salt.avoided(optimization.contract["salt"]),
+      budget: Keyword.get(opts, :budget, optimization.contract["orcamento_total"]),
+      spent: spent_so_far(optimization)
+    )
   end
 
-  defp split(suggestions, audit) do
+  @doc "Sorts audited suggestions into what the engine took and what it refused."
+  @spec split([Suggestion.t()], Audit.t()) :: {[map()], [map()]}
+  def split(suggestions, audit) do
     {clean, dirty} =
       Enum.split_with(suggestions, fn suggestion ->
         suggestion.resolved? and

@@ -65,6 +65,7 @@ defmodule DeckexWeb.OptimizationLive do
         Optimizations.sandbox_size(optimization, Optimizations.current_list(optimization)),
       stage_progress: stage_progress(optimization, deck, baselines),
       visions: vision_cards(optimization, deck),
+      board: board_waiting(optimization),
       card_uris: Cards.uris_for_names(named_cards(optimization)),
       card_ranks: Cards.ranks_for_names(named_cards(optimization)),
       shopping: Optimizations.shopping_list(optimization, deck),
@@ -100,6 +101,17 @@ defmodule DeckexWeb.OptimizationLive do
 
   defp vision_cards(_settled, _deck), do: []
 
+  # The Bancada's gate, seen from the timeline. A run parked on a board is not
+  # a run that stopped: it is one waiting on the person it belongs to, and the
+  # page has to say so loudly enough that he does not read it as a hang.
+  defp board_waiting(optimization) do
+    case Optimizations.open_gate(optimization) do
+      %{kind: :visao} -> nil
+      %{} = step -> %{step: step, pending: length(Optimizations.vacancies(optimization, step))}
+      nil -> nil
+    end
+  end
+
   # Where the needle stood after each stage — computed, never stored, so it
   # is always measured against the rules as they are NOW.
   defp stage_progress(optimization, deck, baselines) do
@@ -131,7 +143,7 @@ defmodule DeckexWeb.OptimizationLive do
     prefix =
       case status do
         :done -> "Concluída"
-        :awaiting_choice -> "Escolha uma direção"
+        :awaiting_choice -> "Sua vez"
         :paused -> "Pausada"
         :failed -> "Falhou"
         :cancelled -> "Cancelada"
@@ -398,6 +410,15 @@ defmodule DeckexWeb.OptimizationLive do
 
   defp from_label(_working_state), do: "da lista de então"
 
+  defp board_note(%{step: %{kind: :cardapio}, pending: pending}) do
+    "#{pending} vagas esperando você. Nada mais é gasto até você fechar a rodada."
+  end
+
+  defp board_note(%{pending: pending}) do
+    "O crítico leu a sua lista e propôs #{pending} correções. " <>
+      "Elas só entram se você quiser — recusar todas também fecha a rodada."
+  end
+
   defp run_status_label(:running), do: "rodando"
   defp run_status_label(:awaiting_choice), do: "esperando você escolher"
   defp run_status_label(:paused), do: "pausada"
@@ -649,6 +670,25 @@ defmodule DeckexWeb.OptimizationLive do
           />
         </div>
       </header>
+
+      <section
+        :if={@board}
+        class="mb-8 rounded-xl border border-hairline-strong bg-surface p-5 sm:flex sm:items-center sm:gap-6"
+      >
+        <div class="min-w-0 flex-1">
+          <h2 class="text-heading font-semibold text-ink">Sua vez</h2>
+          <p class="mt-1 text-caption leading-relaxed text-ink-muted">
+            {board_note(@board)}
+          </p>
+        </div>
+
+        <.link
+          navigate={~p"/otimizacoes/#{@optimization.id}/bancada"}
+          class="mt-4 inline-flex min-h-touch w-full items-center justify-center rounded-md bg-ink px-4 text-body font-semibold text-felt transition-opacity hover:opacity-90 motion-reduce:transition-none sm:mt-0 sm:w-auto"
+        >
+          Abrir a Bancada
+        </.link>
+      </section>
 
       <section :if={@visions != []} class="mb-8">
         <h2 class="mb-1 text-heading font-semibold text-ink">Escolha uma direção</h2>

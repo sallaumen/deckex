@@ -50,6 +50,7 @@ defmodule DeckexWeb.Router do
     live "/decks/:id/otimizacoes", OptimizationsLive, :index
     live "/decks/:id/versoes", VersionsLive, :index
     live "/otimizacoes/:id", OptimizationLive, :show
+    live "/otimizacoes/:id/bancada", BancadaLive, :show
     live "/comparar", CompareLive, :index
 
     get "/consultas/:id/csv", ExportController, :consult_csv

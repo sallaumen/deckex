@@ -25,6 +25,7 @@ defmodule Deckex.Consults do
   alias Deckex.Consults.Schemas
   alias Deckex.Consults.Suggestion
   alias Deckex.Consults.Suggestions
+  alias Deckex.Consults.Vacancies
   alias Deckex.Consults.Visions
   alias Deckex.Decks
   alias Deckex.Decks.Deck
@@ -398,7 +399,7 @@ defmodule Deckex.Consults do
   # Suggestions carry the cuts and the adds; a vision answer has neither, and
   # its key cards would go unpriced without this.
   defp card_names(%Consult{} = consult) do
-    Suggestions.names(consult) ++ Visions.card_names(consult)
+    Suggestions.names(consult) ++ Visions.card_names(consult) ++ Vacancies.card_names(consult)
   end
 
   defp keys(names), do: names |> Enum.map(&Name.normalize/1) |> Enum.uniq()
