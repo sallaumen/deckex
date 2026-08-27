@@ -287,6 +287,44 @@ defmodule Deckex.Optimizations.BancadaTest do
     end
   end
 
+  describe "the run while a board is open" do
+    setup do
+      {_deck, optimization} = deck_with_run()
+      {:ok, _planned} = answer(optimization.id, plan())
+      {:ok, waiting} = answer(optimization.id, cardapio())
+
+      %{optimization: waiting}
+    end
+
+    test "pausing leaves it waiting rather than making it resumable", ctx do
+      assert {:ok, still_waiting} = Optimizations.pause(ctx.optimization)
+      assert still_waiting.status == :awaiting_choice
+
+      # Resuming would otherwise run the critic over a board nobody finished.
+      assert {:error, error} = Optimizations.resume(still_waiting)
+      assert error.code == :board_open
+    end
+
+    test "redoing the cardápio throws his old choices away with the old answer", ctx do
+      {step, vacancies} = gate(ctx.optimization)
+      step = pick(step, vacancies, "cut:0", "Forest")
+
+      assert step.selections != %{}
+
+      {:ok, optimization} = Optimizations.fetch(ctx.optimization.id)
+
+      {:ok, redone} =
+        Optimizations.redo_step(
+          optimization,
+          Enum.find(optimization.steps, &(&1.kind == :cardapio)).id,
+          "opus"
+        )
+
+      # The keys are positions in an answer that no longer exists.
+      assert Enum.find(redone.steps, &(&1.kind == :cardapio)).selections == %{}
+    end
+  end
+
   describe "the critic" do
     setup do
       {_deck, optimization} = deck_with_run()

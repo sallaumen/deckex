@@ -245,8 +245,16 @@ defmodule Deckex.Optimizations do
     fetch(optimization.id)
   end
 
-  @doc "Stops advancing after the consult in flight lands. Paid work is kept."
+  @doc """
+  Stops advancing after the consult in flight lands. Paid work is kept.
+
+  A run waiting at a gate is already stopped, and pausing it would lose the one
+  fact that matters about it — that it is waiting on its owner. Resuming from
+  `:paused` runs the next pending stage, which for a board still being filled
+  in would be the critic reading choices nobody had finished making.
+  """
   @spec pause(Optimization.t()) :: {:ok, Optimization.t()}
+  def pause(%Optimization{status: :awaiting_choice} = optimization), do: {:ok, optimization}
   def pause(%Optimization{} = optimization), do: transition(optimization, :paused)
 
   @doc "Resumes a paused run: the next pending (or failed) stage runs again."
@@ -823,7 +831,8 @@ defmodule Deckex.Optimizations do
           applied: [],
           rejected: [],
           consult_id: nil,
-          list_before: nil
+          list_before: nil,
+          selections: %{}
         })
         |> Repo.update!()
       end
@@ -833,9 +842,13 @@ defmodule Deckex.Optimizations do
     |> Optimization.changeset(%{status: :running, outcome: nil, finished_at: nil})
     |> Repo.update!()
 
+    # The board's keys are positions in an answer that is about to be replaced.
+    # Carrying his old choices into a new cardápio would map "the second
+    # candidate of vacancy four" onto whatever card happens to land there —
+    # a selection he never made, on a card he never saw.
     {:ok, _step} =
       step
-      |> OptimizationStep.changeset(%{model: model, status: :pending})
+      |> OptimizationStep.changeset(%{model: model, status: :pending, selections: %{}})
       |> Repo.update!()
       |> run_step()
 
