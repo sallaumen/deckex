@@ -19,6 +19,7 @@ defmodule Deckex.Consults.Audit do
   alias Deckex.Analysis.CardEntry
   alias Deckex.Analysis.DeckSnapshot
   alias Deckex.Analysis.Finding
+  alias Deckex.Analysis.Report
   alias Deckex.Analysis.ReportDiff
   alias Deckex.Analysis.Simulation
   alias Deckex.Budget
@@ -34,7 +35,9 @@ defmodule Deckex.Consults.Audit do
           notes: %{problem_key() => [String.t()]},
           resolved: [Finding.t()],
           remaining: [Finding.t()],
-          introduced: [Finding.t()]
+          introduced: [Finding.t()],
+          before_report: Report.t() | nil,
+          after_report: Report.t() | nil
         }
 
   # `notes` is deliberately a separate field from `problems`, not a severity
@@ -43,7 +46,17 @@ defmodule Deckex.Consults.Audit do
   # exception" and changing nothing. The Game Changer headroom already taught
   # this lesson the expensive way, by masquerading as a problem and silently
   # rejecting every legal add.
-  defstruct problems: %{}, notes: %{}, resolved: [], remaining: [], introduced: []
+  # Both reports ride along rather than only their diff. The Bancada draws the
+  # deck's own numbers moving as the owner chooses, and they are the numbers
+  # this audit already measured — recomputing them next to it is how a screen
+  # and the engine that decides start telling different stories.
+  defstruct problems: %{},
+            notes: %{},
+            resolved: [],
+            remaining: [],
+            introduced: [],
+            before_report: nil,
+            after_report: nil
 
   @doc """
   Audits `suggestions` against `snapshot`. `roles` maps card ids to the roles
@@ -108,7 +121,9 @@ defmodule Deckex.Consults.Audit do
       notes: notes,
       resolved: diff.resolved,
       remaining: diff.remaining,
-      introduced: diff.introduced
+      introduced: diff.introduced,
+      before_report: before_report,
+      after_report: after_report
     }
   end
 

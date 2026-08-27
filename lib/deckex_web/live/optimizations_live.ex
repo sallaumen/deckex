@@ -147,6 +147,8 @@ defmodule DeckexWeb.OptimizationsLive do
       "from_version" => parse_int(params["from_version"])
     }
 
+    contract = Map.merge(contract, slot_counts_for(socket, params))
+
     # Refused here rather than mid-run: every add the contract contradicts
     # would be rejected by the bracket guard anyway, one paid consult at a time.
     case Salt.contradiction(contract) do
@@ -157,6 +159,17 @@ defmodule DeckexWeb.OptimizationsLive do
 
   defp salt_for(%{assigns: %{mode: :reimagine, salt: salt}}), do: salt
   defp salt_for(_refine), do: %{}
+
+  # Frozen at launch like every other rule here: the board he opens tomorrow
+  # has to be the board this form asked for.
+  defp slot_counts_for(%{assigns: %{mode: :curadoria}}, params) do
+    %{
+      "vagas_corte" => parse_int(params["vagas_corte"]) || 10,
+      "vagas_entrada" => parse_int(params["vagas_entrada"]) || 20
+    }
+  end
+
+  defp slot_counts_for(_other_mode, _params), do: %{}
 
   defp launch(socket, contract) do
     case Optimizations.start(socket.assigns.deck, contract) do
@@ -202,6 +215,7 @@ defmodule DeckexWeb.OptimizationsLive do
 
   defp mode_label(:livre), do: "ajuste direto"
   defp mode_label(:reimagine), do: "reimaginar"
+  defp mode_label(:curadoria), do: "curadoria"
   defp mode_label(_refine), do: "refinar"
 
   @impl Phoenix.LiveView
@@ -338,16 +352,19 @@ defmodule DeckexWeb.OptimizationsLive do
             phx-submit="comecar"
             class="space-y-4 px-6 py-5 2xl:grid 2xl:grid-cols-2 2xl:gap-x-8 2xl:gap-y-4 2xl:space-y-0"
           >
-            <%!-- Three modes, weakest first, because the order is how much of
+            <%!-- Four modes, weakest first, because the order is how much of
                   the deck you are handing over — and the cheapest one is the
-                  one he reaches for most. --%>
-            <div class="grid grid-cols-3 gap-2 2xl:col-span-2">
+                  one he reaches for most. Curadoria sits at the end because it
+                  hands over the least of all: the engine proposes and he is
+                  the one who decides. --%>
+            <div class="grid grid-cols-2 gap-2 sm:grid-cols-4 2xl:col-span-2">
               <button
                 :for={
                   {mode, label} <- [
                     {:livre, "Ajuste direto"},
                     {:refine, "Refinar"},
-                    {:reimagine, "Reimaginar"}
+                    {:reimagine, "Reimaginar"},
+                    {:curadoria, "Curadoria"}
                   ]
                 }
                 type="button"
@@ -364,6 +381,48 @@ defmodule DeckexWeb.OptimizationsLive do
             </div>
 
             <p class="text-micro text-ink-muted 2xl:col-span-2 2xl:-mt-2">{mode_note(@mode)}</p>
+
+            <div :if={@mode == :curadoria} class="grid grid-cols-2 gap-3 2xl:col-span-2">
+              <div>
+                <label
+                  for="launch-vagas-corte"
+                  class="mb-1 block text-caption font-semibold text-ink-secondary"
+                >
+                  Vagas de corte
+                </label>
+                <input
+                  id="launch-vagas-corte"
+                  type="text"
+                  inputmode="numeric"
+                  name="contract[vagas_corte]"
+                  value="10"
+                  class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-2 py-2 font-mono text-caption text-ink"
+                />
+              </div>
+
+              <div>
+                <label
+                  for="launch-vagas-entrada"
+                  class="mb-1 block text-caption font-semibold text-ink-secondary"
+                >
+                  Vagas de entrada
+                </label>
+                <input
+                  id="launch-vagas-entrada"
+                  type="text"
+                  inputmode="numeric"
+                  name="contract[vagas_entrada]"
+                  value="20"
+                  class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-2 py-2 font-mono text-caption text-ink"
+                />
+              </div>
+
+              <p class="col-span-2 -mt-1 text-micro leading-relaxed text-ink-muted">
+                Cada vaga vem com duas ou três cartas para você escolher. O deck fica em 100, então
+                toda entrada é paga por um corte — quando faltar corte, a reserva abre sozinha, sem
+                gastar consulta.
+              </p>
+            </div>
 
             <%!-- The whole point of a one-stage round: he already knows what
                   he wants done and does not need nine stages to discover it. --%>
@@ -702,6 +761,10 @@ defmodule DeckexWeb.OptimizationsLive do
 
   defp mode_note(:reimagine) do
     "A IA propõe três direções novas, você escolhe uma, e o pipeline reconstrói o deck em cima dela."
+  end
+
+  defp mode_note(:curadoria) do
+    "A IA lê o deck e monta um cardápio de vagas — cada uma com duas ou três cartas. Quem escolhe é você, carta por carta, e o crítico volta pra você em vez de mexer sozinho."
   end
 
   defp etapas(1), do: "1 etapa"

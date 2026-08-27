@@ -982,6 +982,134 @@ defmodule Deckex.Optimizations do
   end
 
   @doc """
+  Everything the board shows about the choices made so far.
+
+  Recomputed on every click, and deliberately so: the whole point of the screen
+  is that the deck's own numbers move because of something he just did. All of
+  it is `Deckex.Analysis` and `Deckex.Consults.Audit`, both pure and both
+  already built — this is the first place they run live rather than once, at
+  the end of a stage.
+
+  The balance guard is off here (`card_count: nil`). Mid-triage a net of +5
+  means nothing, and the board's own gate — landing on exactly 100 — is
+  stricter than the guard would be.
+  """
+  @spec preview(Optimization.t(), OptimizationStep.t(), Deck.t(), [Vacancy.t()]) :: map()
+  def preview(
+        %Optimization{} = optimization,
+        %OptimizationStep{} = step,
+        %Deck{} = deck,
+        vacancies
+      ) do
+    suggestions = Curation.chosen(step, vacancies)
+    audit = audit_for(optimization, step, deck, suggestions, card_count: nil, history: [])
+    starting = sandbox_size(optimization, step.list_before)
+
+    %{
+      audit: audit,
+      chosen: suggestions,
+      starting: starting,
+      count: Curation.count(step, vacancies, starting),
+      undecided: Curation.undecided(step, vacancies),
+      spend_usd: Suggestions.total_usd(suggestions),
+      occupancy: occupancy_of(optimization, step, deck, suggestions),
+      blocker: Curation.blocker(step, vacancies, starting)
+    }
+  end
+
+  @doc """
+  The engine's verdict on **every** candidate on the board, whether chosen or not.
+
+  A board that only warned after the click would be warning too late: he has
+  already committed the second of his two exception slots by the time the
+  screen tells him the card is illegal in these colours.
+
+  Only the per-card guards run here — identity, singleton, legality, the price
+  ceiling, the bracket, the salt contract, the keep-list, and whether a cut is
+  even in the list. The set-dependent ones are deliberately switched off: the
+  quota is a property of the whole answer, and charging every candidate against
+  it would refuse forty cards for a limit none of them had reached. Those
+  surface in `preview/4`, on the cards he actually chose.
+
+  Depends on nothing that changes while he works, so it is computed once.
+  """
+  @spec preflight(Optimization.t(), OptimizationStep.t(), Deck.t(), [Vacancy.t()]) :: Audit.t()
+  def preflight(
+        %Optimization{} = optimization,
+        %OptimizationStep{} = step,
+        %Deck{} = deck,
+        vacancies
+      ) do
+    suggestions =
+      vacancies
+      |> Enum.flat_map(fn vacancy ->
+        Enum.map(vacancy.candidatos, fn candidate ->
+          %Suggestion{
+            action: vacancy.action,
+            name: candidate.name,
+            reason: "",
+            card: candidate.card,
+            price_usd: candidate.price_usd,
+            resolved?: candidate.resolved?
+          }
+        end)
+      end)
+      |> Enum.uniq_by(&{&1.action, &1.name})
+
+    audit_for(optimization, step, deck, suggestions,
+      card_count: nil,
+      history: [],
+      budget: nil,
+      budget_policy:
+        Budget.unlimited(Budget.from_contract(optimization.contract["forma_do_gasto"]))
+    )
+  end
+
+  @doc """
+  Why the engine would refuse this candidate, or what it wants him to know.
+
+  `{:problem, sentence}` disables the card — it is the same refusal a model's
+  answer would get. `{:note, sentence}` changes nothing and is shown anyway:
+  spending one of two exception slots on a seven-hundred-real card is his
+  decision to make, and he can only make it if somebody says so.
+  """
+  @spec verdict(Audit.t(), :cut | :add, String.t()) ::
+          {:problem, String.t()} | {:note, String.t()} | nil
+  def verdict(%Audit{} = audit, action, name) do
+    cond do
+      problem = audit.problems |> Map.get({action, name}, []) |> List.first() ->
+        {:problem, problem}
+
+      note = audit.notes |> Map.get({action, name}, []) |> List.first() ->
+        {:note, note}
+
+      true ->
+        nil
+    end
+  end
+
+  # How many of the owner's expensive slots this board would be using, counted
+  # over the whole list rather than per card — the price rule is a count, and a
+  # board that judged card by card would let three suggestions each be told
+  # there was room for the last one.
+  defp occupancy_of(optimization, step, deck, suggestions) do
+    policy = Budget.from_contract(optimization.contract["forma_do_gasto"])
+    snapshot = snapshot_for(step.list_before, current_commanders(optimization), deck)
+
+    start = Budget.occupancy(snapshot.main ++ snapshot.commanders, policy)
+
+    %{occupancy: Enum.reduce(suggestions, start, &charge(&1, &2, policy)), policy: policy}
+  end
+
+  defp charge(suggestion, occupancy, policy) do
+    Budget.charge(
+      occupancy,
+      Budget.tier(suggestion.price_usd, policy),
+      if(suggestion.action == :add, do: 1, else: -1)
+    )
+  end
+
+  @doc """
   Records one decision on the board. A `nil` name is an explicit skip.
 
   One small write per click and no consult: the triage of thirty vacancies
@@ -1019,7 +1147,12 @@ defmodule Deckex.Optimizations do
   two models arguing in circles, and the party choosing here is not a model.
   """
   @spec commit(Optimization.t(), [Vacancy.t()]) :: {:ok, Optimization.t()} | {:error, Error.t()}
-  def commit(%Optimization{} = optimization, vacancies) do
+  def commit(%Optimization{id: id}, vacancies) do
+    # Read fresh. The board is a session that lasts minutes and writes one
+    # selection per click, so the copy the caller is holding was already stale
+    # by the second click — auditing it would judge a board nobody assembled.
+    {:ok, optimization} = fetch(id)
+
     with {:ok, step} <- committable_gate(optimization),
          :ok <- committable_board(optimization, step, vacancies) do
       {:ok, deck} = Decks.fetch_deck(optimization.deck_id)
@@ -1141,7 +1274,10 @@ defmodule Deckex.Optimizations do
       roles,
       Settings.baselines(),
       ceilings,
-      budget_policy: Budget.from_contract(optimization.contract["forma_do_gasto"]),
+      budget_policy:
+        Keyword.get_lazy(opts, :budget_policy, fn ->
+          Budget.from_contract(optimization.contract["forma_do_gasto"])
+        end),
       # The count the stage started from. Without it the engine has no idea
       # which direction is "further from 100", and the balance guard is off.
       card_count: Keyword.get(opts, :card_count, sandbox_size(optimization, step.list_before)),
@@ -1164,7 +1300,7 @@ defmodule Deckex.Optimizations do
         ),
       bracket_max: optimization.contract["bracket_max"],
       avoid: Salt.avoided(optimization.contract["salt"]),
-      budget: optimization.contract["orcamento_total"],
+      budget: Keyword.get(opts, :budget, optimization.contract["orcamento_total"]),
       spent: spent_so_far(optimization)
     )
   end

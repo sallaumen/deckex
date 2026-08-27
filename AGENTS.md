@@ -391,6 +391,40 @@ for *what* we are building and *why*. This file is *how*.
   sandbox and the closing balance stage still apply: one stage is still a
   round, not a shortcut around the engine.
 
+- **A gate is a stage that hands the run to its owner.** `:visao`, `:cardapio`
+  and — in `:curadoria` only — `:critico` park the run in `:awaiting_choice`
+  instead of applying their own answer. `Optimizations.open_gate/1` returns the
+  **last** completed gate, not the first: a curadoria run passes through two of
+  them, and after the cardápio is closed that step is still done and still a
+  gate. And a gate with nothing on it is not a gate — a critic that found
+  nothing to correct finishes the run rather than parking it on an empty board
+  for the owner to click through.
+- **On the Bancada the engine still audits; it just stops choosing.** His
+  selections become `Deckex.Consults.Suggestion` structs and go through the
+  same `audit_for`/`split` every stage's answer goes through, written to the
+  step as `applied` and `rejected` in the same shape. `selections` is kept
+  beside them because it is a different fact: what he chose, against what the
+  engine let through. Two guards are relaxed and only two — the flip-flop guard
+  is handed an empty history (it exists to stop two models arguing in circles,
+  and a person with new information is not churn), and an empty board is a
+  legitimate answer at the critic's gate, where it means he declined the
+  corrections.
+- **`commit/2` reads the run fresh.** The board is a session that lasts minutes
+  and writes one selection per click, so the struct the caller is holding was
+  already stale by the second click; auditing it would judge a board nobody
+  assembled.
+- **The board answers two audit questions, not one.** `preflight/4` judges
+  **every** candidate — chosen or not — with the quota switched off, so a card
+  that is illegal in these colours says so *before* the click; `preview/4`
+  judges the chosen set with the quota on, and is the only place the exception
+  slots can be counted, because the price rule is a count over the whole
+  answer. A board that only warned after the click would be warning too late.
+- **The cardápio is told the count as a fact, never as a target.** It ends
+  nothing — the owner does — so `Briefing.count_line/2` gives it the number and
+  the rule instead of `Balance.instruction/1`. A menu stage handed "aim to end
+  this stage at 98" either ignores it or obeys it by proposing fewer vacancies
+  than were asked for.
+
 ## Operating notes
 
 - **`mix run` starts Oban, and Oban consumes.** A script that enqueues a job

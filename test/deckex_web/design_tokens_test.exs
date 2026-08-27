@@ -47,6 +47,8 @@ defmodule DeckexWeb.DesignTokensTest do
     border-collapse border-separate divide-y divide-x
     rounded-full rounded-none rounded-t-xs
     bg-current
+    text-balance text-pretty
+    ring-1
   )
 
   test "every utility using a token prefix names a token that exists" do
