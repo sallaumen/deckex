@@ -55,7 +55,7 @@ defmodule Deckex.AI.ClaudeCli do
   def parse_output(output) do
     case Jason.decode(output) do
       {:ok, %{"is_error" => true} = envelope} ->
-        {:error, ai_error("A IA retornou erro.", %{result: envelope["result"]})}
+        {:error, envelope_error(envelope)}
 
       {:ok, %{"structured_output" => structured} = envelope} when is_map(structured) ->
         {:ok, structured, Usage.from_envelope(envelope)}
@@ -77,9 +77,17 @@ defmodule Deckex.AI.ClaudeCli do
       {:ok, {output, 0}} ->
         parse_output(output)
 
+      # A non-zero exit is not the end of the story: the CLI reports an API
+      # failure as a **JSON envelope on stdout** and *then* exits 1, so the
+      # explanation is sitting right there. This used to throw it away and
+      # report "saiu com código 1", which is how an expired login looked
+      # exactly like a crash — three times in a row, for the price of three
+      # retries, with the real reason in the output the whole time.
       {:ok, {output, code}} ->
-        {:error,
-         ai_error("O `claude` saiu com código #{code}.", %{output: String.slice(output, 0, 500)})}
+        case parse_output(output) do
+          {:error, %Error{} = explained} -> {:error, explained}
+          _unreadable -> {:error, opaque_exit(code, output)}
+        end
 
       {:error, {:exit, reason}} ->
         {:error, ai_error("O `claude` morreu.", %{reason: inspect(reason)})}
@@ -89,6 +97,32 @@ defmodule Deckex.AI.ClaudeCli do
          Error.new(:ai_timeout, "A IA não respondeu a tempo.", %{timeout_ms: timeout(opts)})}
     end
   end
+
+  defp opaque_exit(code, output) do
+    ai_error("O `claude` saiu com código #{code}.", %{output: String.slice(output, 0, 500)})
+  end
+
+  # An expired login is not a transient failure, and retrying it three times
+  # only spends the queue's patience. It gets its own code and the command
+  # that fixes it: "código 1" told the owner nothing while the CLI was saying
+  # exactly what was wrong.
+  @auth ~r/authenticat|OAuth|session expired|not logged in|unauthorized/i
+
+  defp envelope_error(%{"result" => result}) when is_binary(result) do
+    if Regex.match?(@auth, result) do
+      Error.new(
+        :ai_unauthenticated,
+        "A sessão do `claude` expirou. Rode `claude login` no terminal e retome a rodada — " <>
+          "as etapas já pagas ficam.",
+        %{result: result}
+      )
+    else
+      ai_error("A IA retornou erro.", %{result: result})
+    end
+  end
+
+  defp envelope_error(envelope),
+    do: ai_error("A IA retornou erro.", %{result: envelope["result"]})
 
   defp ai_error(message, details), do: Error.new(:ai_unavailable, message, details)
 
