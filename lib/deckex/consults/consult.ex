@@ -33,7 +33,8 @@ defmodule Deckex.Consults.Consult do
     :plano,
     :execucao,
     :reconstrucao,
-    :critico
+    :critico,
+    :cardapio
   ]
 
   @type t :: %__MODULE__{}

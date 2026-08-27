@@ -105,10 +105,10 @@ defmodule Deckex.ConsultModelsTest do
     end
 
     # :finding rides the "Pedir diagnóstico" buttons, :scout the dossier card,
-    # and :alinhamento, :visao, :balanco, :revisao and :livre the optimization
-    # pipeline — none belongs in the lens dropdown, so none has a label. A
-    # single-stage round is still a round: it is launched from the launcher,
-    # with a contract and a sandbox, not from the consult picker.
+    # and :alinhamento, :visao, :cardapio, :balanco, :revisao and :livre the
+    # optimization pipeline — none belongs in the lens dropdown, so none has a
+    # label. A single-stage round is still a round: it is launched from the
+    # launcher, with a contract and a sandbox, not from the consult picker.
     test "every pickable lens has a label" do
       labels = Map.new(Consults.lens_labels())
 
@@ -117,6 +117,7 @@ defmodule Deckex.ConsultModelsTest do
             :finding,
             :scout,
             :visao,
+            :cardapio,
             :balanco,
             :revisao,
             :livre,
