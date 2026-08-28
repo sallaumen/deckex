@@ -425,6 +425,31 @@ for *what* we are building and *why*. This file is *how*.
   this stage at 98" either ignores it or obeys it by proposing fewer vacancies
   than were asked for.
 
+- **A window key listener hears every key, so its handler needs a floor.**
+  `phx-window-keydown` fires on `a`, on `Tab`, on `F5`, and delivers
+  `%{"key" => ...}` — a payload no specific clause matches. Measured
+  2026-08-28: the Bancada raised `FunctionClauseError` on the first letter
+  typed, the LiveView process died, and the remount threw away the cursor
+  mid-triage. Any handler reachable from a window listener ends in a
+  catch-all, and a hook that already listens on `window` must not *also* carry
+  the attribute — that is two listeners for one keystroke.
+- **A pick that unmounts the focused control has to say where focus went.**
+  Advancing the triage cursor destroys the button the keyboard was standing on,
+  and the browser drops focus to `<body>`: the next `Tab` restarts from the top
+  of the page. The vacancy heading carries the cursor's key in its `id` and a
+  `phx-mounted={JS.focus()}`, so focus follows the work and a screen reader
+  hears the new question.
+- **A board may not reorder itself under the cursor.** Sorting groups by how
+  many of them were decided moved a column every time he answered one. The
+  board sorts by action and position — facts that do not change while he works.
+- **A card is judged on its rules text, on screen as well as in a briefing.**
+  The law that a briefing carries oracle text exists because Jaheira and Sam
+  were cut by stages reading a name and a type line. A person choosing between
+  three candidates is doing the same job with the same handicap, so every
+  candidate on the Bancada carries its oracle text — rendered with real mana
+  pips (`DeckexWeb.UI.oracle_text/1`), because `{2}{G}` printed as braces is
+  the source code of a card rather than the card.
+
 ## Operating notes
 
 - **`mix run` starts Oban, and Oban consumes.** A script that enqueues a job

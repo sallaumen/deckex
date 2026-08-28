@@ -192,6 +192,130 @@ defmodule DeckexWeb.BancadaLiveTest do
     end
   end
 
+  describe "the keyboard" do
+    setup %{conn: conn} do
+      {_deck, optimization} = parked_run()
+      {:ok, view, _html} = live(conn, ~p"/otimizacoes/#{optimization.id}/bancada")
+
+      %{view: view, optimization: optimization}
+    end
+
+    # The regression that matters: a window key listener hears every key, and
+    # the LiveView used to raise `FunctionClauseError` on the first letter —
+    # killing the process and losing the cursor on remount.
+    test "a key that means nothing here is ignored, not a crash", %{view: view} do
+      for key <- ~w(a Z 9 Shift Tab F5 Dead) do
+        render_hook(view, "tecla", %{"key" => key})
+      end
+
+      assert render(view) =~ "Bancada"
+    end
+
+    test "0 skips the vacancy on screen", %{view: view} do
+      render_hook(view, "tecla", %{"acao" => "pular"})
+
+      assert render(view) =~ "1 de 4"
+      assert render(view) =~ "100"
+    end
+
+    test "U undoes the vacancy on screen", %{view: view} do
+      render_hook(view, "tecla", %{"n" => 1})
+      assert render(view) =~ "99"
+
+      render_hook(view, "tecla", %{"acao" => "desfazer"})
+      assert render(view) =~ "100"
+    end
+
+    test "the shortcuts sheet opens and closes", %{view: view} do
+      html = view |> element(~s(button[phx-click="atalhos"])) |> render_click()
+
+      assert html =~ "Atalhos"
+      assert html =~ "nenhuma destas"
+
+      render_hook(view, "tecla", %{"acao" => "fechar-paineis"})
+      refute render(view) =~ ~s(role="dialog")
+    end
+  end
+
+  describe "judging a card" do
+    test "every candidate carries its rules text", %{conn: conn} do
+      {_deck, optimization} = parked_run()
+
+      {:ok, view, html} = live(conn, ~p"/otimizacoes/#{optimization.id}/bancada")
+
+      # Forest's oracle text, which is what the choice is actually made on.
+      assert html =~ "Add"
+
+      html = view |> element(~s(button[phx-click="texto"])) |> render_click()
+
+      refute html =~ "esconder o texto das cartas"
+      assert html =~ "mostrar o texto das cartas"
+    end
+
+    test "a candidate's accessible name is the card, not the whole tile", %{conn: conn} do
+      {_deck, optimization} = parked_run()
+
+      {:ok, _view, html} = live(conn, ~p"/otimizacoes/#{optimization.id}/bancada")
+
+      assert html =~ ~s(aria-label="Opção 1: Forest")
+    end
+  end
+
+  describe "the board's filters" do
+    setup %{conn: conn} do
+      {_deck, optimization} = parked_run()
+      {:ok, view, _html} = live(conn, ~p"/otimizacoes/#{optimization.id}/bancada")
+      quadro(view)
+
+      %{view: view}
+    end
+
+    test "narrow the board to what he is looking for", %{view: view} do
+      pick(view, "cut:0", "Forest")
+
+      html = view |> element(~s(button[phx-value-filtro="escolhidas"])) |> render_click()
+
+      assert html =~ "Noventa e oito florestas é terreno demais."
+      refute html =~ "Llanowar morre a qualquer varrida."
+
+      html = view |> element(~s(button[phx-value-filtro="indecisas"])) |> render_click()
+
+      refute html =~ "Noventa e oito florestas é terreno demais."
+      assert html =~ "Llanowar morre a qualquer varrida."
+    end
+
+    test "say plainly when nothing matches", %{view: view} do
+      html = view |> element(~s(button[phx-value-filtro="escolhidas"])) |> render_click()
+
+      assert html =~ "Nenhuma vaga com esse filtro"
+    end
+
+    test "a vacancy on the board opens in triage", %{view: view} do
+      html = view |> element(~s(button[phx-value-chave="add:0"])) |> render_click()
+
+      assert html =~ "Sua curva quer aceleração de 3."
+      assert html =~ "Nenhuma destas"
+    end
+  end
+
+  describe "the round as a list" do
+    test "the rail can show back what he chose", %{conn: conn} do
+      {_deck, optimization} = parked_run()
+
+      {:ok, view, _html} = live(conn, ~p"/otimizacoes/#{optimization.id}/bancada")
+
+      html = view |> element(~s(button[phx-click="resumo"])) |> render_click()
+      assert html =~ "Nada escolhido ainda"
+
+      quadro(view)
+      pick(view, "add:0", "Cultivate")
+      html = render(view)
+
+      assert html =~ "Suas escolhas"
+      assert html =~ "Cultivate"
+    end
+  end
+
   describe "the board" do
     test "groups the vacancies by the reason they exist", %{conn: conn} do
       {_deck, optimization} = parked_run()

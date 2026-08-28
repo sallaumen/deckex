@@ -49,6 +49,7 @@ defmodule DeckexWeb.DesignTokensTest do
     bg-current
     text-balance text-pretty
     ring-1
+    bg-transparent
   )
 
   test "every utility using a token prefix names a token that exists" do
