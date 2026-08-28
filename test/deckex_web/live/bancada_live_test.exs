@@ -192,6 +192,46 @@ defmodule DeckexWeb.BancadaLiveTest do
     end
   end
 
+  describe "what a click means" do
+    setup %{conn: conn} do
+      {_deck, optimization} = parked_run()
+      {:ok, view, html} = live(conn, ~p"/otimizacoes/#{optimization.id}/bancada")
+
+      %{view: view, html: html}
+    end
+
+    # The owner's first real board: he could not tell whether choosing meant
+    # wanting or condemning, read "40" as "40 cards leaving the deck", and
+    # stopped clicking, afraid each click was spending tokens.
+    test "a cut vacancy says the click cuts", %{html: html} do
+      assert html =~ "SAI do deck — ou nenhuma"
+      assert html =~ "Clicar numa carta é cortá-la"
+      assert html =~ ~s|aria-label="Cortar Forest (opção 1)"|
+    end
+
+    test "an add vacancy says the click adds", %{view: view} do
+      quadro(view)
+      html = view |> element(~s|button[phx-value-chave="add:0"]|) |> render_click()
+
+      assert html =~ "ENTRA no deck — ou nenhuma"
+      assert html =~ ~s|aria-label="Adicionar Cultivate (opção 1)"|
+    end
+
+    test "the counters count VAGAS and the strip says clicks are free", %{html: html} do
+      assert html =~ "vagas decididas"
+      assert html =~ "vaga 1 de 4"
+      assert html =~ "vagas de possível corte"
+      assert html =~ "Nada aqui gasta consulta"
+    end
+
+    test "a chosen cut is stamped SAI, not just checked", %{view: view} do
+      # The pick advances triage past the stamped tile; the board shows it.
+      pick(view, "cut:0", "Forest")
+
+      assert quadro(view) =~ "SAI ✓"
+    end
+  end
+
   describe "the keyboard" do
     setup %{conn: conn} do
       {_deck, optimization} = parked_run()
@@ -292,7 +332,7 @@ defmodule DeckexWeb.BancadaLiveTest do
 
       # Jump to add:0 and pick — net +1 opens the reserve cut.
       view |> element(~s(button[phx-value-fase="quadro"])) |> render_click()
-      view |> element(~s(button[phx-value-chave="add:0"])) |> render_click()
+      view |> element(~s|button[phx-value-chave="add:0"]|) |> render_click()
       render_hook(view, "tecla", %{"n" => 1})
 
       html = render(view)
@@ -337,7 +377,7 @@ defmodule DeckexWeb.BancadaLiveTest do
 
       {:ok, _view, html} = live(conn, ~p"/otimizacoes/#{optimization.id}/bancada")
 
-      assert html =~ ~s(aria-label="Opção 1: Forest")
+      assert html =~ ~s|aria-label="Cortar Forest (opção 1)"|
     end
   end
 
@@ -386,7 +426,7 @@ defmodule DeckexWeb.BancadaLiveTest do
     end
 
     test "a vacancy on the board opens in triage", %{view: view} do
-      html = view |> element(~s(button[phx-value-chave="add:0"])) |> render_click()
+      html = view |> element(~s|button[phx-value-chave="add:0"]|) |> render_click()
 
       assert html =~ "Sua curva quer aceleração de 3."
       assert html =~ "Nenhuma destas"
