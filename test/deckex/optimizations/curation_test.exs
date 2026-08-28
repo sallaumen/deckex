@@ -168,18 +168,19 @@ defmodule Deckex.Optimizations.CurationTest do
       assert Curation.blocker(step(%{}, :critico), [vacancy(:add, 0)], 100) == nil
     end
 
-    test "refuses a board that would leave the deck over 100, and says by how much" do
+    test "the count never blocks — off 100 is the balance stages' job" do
+      # The owner chooses freely; the copy he leaves at 102 is what the
+      # closing stages exist to settle, informed by every decision he made.
       vacancies = [vacancy(:add, 0), vacancy(:add, 1, cards: ["Cultivate"])]
       step = step(%{"add:0" => "Sol Ring", "add:1" => "Cultivate"})
 
-      assert Curation.blocker(step, vacancies, 100) =~ "102 cartas"
-      assert Curation.blocker(step, vacancies, 100) =~ "Corte mais 2"
-    end
+      assert Curation.blocker(step, vacancies, 100) == nil
 
-    test "refuses a board that would leave the deck short" do
-      vacancies = [vacancy(:cut, 0, cards: ["Forest"])]
-
-      assert Curation.blocker(step(%{"cut:0" => "Forest"}), vacancies, 100) =~ "Faltam 1"
+      assert Curation.blocker(
+               step(%{"cut:0" => "Forest"}),
+               [vacancy(:cut, 0, cards: ["Forest"])],
+               100
+             ) == nil
     end
 
     test "lets a balanced swap through, however small" do

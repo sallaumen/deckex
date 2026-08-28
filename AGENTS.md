@@ -609,6 +609,22 @@ for *what* we are building and *why*. This file is *how*.
   consult until Fechar. When a real user reports "acho que tá bugado" about a
   working screen, the bug is in the communication and it is ours.
 
+- **On the Bancada the count never blocks — the balance stages settle it,
+  after his decisions.** The owner asked in as many words: pick and drop
+  freely, close the round off 100, and let the engine balance the hundred
+  aware of everything he chose. The machinery already existed (the closing
+  balance stages); curadoria just refused to reach it. `Curation.blocker/3`
+  keeps one refusal (an empty cardápio); `closable?/3` gives curadoria a
+  wider gap cap (30 — bounded by the vacancies he could possibly take), and
+  the stages converge because a closing answer that lands short has its
+  excess refused and the remaining gap goes to the next stage. The rail says
+  the plan instead of blocking: "ao fechar, a IA fecha a conta em 100".
+- **Controls that ride variable-height content move under a clicking finger.**
+  The triage's prev/next sat below candidate tiles whose height changes per
+  vacancy; forty clicks meant forty small hunts. Navigation between many
+  same-shaped things is FIXED to the viewport (bottom-center cluster with the
+  position between the arrows), one screen spot for the whole session.
+
 ## Operating notes
 
 - **`mix run` starts Oban, and Oban consumes.** A script that enqueues a job

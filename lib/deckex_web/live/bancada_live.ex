@@ -585,6 +585,7 @@ defmodule DeckexWeb.BancadaLive do
             vacancies={@vacancies}
             filter={@filter}
             reserve_open?={@reserve_open?}
+            preview={@preview}
             verdicts={%{preflight: @preflight, preview: @preview}}
           />
         </main>
@@ -766,29 +767,35 @@ defmodule DeckexWeb.BancadaLive do
             U
           </kbd>
         </button>
+      </div>
 
-        <div class="ml-auto flex items-center gap-2">
-          <button
-            type="button"
-            phx-click="ir"
-            phx-value-para="anterior"
-            disabled={@cursor == 0}
-            aria-label="Vaga anterior"
-            class="inline-flex size-touch items-center justify-center rounded-md border border-hairline-soft text-ink-faint transition-colors hover:text-ink disabled:opacity-40 disabled:hover:text-ink-faint motion-reduce:transition-none"
-          >
-            <.icon name="hero-arrow-left-micro" class="size-4" />
-          </button>
-          <button
-            type="button"
-            phx-click="ir"
-            phx-value-para="proxima"
-            disabled={@cursor >= length(@visible) - 1}
-            aria-label="Próxima vaga"
-            class="inline-flex size-touch items-center justify-center rounded-md border border-hairline-soft text-ink-faint transition-colors hover:text-ink disabled:opacity-40 disabled:hover:text-ink-faint motion-reduce:transition-none"
-          >
-            <.icon name="hero-arrow-right-micro" class="size-4" />
-          </button>
-        </div>
+      <%!-- FIXED to the viewport, because vacancies have different heights and
+            buttons that ride the content move under a finger that is clicking
+            through forty of them. Same screen spot, every vacancy. --%>
+      <div class="fixed bottom-5 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-lg border border-hairline-soft bg-rail/95 p-1 shadow-lifted backdrop-blur-sm">
+        <button
+          type="button"
+          phx-click="ir"
+          phx-value-para="anterior"
+          disabled={@cursor == 0}
+          aria-label="Vaga anterior"
+          class="inline-flex size-touch items-center justify-center rounded-md text-ink-secondary transition-colors hover:text-ink disabled:opacity-40 disabled:hover:text-ink-secondary motion-reduce:transition-none"
+        >
+          <.icon name="hero-arrow-left-micro" class="size-4" />
+        </button>
+        <span class="px-1 font-mono text-micro tabular-nums text-ink-faint">
+          {@cursor + 1}/{length(@visible)}
+        </span>
+        <button
+          type="button"
+          phx-click="ir"
+          phx-value-para="proxima"
+          disabled={@cursor >= length(@visible) - 1}
+          aria-label="Próxima vaga"
+          class="inline-flex size-touch items-center justify-center rounded-md text-ink-secondary transition-colors hover:text-ink disabled:opacity-40 disabled:hover:text-ink-secondary motion-reduce:transition-none"
+        >
+          <.icon name="hero-arrow-right-micro" class="size-4" />
+        </button>
       </div>
 
       <p class="mt-5 max-w-[65ch] border-t border-hairline pt-4 text-caption leading-relaxed text-ink-muted">
@@ -805,6 +812,7 @@ defmodule DeckexWeb.BancadaLive do
   attr :vacancies, :list, required: true
   attr :filter, :atom, required: true
   attr :reserve_open?, :boolean, required: true
+  attr :preview, :map, required: true
   attr :verdicts, :map, required: true
 
   defp quadro(assigns) do
@@ -816,6 +824,33 @@ defmodule DeckexWeb.BancadaLive do
 
     ~H"""
     <div class="space-y-8">
+      <%!-- The round he has assembled so far, as CARDS — after thirty-six
+            decisions the text list in the rail was the only mirror, and "não
+            consigo ver um resumo geral, bonito e visual" is exactly right:
+            a deck is pictures, and so is a round. --%>
+      <section :if={@preview.chosen != []} class="rounded-xl border border-hairline-soft bg-rail p-4">
+        <div :for={action <- [:cut, :add]} class="not-first:mt-5">
+          <% picks = Enum.filter(@preview.chosen, &(&1.action == action)) %>
+          <h2 :if={picks != []} class="flex items-baseline gap-2">
+            <span class="text-label font-semibold uppercase tracking-[0.1em] text-ink-secondary">
+              {if action == :cut, do: "Saem", else: "Entram"}
+            </span>
+            <span class="font-mono text-micro text-ink-faint">{length(picks)}</span>
+          </h2>
+          <div :if={picks != []} class="-mx-1 mt-2 min-w-0 overflow-x-auto px-1 pb-1">
+            <div class="flex gap-2">
+              <.card_thumb
+                :for={pick <- picks}
+                name={pick.name}
+                art={pick.card && pick.card.image_art_crop_url}
+                uri={pick.card && pick.card.scryfall_uri}
+                note={pick.price_usd && Money.brl(pick.price_usd)}
+                rank={pick.card && pick.card.edhrec_rank}
+              />
+            </div>
+          </div>
+        </div>
+      </section>
       <%!-- Forty vacancies is a lot to hold at once, and the three questions he
             actually asks of a board are always the same: what is left, what did
             I take, and what did the engine complain about. --%>
@@ -1246,8 +1281,21 @@ defmodule DeckexWeb.BancadaLive do
           >
             {@preview.blocker}
           </p>
+          <%!-- Off 100 is no longer a wall: he chooses freely and the balance
+                stages settle the hundred AFTER his decisions — his own ask,
+                in his own words. The rail says the plan instead of blocking. --%>
           <p
-            :if={is_nil(@preview.blocker) and @preview.undecided > 0}
+            :if={is_nil(@preview.blocker) and @preview.count != Balance.target()}
+            class="mb-2 text-caption leading-snug text-ink-secondary"
+          >
+            O deck ficaria com {@preview.count}. Ao fechar, o crítico lê suas escolhas e a IA
+            fecha a conta em {Balance.target()} — ciente de tudo que você decidiu.
+          </p>
+          <p
+            :if={
+              is_nil(@preview.blocker) and @preview.count == Balance.target() and
+                @preview.undecided > 0
+            }
             class="mb-2 text-caption leading-snug text-ink-muted"
           >
             A conta fecha. Ainda tem {@preview.undecided} vagas sem resposta — fechar agora as descarta.
