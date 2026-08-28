@@ -528,6 +528,29 @@ for *what* we are building and *why*. This file is *how*.
   held zero roles while being exactly what a go-wide deck holds up against a
   wipe.
 
+- **A worse run names what appeared, never just counts it.** "Críticos 0→1"
+  made the owner open a forty-minute timeline to learn WHICH critical — and
+  three real runs earned that label from one finding crossing its threshold
+  by a single card. The outcome carries the introduced criticals' titles
+  ("apareceu: Nada segura um ataque"), because a verdict he can judge from
+  the row is the difference between real damage and a deck standing one card
+  from a line it was already leaning on.
+- **An amplifier is the card its deck is built around, and it was the largest
+  residue class left.** "Triggers an additional time" and "copy target/that
+  spell" assign `:amplifier` by rule; "whenever you cast **or copy**" is a
+  trigger condition and copies nothing — matching it would hand the role to
+  every magecraft payoff in the format.
+- **The price cron assumes a server awake at 06:00, and a desktop app is
+  not.** `Cards.reprice_stale_on_boot/0` enqueues one stale-only sweep at
+  application start, unique per day so it is free when the cron already ran,
+  and rescued so a database that is not up yet cannot stop the boot. Skipped
+  under Oban's `:testing` — the suite starts this application before the
+  sandbox owns the connection.
+- **The AI residue prompt explains the judgement kinds, not just lists them.**
+  The vocabulary derives from `RoleMatch.kinds/0` automatically, but a model
+  told only the atom names returned empty for Veyran and Arachnogenesis; the
+  guidance block carries the boundary each judgement role turns on.
+
 ## Operating notes
 
 - **`mix run` starts Oban, and Oban consumes.** A script that enqueues a job

@@ -20,6 +20,7 @@ defmodule Deckex.Optimizations do
   alias Deckex.Analysis.Bracket
   alias Deckex.Analysis.CardEntry
   alias Deckex.Analysis.DeckSnapshot
+  alias Deckex.Analysis.Finding
   alias Deckex.Analysis.Report
   alias Deckex.Analysis.ReportDiff
   alias Deckex.Budget
@@ -1506,7 +1507,7 @@ defmodule Deckex.Optimizations do
   defp outcome_for(optimization) do
     case sandbox_size(optimization, current_list(optimization)) do
       count when count != 100 -> "fechou em #{count} cartas, não em #{Balance.target()}"
-      _hundred -> verdict(criticals_delta(optimization))
+      _hundred -> verdict(criticals_delta(optimization), effect(optimization))
     end
   end
 
@@ -1568,11 +1569,29 @@ defmodule Deckex.Optimizations do
 
   # Said as a fact, in the owner's language, because it is the line he reads
   # before deciding whether to apply half an hour of model time to his deck.
-  defp verdict({same, same}), do: "completo · críticos #{same}, sem mudança"
-  defp verdict({before, now}) when now < before, do: "completo · críticos #{before}→#{now}"
+  #
+  # A worse run NAMES what appeared instead of counting it. "Críticos 0→1" made
+  # the owner open the timeline to learn which critical — and three real runs
+  # earned that label from a single finding crossing its threshold by one card.
+  # "Apareceu: Nada segura um ataque" is a verdict he can judge from the row:
+  # sometimes it is real damage, sometimes it is the deck standing one card
+  # from a line it was already leaning on.
+  defp verdict({same, same}, _effect), do: "completo · críticos #{same}, sem mudança"
 
-  defp verdict({before, now}) do
-    "ATENÇÃO: o deck saiu pior — críticos #{before}→#{now}"
+  defp verdict({before, now}, _effect) when now < before,
+    do: "completo · críticos #{before}→#{now}"
+
+  defp verdict({before, now}, effect) do
+    "ATENÇÃO: o deck saiu pior — críticos #{before}→#{now}#{appeared(effect)}"
+  end
+
+  defp appeared(%{introduced: introduced}) do
+    case introduced |> Enum.filter(&Finding.critical?/1) |> Enum.map(& &1.title) do
+      [] -> ""
+      [one] -> " · apareceu: #{one}"
+      [one, two] -> " · apareceram: #{one}; #{two}"
+      [one | rest] -> " · apareceram: #{one} e mais #{length(rest)}"
+    end
   end
 
   defp fork_list(optimization, nil), do: current_list(optimization)

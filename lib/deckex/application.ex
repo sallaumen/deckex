@@ -16,7 +16,12 @@ defmodule Deckex.Application do
       # Start a worker by calling: Deckex.Worker.start_link(arg)
       # {Deckex.Worker, arg},
       # Start to serve requests, typically the last entry
-      DeckexWeb.Endpoint
+      DeckexWeb.Endpoint,
+      # The price cron fires at 06:00 — on a desktop the app is often simply
+      # not running at 06:00, and the owner opened it to "preços de 13 dias
+      # atrás" because the sweep had never had a chance to fire. On boot, one
+      # stale-only sweep; uniqueness makes it free when the cron already ran.
+      {Task, &Deckex.Cards.reprice_stale_on_boot/0}
     ]
 
     # See https://elixir.hexdocs.pm/Supervisor.html

@@ -29,7 +29,7 @@ defmodule Deckex.Cards.RolesGoldenTest do
 
   @golden %{
     agadeems_awakening: ~w(ritual)a,
-    alania_divergent_storm: ~w()a,
+    alania_divergent_storm: ~w(amplifier)a,
     apex_devastator: ~w()a,
     arachnogenesis: ~w()a,
     archmage_emeritus: ~w(draw)a,
@@ -58,6 +58,7 @@ defmodule Deckex.Cards.RolesGoldenTest do
     goblin_anarchomancer: ~w(cost_reduction)a,
     goblin_electromancer: ~w(cost_reduction)a,
     grave_pact: ~w(forced_sacrifice)a,
+    harmonic_prodigy: ~w(amplifier)a,
     hullbreaker_horror: ~w(counter spot_removal)a,
     humility: ~w(hoser)a,
     island: ~w()a,
@@ -71,6 +72,7 @@ defmodule Deckex.Cards.RolesGoldenTest do
     oust: ~w(spot_removal)a,
     overwhelming_victory: ~w(spot_removal)a,
     perplexing_test: ~w(board_wipe)a,
+    reiterate: ~w(amplifier)a,
     reliquary_tower: ~w()a,
     resculpt: ~w(spot_removal)a,
     rhystic_study: ~w(draw stax taxation)a,
