@@ -338,6 +338,106 @@ defmodule DeckexWeb.UI do
   end
 
   @doc """
+  One labelled setting: its control, its hint, and **its own error**.
+
+  The settings panel used to hand-roll every box and put the one error message
+  it could hold at the top of a nineteen-field form — so a typo in the eighth
+  box printed "valor inválido" somewhere above the fold, next to none of them,
+  and the box kept showing the rejected value as if it had been accepted. This
+  component exists so that never depends on remembering.
+
+  Three rules it enforces by being the only way to draw a field:
+
+    * the error renders **under the field it belongs to**, never at the top;
+    * a field carrying an error says so on its border as well as in words,
+      because colour alone is not a message;
+    * `saved` is the confirmation the panel promises — a form that saves by
+      itself has to show that it did, where the eye already is.
+
+  ## Examples
+
+      <.field id="ceiling" name="setting[value]" label="Teto" value={@v} error={@errors["ceiling"]} />
+      <.field id="model" name="setting[value]" label="Modelo" options={~w(fable opus)} value={@m} />
+  """
+  attr :id, :string, required: true
+  attr :name, :string, required: true
+  attr :label, :string, required: true
+  attr :value, :any, default: nil
+  attr :options, :list, default: nil, doc: "renders a select when given"
+  attr :hint, :string, default: nil
+  attr :error, :string, default: nil
+  attr :saved, :boolean, default: false
+  attr :numeric, :boolean, default: false
+  attr :class, :any, default: nil
+  attr :rest, :global, include: ~w(disabled placeholder)
+
+  def field(assigns) do
+    ~H"""
+    <div class={["min-w-0", @class]}>
+      <label
+        for={@id}
+        class="mb-1 flex items-baseline gap-2 text-caption font-semibold text-ink-secondary"
+      >
+        {@label}
+        <span :if={@saved && is_nil(@error)} class="font-mono text-micro text-sev-healthy">
+          salvo
+        </span>
+      </label>
+
+      <select
+        :if={@options}
+        id={@id}
+        name={@name}
+        aria-invalid={to_string(not is_nil(@error))}
+        aria-describedby={@error && "#{@id}-error"}
+        class={[
+          "min-h-touch w-full rounded-md border bg-inlay px-3 py-2 text-body text-ink",
+          border(@error)
+        ]}
+        {@rest}
+      >
+        <option
+          :for={option <- @options}
+          value={option}
+          selected={to_string(@value) == to_string(option)}
+        >
+          {option}
+        </option>
+      </select>
+
+      <input
+        :if={is_nil(@options)}
+        id={@id}
+        type="text"
+        name={@name}
+        value={@value}
+        inputmode={if @numeric, do: "decimal"}
+        phx-debounce="blur"
+        aria-invalid={to_string(not is_nil(@error))}
+        aria-describedby={@error && "#{@id}-error"}
+        class={[
+          "min-h-touch w-full rounded-md border bg-inlay px-3 py-2 text-body-lg text-ink",
+          @numeric && "font-mono",
+          border(@error)
+        ]}
+        {@rest}
+      />
+
+      <p :if={@hint && is_nil(@error)} class="mt-1 text-micro text-ink-muted">{@hint}</p>
+
+      <%!-- Under its own field, with the reason. `role="alert"` so the message
+            reaches a screen reader the moment the save comes back refused. --%>
+      <p :if={@error} id={"#{@id}-error"} role="alert" class="mt-1 text-micro text-sev-critical">
+        {@error}
+      </p>
+    </div>
+    """
+  end
+
+  defp border(nil), do: "border-hairline-soft focus:border-ink-faint"
+  defp border(_error), do: "border-sev-critical"
+
+  @doc """
   The four screens one deck has, as one row of links.
 
   It exists because the app grew four of them — the list, the owner's standing

@@ -146,10 +146,41 @@ defmodule Deckex.Settings do
 
   defp validate(%{type: :integer}, value) when is_integer(value) and value >= 0, do: :ok
   defp validate(%{type: :number}, value) when is_number(value) and value > 0, do: :ok
-  defp validate(%{type: :baselines}, value) when is_map(value), do: :ok
+  # `is_map/1` used to be the whole check here, and the baselines are the
+  # numbers every measurement in this app is compared against — the land
+  # target, the interaction target, how many blockers count as defence. A typo
+  # in one box wrote `"abc"` into the middle of the struct, passed because the
+  # container was still a map, and every lens that read that field afterwards
+  # was comparing a number to a string.
+  defp validate(%{type: :baselines}, value) when is_map(value) do
+    fields = Baselines.default() |> Map.from_struct() |> Map.keys() |> MapSet.new()
+
+    # Only the fields that still exist are judged. A field renamed in code
+    # leaves a stale key in the stored map, and the form submits the whole map
+    # on every edit — refusing the stale key would lock all nineteen boxes
+    # over a rename nobody made today. Reading already ignores them.
+    value
+    |> Enum.filter(fn {field, _number} -> safe_atom(field, fields) end)
+    |> Enum.reduce_while(:ok, fn {field, number}, :ok ->
+      case baseline_problem(field, number) do
+        nil -> {:cont, :ok}
+        problem -> {:halt, {:error, invalid(problem, %{field: field, value: inspect(number)})}}
+      end
+    end)
+  end
 
   defp validate(entry, value) do
     {:error, invalid("#{entry.label}: valor inválido.", %{key: entry.key, value: inspect(value)})}
+  end
+
+  # The field name goes in the message. "Baselines: valor inválido" on a form
+  # with nineteen boxes tells the owner to go and find it himself.
+  defp baseline_problem(field, number) do
+    cond do
+      not is_number(number) -> "#{field}: “#{number}” não é um número."
+      number <= 0 -> "#{field}: precisa ser maior que zero."
+      true -> nil
+    end
   end
 
   defp invalid(message, details), do: Error.new(:invalid_setting, message, details)
