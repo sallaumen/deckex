@@ -79,13 +79,16 @@ defmodule Deckex.Settings do
   @spec ceilings(atom()) :: %{card: pos_integer() | nil, land: pos_integer() | nil}
   def ceilings(:budget), do: %{card: positive(:budget_max_brl), land: positive(:budget_max_brl)}
 
-  # No card ceiling here, and that is not an oversight: `upgrade_max_brl` is the
-  # exception line, and `Deckex.Budget` enforces it as a quota rather than a
-  # wall. A hard ceiling at the same number would make the exception slots
-  # unreachable — the card would be refused before anyone could spend one.
-  # Lands keep theirs: a land is the easiest way to spend a lot and win nothing,
-  # and no exception has ever been worth spending on one.
-  def ceilings(:upgrade), do: %{card: nil, land: positive(:upgrade_land_max_brl)}
+  # The card ceiling here is the WALL, not the exception line: `upgrade_max_brl`
+  # (600) is enforced by `Deckex.Budget` as a quota — a pricier card spends one
+  # of the two exception slots — and `upgrade_card_max_brl` (800) is where the
+  # engine refuses outright, slots or no slots. Distinct on purpose: a wall at
+  # the exception line would make the slots unreachable, and no wall at all
+  # left the launcher showing an empty field the owner had to fill every time.
+  # Lands keep their own, lower wall: a land is the easiest way to spend a lot
+  # and win nothing, and no exception has ever been worth spending on one.
+  def ceilings(:upgrade),
+    do: %{card: positive(:upgrade_card_max_brl), land: positive(:upgrade_land_max_brl)}
 
   def ceilings(_lens), do: %{card: nil, land: nil}
 

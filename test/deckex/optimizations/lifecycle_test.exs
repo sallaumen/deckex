@@ -31,7 +31,9 @@ defmodule Deckex.Optimizations.LifecycleTest do
       assert contract["bracket_max"] == 3
       # No card ceiling: the per-card line is the exception threshold, enforced
       # as a quota rather than a wall. Lands keep a hard one.
-      assert contract["ceilings"] == %{"card" => nil, "land" => 200}
+      # 800/300: the registry defaults the owner set — an empty card box
+      # read as "no ceiling" and he refilled it every launch.
+      assert contract["ceilings"] == %{"card" => 800, "land" => 300}
 
       # Frozen at launch — changing Ajustes halfway through a run must not move
       # the line a finished stage was already judged by.

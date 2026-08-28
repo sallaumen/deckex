@@ -551,6 +551,24 @@ for *what* we are building and *why*. This file is *how*.
   told only the atom names returned empty for Veyran and Arachnogenesis; the
   guidance block carries the boundary each judgement role turns on.
 
+- **A contract field the pipeline never reads is worse than no field.** The
+  launcher collected matchups for weeks and no stage briefing ever saw them —
+  the owner typed into a box that did nothing, then stopped typing, and the
+  runs planned against no table at all. `Briefing.table_line/1` now hands the
+  expected pod to EVERY stage, weighed but never tunnel-visioned: the
+  flexible-removal rule still outranks it.
+- **What the owner keeps retyping becomes a chip.** Fifteen pod archetypes
+  and ten standing instructions are one click each in the launcher; the free
+  fields remain for what only he knows. Chips first, in the vocabulary's
+  order, then his own lines — and the default contract speaks the chip
+  vocabulary so a fresh launch arrives preselected instead of empty.
+- **The card wall and the exception quota are different numbers on purpose.**
+  `upgrade_card_max_brl` (default 800) is where the engine refuses outright;
+  `upgrade_max_brl` (600) is the exception line whose two slots live BETWEEN
+  the two numbers. A wall at the exception line would make the slots
+  unreachable, and no wall at all left the launcher showing an empty field
+  the owner refilled every launch — his own words drew it: "R$ 800 inviável".
+
 ## Operating notes
 
 - **`mix run` starts Oban, and Oban consumes.** A script that enqueues a job

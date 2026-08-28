@@ -22,6 +22,44 @@ defmodule DeckexWeb.OptimizationsLive do
   alias Deckex.Settings
   alias DeckexWeb.Clock
 
+  # The archetypes a Commander pod actually seats, as one-click chips. He
+  # launched round after round with the matchups box empty because naming the
+  # meta from memory, under a modal, is head-scratching work — and a field the
+  # pipeline reads deserves better than blank. The free textarea stays for the
+  # deck only he knows.
+  @matchup_chips [
+    "aggro rápido de criaturas",
+    "tokens em massa com anthems",
+    "controle pesado de counters",
+    "stax / prisão de recursos",
+    "combo que fecha no turno 4–5",
+    "spellslinger / storm",
+    "voltron — comandante gigante",
+    "reanimator / cemitério",
+    "aristocratas — sacrifício e drenagem",
+    "landfall / rampa pesada",
+    "artefatos e tesouros",
+    "tribal sinérgico",
+    "superfriends — planeswalkers",
+    "mill",
+    "group hug que vira caos"
+  ]
+
+  # The instructions he keeps retyping, one click each. Joined into the same
+  # notes the briefing already carries — the free field remains for the rest.
+  @nota_chips [
+    "mantenha o tema do deck",
+    "não mexa na base de mana",
+    "arrume a base de mana primeiro",
+    "só troque carta ruim por upgrade claro",
+    "quero fechar o jogo mais cedo",
+    "aguente melhor as varreduras",
+    "prefira interação a velocidade instantânea",
+    "prefira cartas que disparam os motores do deck",
+    "nada que irrite a mesa",
+    "menos cartas situacionais, mais consistência"
+  ]
+
   @impl Phoenix.LiveView
   def mount(%{"id" => deck_id}, _session, socket) do
     case Decks.fetch_deck(deck_id) do
@@ -109,7 +147,9 @@ defmodule DeckexWeb.OptimizationsLive do
      assign(socket,
        launching: true,
        standing: Decks.standing_rules(socket.assigns.deck),
-       contract: Optimizations.default_contract(socket.assigns.deck)
+       contract: Optimizations.default_contract(socket.assigns.deck),
+       matchup_chips: default_chips(socket.assigns.deck),
+       nota_chips: MapSet.new()
      )}
   end
 
@@ -122,6 +162,14 @@ defmodule DeckexWeb.OptimizationsLive do
 
     {:noreply,
      assign(socket, mode: mode, recipe: Optimizations.recipe(socket.assigns.deck, mode))}
+  end
+
+  def handle_event("matchup-chip", %{"valor" => valor}, socket) do
+    {:noreply, assign(socket, matchup_chips: toggle(socket.assigns.matchup_chips, valor))}
+  end
+
+  def handle_event("nota-chip", %{"valor" => valor}, socket) do
+    {:noreply, assign(socket, nota_chips: toggle(socket.assigns.nota_chips, valor))}
   end
 
   def handle_event("preset-salt", %{"preset" => preset}, socket) do
@@ -161,8 +209,11 @@ defmodule DeckexWeb.OptimizationsLive do
         "land" => parse_int(params["ceiling_land"])
       },
       "keep" => lines(params["keep"]),
-      "matchups" => lines(params["matchups"]),
-      "notes" => String.trim(params["notes"] || ""),
+      # Chips first, in the vocabulary's order, then whatever only he knows.
+      "matchups" =>
+        Enum.filter(@matchup_chips, &(&1 in socket.assigns.matchup_chips)) ++
+          lines(params["matchups"]),
+      "notes" => merged_notes(socket.assigns.nota_chips, params["notes"]),
       "pedido" => String.trim(params["pedido"] || ""),
       "model" => params["model"],
       "salt" => salt_for(socket),
@@ -180,6 +231,31 @@ defmodule DeckexWeb.OptimizationsLive do
       reason ->
         {:noreply, put_flash(socket, :error, reason)}
     end
+  end
+
+  # Chips first, in the vocabulary's order, then whatever only he wrote.
+  defp matchup_chip_options, do: @matchup_chips
+  defp nota_chip_options, do: @nota_chips
+
+  defp merged_notes(chips, livre) do
+    livre = String.trim(livre || "")
+    selected = Enum.filter(@nota_chips, &(&1 in chips))
+
+    (selected ++ if(livre == "", do: [], else: [livre])) |> Enum.join("; ")
+  end
+
+  # The default contract's matchups become preselected chips when they match
+  # the vocabulary — one source of truth for what a fresh launch tests against.
+  defp default_chips(deck) do
+    deck
+    |> Optimizations.default_contract()
+    |> Map.get("matchups", [])
+    |> Enum.filter(&(&1 in @matchup_chips))
+    |> MapSet.new()
+  end
+
+  defp toggle(set, value) do
+    if MapSet.member?(set, value), do: MapSet.delete(set, value), else: MapSet.put(set, value)
   end
 
   defp salt_for(%{assigns: %{mode: :reimagine, salt: salt}}), do: salt
@@ -633,22 +709,70 @@ defmodule DeckexWeb.OptimizationsLive do
             <%!-- Only the recipe that has a matchup stage asks for matchups.
                   A field that changes nothing is a field that makes the reader
                   wonder what it changed. --%>
-            <div :if={@mode != :livre}>
-              <.field
-                id="launch-matchups"
-                name="contract[matchups]"
-                label="Matchups para testar (um por linha)"
-                rows={2}
-                value={Enum.join(@contract["matchups"], "\n")}
-              />
+            <div class="2xl:col-span-2">
+              <span class="mb-1 block text-caption font-semibold text-ink-secondary">
+                A mesa esperada
+              </span>
+              <%!-- One click per archetype, because he launched round after
+                    round with this box empty: naming a meta from memory,
+                    under a modal, is head-scratching work. Every stage's
+                    briefing reads what is selected here. --%>
+              <div class="flex flex-wrap gap-1.5" role="group" aria-label="Matchups para testar">
+                <button
+                  :for={chip <- matchup_chip_options()}
+                  type="button"
+                  phx-click="matchup-chip"
+                  phx-value-valor={chip}
+                  aria-pressed={to_string(MapSet.member?(@matchup_chips, chip))}
+                  class={[
+                    "min-h-touch rounded-md border px-2.5 text-caption transition-colors motion-reduce:transition-none",
+                    MapSet.member?(@matchup_chips, chip) &&
+                      "border-hairline-strong bg-inlay text-ink",
+                    !MapSet.member?(@matchup_chips, chip) &&
+                      "border-hairline-soft text-ink-faint hover:text-ink"
+                  ]}
+                >
+                  {chip}
+                </button>
+              </div>
+
+              <div class="mt-2">
+                <.field
+                  id="launch-matchups"
+                  name="contract[matchups]"
+                  label="Outros matchups (um por linha)"
+                  rows={1}
+                  placeholder="ex.: o deck de dragões do João"
+                />
+              </div>
             </div>
 
             <div class="grid gap-4 sm:grid-cols-[1fr_10rem]">
               <div>
+                <span class="mb-1 block text-caption font-semibold text-ink-secondary">
+                  Notas para todas as etapas
+                </span>
+                <div class="mb-2 flex flex-wrap gap-1.5" role="group" aria-label="Notas prontas">
+                  <button
+                    :for={chip <- nota_chip_options()}
+                    type="button"
+                    phx-click="nota-chip"
+                    phx-value-valor={chip}
+                    aria-pressed={to_string(MapSet.member?(@nota_chips, chip))}
+                    class={[
+                      "min-h-touch rounded-md border px-2.5 text-caption transition-colors motion-reduce:transition-none",
+                      MapSet.member?(@nota_chips, chip) && "border-hairline-strong bg-inlay text-ink",
+                      !MapSet.member?(@nota_chips, chip) &&
+                        "border-hairline-soft text-ink-faint hover:text-ink"
+                    ]}
+                  >
+                    {chip}
+                  </button>
+                </div>
                 <.field
                   id="launch-notes"
                   name="contract[notes]"
-                  label="Notas para todas as etapas"
+                  label="Mais alguma instrução, do seu jeito"
                   placeholder="ex.: mantenha o tema de lontras"
                 />
               </div>

@@ -101,7 +101,7 @@ defmodule Deckex.ConsultModelsTest do
       assert consult.briefing =~ "It already holds **0**"
       assert consult.briefing =~ "0 are spent"
       # A land still gets a hard wall, and no exception can buy past it.
-      assert consult.briefing =~ "R$ 200"
+      assert consult.briefing =~ "R$ 300"
     end
 
     # :finding rides the "Pedir diagnóstico" buttons, :scout the dossier card,

@@ -948,7 +948,7 @@ defmodule Deckex.Consults.Briefing do
 
     - Maximum bracket: **#{contract["bracket_max"]}** — an add that moves the deck past it will be rejected by the engine.
     #{land_ceiling_line(contract["ceilings"])}
-    #{salt_line(contract["salt"])}#{keep_line(contract["keep"])}#{notes_line(contract["notes"])}#{count_line(optimization[:card_count], stage_kind)}
+    #{salt_line(contract["salt"])}#{keep_line(contract["keep"])}#{notes_line(contract["notes"])}#{table_line(contract["matchups"])}#{count_line(optimization[:card_count], stage_kind)}
     #{changelog_lines(changelog)}
     You may revert an earlier stage's change, but engage its stated reason.
     Each card may enter and leave this optimization once — the engine enforces
@@ -1013,6 +1013,20 @@ defmodule Deckex.Consults.Briefing do
   # Stating the count was never enough: a stage that knows the copy is at 105
   # and is asked for nothing in particular tends to swap card-for-card and
   # leave it at 105. `Balance` turns the gap into a number for this stage.
+  # The pod he actually faces. It reaches EVERY stage — for most of this
+  # feature's life the launcher collected matchups and no pipeline briefing
+  # ever read them, so the owner typed them into a field that did nothing.
+  # Weighed, never tunnel-visioned: the flexible-removal rule below still
+  # stands, and a card that only beats the named deck is still dead against
+  # the other two chairs.
+  defp table_line(matchups) when is_list(matchups) and matchups != [] do
+    "\n- The table this deck actually faces: **#{Enum.join(matchups, "; ")}**. " <>
+      "Weigh every change against these decks showing up — without narrowing " <>
+      "into answers that only work against them."
+  end
+
+  defp table_line(_none), do: ""
+
   defp count_line(nil, _stage_kind), do: ""
 
   # The cardápio ends nothing — the owner does — so it is told the count as a

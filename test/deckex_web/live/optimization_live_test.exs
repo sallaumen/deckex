@@ -134,6 +134,58 @@ defmodule DeckexWeb.OptimizationLiveTest do
       assert html =~ "Proteger só nesta rodada"
     end
 
+    test "the launcher's chips land in the frozen contract", %{conn: conn} do
+      deck = deck()
+      {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}/otimizacoes")
+
+      live |> element("button[phx-click='abrir-lancador']") |> render_click()
+
+      # The defaults arrive preselected — a fresh launch already tests against
+      # aggro and control, which is what the empty box silently dropped.
+      html = render(live)
+      assert html =~ ~s(aria-pressed="true")
+
+      # One archetype on, one note on, one custom line typed.
+      live
+      |> element(~s(button[phx-value-valor="spellslinger / storm"]))
+      |> render_click()
+
+      live
+      |> element(~s(button[phx-value-valor="mantenha o tema do deck"]))
+      |> render_click()
+
+      live
+      |> form("#launch-form",
+        contract: %{
+          "bracket_max" => "3",
+          "matchups" => "o deck de dragões do João",
+          "notes" => "sem cartas de mais de 6 manas",
+          "model" => "opus"
+        }
+      )
+      |> render_submit()
+
+      run = deck.id |> Deckex.Optimizations.list_for_deck() |> hd()
+
+      assert "spellslinger / storm" in run.contract["matchups"]
+      assert "aggro rápido de criaturas" in run.contract["matchups"]
+      assert "o deck de dragões do João" in run.contract["matchups"]
+      assert run.contract["notes"] =~ "mantenha o tema do deck"
+      assert run.contract["notes"] =~ "sem cartas de mais de 6 manas"
+    end
+
+    test "the ceilings arrive filled from Ajustes, not blank", %{conn: conn} do
+      deck = deck()
+      {:ok, live, _html} = live(conn, ~p"/decks/#{deck.id}/otimizacoes")
+
+      html = live |> element("button[phx-click='abrir-lancador']") |> render_click()
+
+      # 800 for a card, 300 for a land — the registry defaults the owner set.
+      # An empty box read as "no ceiling", and he refilled it every launch.
+      assert html =~ ~s(value="800")
+      assert html =~ ~s(value="300")
+    end
+
     test "the direct-adjustment mode launches one stage with his request",
          %{conn: conn} do
       deck = deck()
@@ -145,8 +197,9 @@ defmodule DeckexWeb.OptimizationLiveTest do
       assert html =~ "Uma etapa só"
       assert html =~ "O que você quer que ele faça"
       assert html =~ "Começar a etapa"
-      # A single stage never runs the matchup validation, so it never asks.
-      refute html =~ "Matchups para testar"
+      # The expected table reaches EVERY stage's briefing now — a single free
+      # stage plans against the same pod the full pipeline does.
+      assert html =~ "A mesa esperada"
 
       assert {:error, {:live_redirect, %{to: "/otimizacoes/" <> _id}}} =
                live
