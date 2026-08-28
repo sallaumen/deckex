@@ -425,6 +425,17 @@ for *what* we are building and *why*. This file is *how*.
   this stage at 98" either ignores it or obeys it by proposing fewer vacancies
   than were asked for.
 
+- **`Enum.at/2` wraps a negative index, and user input can be negative.** The
+  Bancada's number-key handler did `Enum.at(candidatos, n - 1)` unguarded; a
+  payload of `n: 0` silently picked the **last** candidate — a selection the
+  owner never made, on the one screen built to prevent exactly that. Any
+  index that arrives from outside is guarded positive before it reaches
+  `Enum.at`.
+- **A close is idempotent; a toggle is not a close.** The shortcuts sheet
+  closed via three paths — Escape, click-away, the X — all wired to one
+  toggle event, and any two firing together reopened what one closed (Escape
+  had two window listeners; a backdrop click also triggered click-away). Every
+  dismiss path sends an event that *sets* closed, never one that flips.
 - **A window key listener hears every key, so its handler needs a floor.**
   `phx-window-keydown` fires on `a`, on `Tab`, on `F5`, and delivers
   `%{"key" => ...}` — a payload no specific clause matches. Measured

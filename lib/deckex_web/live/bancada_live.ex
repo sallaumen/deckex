@@ -24,7 +24,9 @@ defmodule DeckexWeb.BancadaLive do
   alias Deckex.Analysis.Report
   alias Deckex.Budget
   alias Deckex.Cards.Card
+  alias Deckex.Cards.Name
   alias Deckex.Decks
+  alias Deckex.Decks.CardNote
   alias Deckex.Error
   alias Deckex.Money
   alias Deckex.Optimizations
@@ -69,6 +71,10 @@ defmodule DeckexWeb.BancadaLive do
       # Depends on nothing he can change while he works, so it is measured once
       # and then only read.
       preflight: Optimizations.preflight(optimization, step, deck, vacancies),
+      # What he has already said about these cards. The owner outranks the
+      # pipeline about his own cards — the law the review stage wrote — and a
+      # screen asking him to judge a cut owes him his own past correction.
+      notes: Map.new(Decks.card_notes(deck), &{Name.normalize(&1.card_name), &1}),
       phase: :triagem,
       cursor: 0,
       filter: :todas,
@@ -106,18 +112,25 @@ defmodule DeckexWeb.BancadaLive do
 
   @impl Phoenix.LiveView
   def handle_event("escolher", %{"vaga" => key, "carta" => name}, socket) do
-    {:noreply, socket |> decide(key, name) |> advance_after_choice()}
+    {:noreply, socket |> decide(key, name) |> advance_after_choice(key)}
   end
 
   def handle_event("pular", %{"vaga" => key}, socket) do
-    {:noreply, socket |> decide(key, nil) |> advance_after_choice()}
+    {:noreply, socket |> decide(key, nil) |> advance_after_choice(key)}
   end
 
   def handle_event("limpar", %{"vaga" => key}, socket) do
-    vacancy = Enum.find(socket.assigns.vacancies, &(&1.key == key))
-    {:ok, step} = Optimizations.unselect(socket.assigns.step, vacancy)
+    case Enum.find(socket.assigns.vacancies, &(&1.key == key)) do
+      nil ->
+        {:noreply, socket}
 
-    {:noreply, socket |> assign(step: step) |> measure()}
+      vacancy ->
+        {:ok, step} = Optimizations.unselect(socket.assigns.step, vacancy)
+
+        # Undoing the add that opened the reserve folds it back, and `visible`
+        # shrinks under the cursor — clamp rather than point past the end.
+        {:noreply, socket |> assign(step: step) |> measure() |> move(0)}
+    end
   end
 
   def handle_event("ir", %{"para" => "proxima"}, socket), do: {:noreply, move(socket, 1)}
@@ -134,9 +147,12 @@ defmodule DeckexWeb.BancadaLive do
     {:noreply, assign(socket, phase: String.to_existing_atom(fase), atalhos?: false)}
   end
 
-  def handle_event("filtrar", %{"filtro" => filtro}, socket) do
+  def handle_event("filtrar", %{"filtro" => filtro}, socket)
+      when filtro in ~w(todas indecisas escolhidas avisos) do
     {:noreply, assign(socket, filter: String.to_existing_atom(filtro))}
   end
+
+  def handle_event("filtrar", _junk, socket), do: {:noreply, socket}
 
   def handle_event("texto", _params, socket) do
     {:noreply, assign(socket, texto?: not socket.assigns.texto?)}
@@ -150,14 +166,25 @@ defmodule DeckexWeb.BancadaLive do
     {:noreply, assign(socket, atalhos?: not socket.assigns.atalhos?)}
   end
 
+  # Idempotent on purpose: Escape, click-away and the X can land in any
+  # combination, and a toggle that fires twice reopens what it closed.
+  def handle_event("fechar-atalhos", _params, socket) do
+    {:noreply, assign(socket, atalhos?: false)}
+  end
+
   # The keyboard's numbers pick the nth candidate of whatever is on screen; 0
   # skips. Sent by position rather than by name so the hook never has to know
   # what a card is called.
-  def handle_event("tecla", %{"n" => n}, socket) do
+  # Guarded to positive integers: `Enum.at/2` wraps a negative index to the
+  # END of the list, so an unguarded `n: 0` silently picked the *last*
+  # candidate — a selection he never made, which is the one failure this whole
+  # screen exists to prevent.
+  def handle_event("tecla", %{"n" => n}, socket) when is_integer(n) and n > 0 do
     with vacancy when not is_nil(vacancy) <-
            Enum.at(socket.assigns.visible, socket.assigns.cursor),
          candidate when not is_nil(candidate) <- Enum.at(vacancy.candidatos, n - 1) do
-      {:noreply, socket |> decide(vacancy.key, candidate.name) |> advance_after_choice()}
+      {:noreply,
+       socket |> decide(vacancy.key, candidate.name) |> advance_after_choice(vacancy.key)}
     else
       _no_vacancy_or_no_such_candidate -> {:noreply, socket}
     end
@@ -201,17 +228,31 @@ defmodule DeckexWeb.BancadaLive do
   def handle_event("tecla", _anything_else, socket), do: {:noreply, socket}
 
   defp decide(socket, key, name) do
-    vacancy = Enum.find(socket.assigns.vacancies, &(&1.key == key))
-    {:ok, step} = Optimizations.select(socket.assigns.step, vacancy, name)
+    case Enum.find(socket.assigns.vacancies, &(&1.key == key)) do
+      nil ->
+        socket
 
-    socket |> assign(step: step) |> measure()
+      vacancy ->
+        {:ok, step} = Optimizations.select(socket.assigns.step, vacancy, name)
+
+        socket |> assign(step: step) |> measure()
+    end
   end
 
   # A decision moves him on, because the whole point of triage is rhythm. It
-  # stops at the end rather than wrapping: arriving back at vacancy one reads
-  # as having lost the list.
-  defp advance_after_choice(%{assigns: %{phase: :quadro}} = socket), do: socket
-  defp advance_after_choice(socket), do: move(socket, 1, :stop_at_end)
+  # advances from the KEY of the vacancy he answered, not from the cursor: a
+  # pick that opens the reserve inserts cut vacancies before the adds, and a
+  # numeric +1 landed him back on the vacancy he had just answered. It stops
+  # at the end rather than wrapping — arriving back at vacancy one reads as
+  # having lost the list.
+  defp advance_after_choice(%{assigns: %{phase: :quadro}} = socket, _key), do: socket
+
+  defp advance_after_choice(socket, key) do
+    case key && Enum.find_index(socket.assigns.visible, &(&1.key == key)) do
+      nil -> move(socket, 1, :stop_at_end)
+      index -> assign(socket, cursor: min(index + 1, max(length(socket.assigns.visible) - 1, 0)))
+    end
+  end
 
   defp move(socket, delta, mode \\ :allow_edges) do
     last = max(length(socket.assigns.visible) - 1, 0)
@@ -359,6 +400,18 @@ defmodule DeckexWeb.BancadaLive do
       not (Budget.room?(occupancy, :exception, policy) or occupancy.exception == 0)
   end
 
+  # His standing words about a card, when he has any. A bare `:wanted` on an
+  # add candidate still speaks — he asked for this card by name — but a bare
+  # `:locked` on a cut stays silent here: the audit already refuses that cut
+  # out loud, and saying it twice reads as two rules instead of one.
+  defp owner_line(nil, _action), do: nil
+
+  defp owner_line(%CardNote{note: text}, _action) when is_binary(text) and text != "", do: text
+
+  defp owner_line(%CardNote{stance: :wanted}, :add), do: "você pediu esta carta"
+
+  defp owner_line(_bare_order, _action), do: nil
+
   defp power_toughness(%Card{power: p, toughness: t}) when is_binary(p) and is_binary(t),
     do: "#{p}/#{t}"
 
@@ -487,6 +540,7 @@ defmodule DeckexWeb.BancadaLive do
             visible={@visible}
             cursor={@cursor}
             texto?={@texto?}
+            notes={@notes}
             verdicts={%{preflight: @preflight, preview: @preview}}
             gate={@step.kind}
           />
@@ -558,6 +612,7 @@ defmodule DeckexWeb.BancadaLive do
   attr :visible, :list, required: true
   attr :cursor, :integer, required: true
   attr :texto?, :boolean, required: true
+  attr :notes, :map, required: true
   attr :verdicts, :map, required: true
   attr :gate, :atom, required: true
 
@@ -634,6 +689,7 @@ defmodule DeckexWeb.BancadaLive do
             dimmed={passed_over?(@step, @vacancy, candidate)}
             verdict={verdict(@verdicts, @vacancy, candidate)}
             texto?={@texto?}
+            dono={owner_line(@notes[Name.normalize(candidate.name)], @vacancy.action)}
             big
           />
         </li>
@@ -845,6 +901,7 @@ defmodule DeckexWeb.BancadaLive do
   attr :dimmed, :boolean, default: false
   attr :verdict, :any, default: nil
   attr :texto?, :boolean, default: false
+  attr :dono, :string, default: nil, doc: "the owner's own standing words about this card"
   attr :big, :boolean, default: false
 
   defp candidato(assigns) do
@@ -941,6 +998,14 @@ defmodule DeckexWeb.BancadaLive do
             {Money.brl(@candidate.price_usd)}
           </span>
           <.play_rate :if={@candidate.card} card={@candidate.card} />
+        </p>
+
+        <%!-- His words above the model's, because that is the ranking the
+              review stage already wrote into law: the owner outranks the
+              pipeline about his own cards. --%>
+        <p :if={@dono} class="mt-2 flex gap-1.5 text-caption leading-relaxed text-ink">
+          <span class="shrink-0 font-mono text-micro uppercase text-ink-faint">Você</span>
+          <span class="min-w-0">{@dono}</span>
         </p>
 
         <p class="mt-2 flex gap-1.5 text-caption leading-relaxed text-ink-secondary">
@@ -1210,24 +1275,23 @@ defmodule DeckexWeb.BancadaLive do
 
   defp atalhos(assigns) do
     ~H"""
-    <div
-      class="fixed inset-0 z-40 flex items-end justify-center bg-felt/70 p-4 backdrop-blur-sm sm:items-center"
-      phx-click="atalhos"
-      phx-window-keydown="atalhos"
-      phx-key="Escape"
-    >
+    <%!-- No handler on the backdrop and no second Escape listener: the hook
+          already owns the window's keys, and a backdrop click would fire
+          together with click-away — two toggles reopening what one closed.
+          One idempotent close, from every path. --%>
+    <div class="fixed inset-0 z-40 flex items-end justify-center bg-felt/70 p-4 backdrop-blur-sm sm:items-center">
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Atalhos de teclado"
-        phx-click-away="atalhos"
+        phx-click-away="fechar-atalhos"
         class="w-full max-w-md rounded-xl border border-hairline-soft bg-rail p-5 shadow-lifted"
       >
         <div class="flex items-start justify-between gap-4">
           <h2 class="text-heading font-semibold text-ink">Atalhos</h2>
           <button
             type="button"
-            phx-click="atalhos"
+            phx-click="fechar-atalhos"
             aria-label="Fechar atalhos"
             class="-m-2 inline-flex size-touch items-center justify-center rounded-md text-ink-faint transition-colors hover:text-ink motion-reduce:transition-none"
           >
