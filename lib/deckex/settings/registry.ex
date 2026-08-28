@@ -100,10 +100,25 @@ defmodule Deckex.Settings.Registry do
       options: nil,
       group: :budget
     },
+    # The wall above the quota, and the two do not compete: the exception
+    # slots live between the exception line (600) and this wall — a card at
+    # R$ 700 spends a slot and enters; a card past the wall is refused
+    # outright. The owner's own words drew it: "R$ 800 inviável".
+    %{
+      key: :upgrade_card_max_brl,
+      type: :integer,
+      default: 800,
+      label: "Teto absoluto por carta (R$)",
+      hint:
+        "Acima disso o motor recusa mesmo com vaga de exceção sobrando. " <>
+          "As exceções vivem entre o teto de exceção e este número.",
+      options: nil,
+      group: :budget
+    },
     %{
       key: :upgrade_land_max_brl,
       type: :integer,
-      default: 200,
+      default: 300,
       label: "Teto por terreno (R$)",
       hint: "Terreno caro é o jeito mais fácil de estourar o orçamento sem ganhar jogo.",
       options: nil,

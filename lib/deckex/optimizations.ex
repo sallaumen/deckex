@@ -76,7 +76,7 @@ defmodule Deckex.Optimizations do
       # and forgetting is how a combo piece gets cut.
       "keep" => standing["keep"],
       "wanted" => standing["wanted"],
-      "matchups" => ["um deck aggro rápido", "um deck de controle pesado"],
+      "matchups" => ["aggro rápido de criaturas", "controle pesado de counters"],
       "notes" => "",
       # Every stage of an optimization proposes cutting and adding cards, so
       # the floor is the default here rather than the global model — the owner
