@@ -583,6 +583,19 @@ for *what* we are building and *why*. This file is *how*.
   commit — and when adding a page that shows deck-derived numbers, subscribe
   it to the deck topic.
 
+- **A note is the owner's word, and staleness in it is his to fix — so the
+  screen points and the briefing guards.** Four real notes cited cards gone
+  since an older version (Thousand-Year Storm, Battle Hymn, Infernal Plunge)
+  and rode into every briefing until the model itself flagged them as residue.
+  Three answers, none of which rewrites his text: the Cartas screen marks a
+  note citing a departed card ("cita X, que não está mais na lista"), with
+  departed = the deck's own version history minus the working list — never a
+  guess at prose; the briefing's notes block states that the decklist outranks
+  a chain through an absent card while his rulings about present cards still
+  win; and identical note texts collapse into ONE briefing entry naming every
+  card — the sweep stamps the same paragraph on a whole package, and printing
+  it four times taught the model that repetition means importance.
+
 ## Operating notes
 
 - **`mix run` starts Oban, and Oban consumes.** A script that enqueues a job

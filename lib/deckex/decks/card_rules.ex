@@ -104,4 +104,30 @@ defmodule Deckex.Decks.CardRules do
     |> Enum.reject(&MapSet.member?(have, Name.normalize(&1)))
     |> MapSet.new()
   end
+
+  @doc """
+  Which of `departed` each note cites, keyed by the rule's id.
+
+  A note is the owner's words and the app never rewrites them — but a note
+  that leans on a card the list no longer holds is stale in a way only he can
+  fix, and nothing on any screen said so. Measured on a real deck: four notes
+  citing Thousand-Year Storm, Battle Hymn and Infernal Plunge — cards gone
+  since an older version — rode into every briefing until the model itself
+  had to flag them as residue.
+
+  Exact card names only. They are distinctive enough that a substring hit in
+  a note IS a citation, and `departed` comes from the deck's own version
+  history, not from guessing at prose.
+  """
+  @spec stale_citations([CardNote.t()], [String.t()]) :: %{term() => [String.t()]}
+  def stale_citations(rules, departed) do
+    rules
+    |> Enum.map(fn rule ->
+      note = to_string(rule.note)
+
+      {rule.id, Enum.filter(departed, &String.contains?(note, &1))}
+    end)
+    |> Enum.reject(fn {_id, cited} -> cited == [] end)
+    |> Map.new()
+  end
 end

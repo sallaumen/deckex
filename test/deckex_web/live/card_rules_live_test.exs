@@ -9,6 +9,7 @@ defmodule DeckexWeb.CardRulesLiveTest do
   alias Deckex.CatalogueFixture
   alias Deckex.Consults
   alias Deckex.Decks
+  alias Deckex.Decks.Versions
   alias Deckex.Repo
 
   setup do
@@ -246,5 +247,32 @@ defmodule DeckexWeb.CardRulesLiveTest do
     html = live |> form("#colar", %{lote: %{texto: "# só um título\n\n"}}) |> render_submit()
 
     assert html =~ "Não achei nenhum nome de carta nesse texto"
+  end
+
+  # The regression from a real deck: four notes citing cards gone since an
+  # older version rode into every briefing until the model itself had to flag
+  # them as residue. The note is the owner's and only he can prune it — so the
+  # screen points.
+  test "a note citing a card that left the list gets the pointer",
+       %{conn: conn, deck: deck} do
+    # Cultivate enters the version history, then leaves the working list.
+    {:ok, _card} = Decks.add_card(deck, "Cultivate")
+    {:ok, _version} = Versions.mark(deck, origin: :manual)
+    {:ok, :removed} = Decks.remove_card(deck, "Cultivate")
+
+    {:ok, _note} = Decks.put_card_note(deck, "Sol Ring", "a cadeia fecha com Cultivate")
+
+    {:ok, _live, html} = live(conn, ~p"/decks/#{deck.id}/cartas")
+
+    assert html =~ "Esta nota cita Cultivate"
+    assert html =~ "não está mais na lista"
+  end
+
+  test "a note citing only present cards stays quiet", %{conn: conn, deck: deck} do
+    {:ok, _note} = Decks.put_card_note(deck, "Sol Ring", "o motor de mana do deck")
+
+    {:ok, _live, html} = live(conn, ~p"/decks/#{deck.id}/cartas")
+
+    refute html =~ "não está mais na lista"
   end
 end
