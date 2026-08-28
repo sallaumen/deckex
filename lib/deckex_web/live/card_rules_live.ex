@@ -479,20 +479,15 @@ defmodule DeckexWeb.CardRulesLive do
         <p class="mb-4 max-w-[70ch] text-caption text-ink-secondary">{stance_effect(@stance)}</p>
 
         <.form for={%{}} id="colar" phx-submit="colar">
-          <label for="lote-texto" class="mb-1 block text-caption font-semibold text-ink-secondary">
-            Uma carta por linha
-          </label>
-          <textarea
+          <.field
             id="lote-texto"
             name="lote[texto]"
-            rows="5"
+            label="Uma carta por linha"
+            rows={5}
+            numeric
             placeholder={lote_placeholder()}
-            class="w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 font-mono text-caption text-ink placeholder:text-ink-faint"
-          ></textarea>
-          <p class="mt-1 text-micro text-ink-muted">
-            O motivo vem depois de uma barra vertical, e é opcional — mas é ele que ensina a IA. "1x"
-            na frente do nome é ignorado, então dá para colar linhas de decklist direto.
-          </p>
+            hint={lote_hint()}
+          />
 
           <div class="mt-3 flex justify-end">
             <.button type="submit" variant="primary" phx-disable-with="Guardando…">
@@ -630,6 +625,11 @@ defmodule DeckexWeb.CardRulesLive do
 
   # A function, not an inline string: the formatter mangles multi-line
   # attribute literals (the placeholder law from the import screen).
+  defp lote_hint do
+    "O motivo vem depois de uma barra vertical, e é opcional — mas é ele que ensina a IA. " <>
+      "\"1x\" na frente do nome é ignorado, então dá para colar linhas de decklist direto."
+  end
+
   defp lote_placeholder do
     "Sam, Loyal Attendant | combo infinito com o Prize Pig: comida sai de graça\nPrize Pig"
   end

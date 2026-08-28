@@ -716,7 +716,7 @@ defmodule DeckexWeb.DeckLive do
                 <select
                   id="consult-lens"
                   name="consult[lens]"
-                  class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-2 py-2 text-caption text-ink"
+                  class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-caption text-ink"
                 >
                   <option :for={{lens, label} <- Consults.lens_labels()} value={lens}>
                     {label}
@@ -734,7 +734,7 @@ defmodule DeckexWeb.DeckLive do
                 <select
                   id="consult-model"
                   name="consult[model]"
-                  class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-2 py-2 font-mono text-caption text-ink"
+                  class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 font-mono text-caption text-ink"
                 >
                   <option :for={model <- Consults.models()} value={model} selected={model == @model}>
                     {model}
@@ -754,7 +754,7 @@ defmodule DeckexWeb.DeckLive do
                   type="text"
                   name="consult[against]"
                   placeholder="ex.: Krenko goblins"
-                  class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-2 py-2 text-caption text-ink placeholder:text-ink-faint"
+                  class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-caption text-ink placeholder:text-ink-faint"
                 />
                 <p class="mt-1 text-micro text-ink-muted">
                   Só usado na análise de matchup.
@@ -1123,19 +1123,15 @@ defmodule DeckexWeb.DeckLive do
               phx-change="descricao"
               class="rounded-xl border border-hairline-soft bg-surface p-6"
             >
-              <label for="deck-descricao" class="sr-only">O que é esse deck</label>
-              <textarea
+              <.field
                 id="deck-descricao"
                 name="descricao"
-                rows="4"
-                phx-debounce="blur"
+                label="O que é esse deck"
+                rows={4}
+                value={@deck.description}
                 placeholder={descricao_placeholder()}
-                class="w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-caption text-ink placeholder:text-ink-faint"
-              >{@deck.description}</textarea>
-              <p class="mt-2 max-w-[70ch] text-micro text-ink-muted">
-                O que o deck quer fazer, o que não pode sair, o que você não quer que mexam. Salva
-                sozinho quando você sai do campo.
-              </p>
+                hint="O que o deck quer fazer, o que não pode sair, o que você não quer que mexam. Salva sozinho quando você sai do campo."
+              />
             </.form>
           </section>
 
