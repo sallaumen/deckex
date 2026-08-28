@@ -145,7 +145,7 @@ defmodule DeckexWeb.ImportLive do
                 rows="16"
                 required
                 placeholder={decklist_example()}
-                class="w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 font-mono text-caption text-ink placeholder:text-ink-faint focus:border-ink-faint 2xl:min-h-[30rem]"
+                class={[control_class(), "font-mono", "2xl:min-h-[30rem]"]}
               >{@paste_form[:decklist].value}</textarea>
             </div>
 

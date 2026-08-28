@@ -716,7 +716,7 @@ defmodule DeckexWeb.DeckLive do
                 <select
                   id="consult-lens"
                   name="consult[lens]"
-                  class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-caption text-ink"
+                  class={[control_class(), "min-h-touch"]}
                 >
                   <option :for={{lens, label} <- Consults.lens_labels()} value={lens}>
                     {label}
@@ -734,7 +734,7 @@ defmodule DeckexWeb.DeckLive do
                 <select
                   id="consult-model"
                   name="consult[model]"
-                  class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 font-mono text-caption text-ink"
+                  class={[control_class(), "min-h-touch font-mono"]}
                 >
                   <option :for={model <- Consults.models()} value={model} selected={model == @model}>
                     {model}
@@ -754,7 +754,7 @@ defmodule DeckexWeb.DeckLive do
                   type="text"
                   name="consult[against]"
                   placeholder="ex.: Krenko goblins"
-                  class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-caption text-ink placeholder:text-ink-faint"
+                  class={[control_class(), "min-h-touch"]}
                 />
                 <p class="mt-1 text-micro text-ink-muted">
                   Só usado na análise de matchup.
@@ -1221,7 +1221,7 @@ defmodule DeckexWeb.DeckLive do
                         id={"dossier-#{field}"}
                         name={"dossier[#{field}]"}
                         rows="3"
-                        class="w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-caption text-ink"
+                        class={[control_class()]}
                       >{@deck.dossier[field]}</textarea>
                     </div>
                     <.button type="submit">Salvar</.button>
@@ -1557,7 +1557,7 @@ defmodule DeckexWeb.DeckLive do
               value=""
               placeholder="Adicionar carta pelo nome"
               autocomplete="off"
-              class="min-h-touch w-56 rounded-md border border-hairline-soft bg-inlay px-3 text-caption text-ink placeholder:text-ink-faint focus:border-ink-faint"
+              class={[control_class(), "min-h-touch w-56"]}
             />
             <.button type="submit">Adicionar</.button>
           </.form>

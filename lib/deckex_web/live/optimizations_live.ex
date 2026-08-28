@@ -524,7 +524,7 @@ defmodule DeckexWeb.OptimizationsLive do
               <select
                 id="launch-from"
                 name="contract[from_version]"
-                class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-caption text-ink"
+                class={[control_class(), "min-h-touch"]}
               >
                 <option :if={@drifted?} value="" selected>
                   Como está agora — {@deck_size} cartas, com mudanças não marcadas

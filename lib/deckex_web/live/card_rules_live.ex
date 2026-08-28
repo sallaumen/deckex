@@ -612,7 +612,7 @@ defmodule DeckexWeb.CardRulesLive do
                 name="motivo"
                 value={rule.note}
                 placeholder={motivo_placeholder(@stance)}
-                class="min-h-touch min-w-0 flex-1 rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-caption text-ink placeholder:text-ink-faint"
+                class={[control_class(), "min-h-touch min-w-0 flex-1"]}
               />
               <.button type="submit" phx-disable-with="…">Guardar</.button>
             </div>

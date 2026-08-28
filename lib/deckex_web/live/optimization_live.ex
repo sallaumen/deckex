@@ -972,7 +972,7 @@ defmodule DeckexWeb.OptimizationLive do
                 name="feedback[note]"
                 value={step.feedback["note"]}
                 placeholder="anotar algo sobre esta etapa…"
-                class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-caption text-ink placeholder:text-ink-faint"
+                class={[control_class(), "min-h-touch"]}
               />
               <button
                 type="submit"
@@ -994,7 +994,7 @@ defmodule DeckexWeb.OptimizationLive do
               <select
                 id={"modelo-#{step.id}"}
                 name="modelo"
-                class="min-h-touch rounded-md border border-hairline-soft bg-inlay px-2 font-mono text-micro text-ink"
+                class={[control_class(), "min-h-touch w-auto font-mono"]}
               >
                 <option
                   :for={model <- Consults.models_at_or_above(Settings.model_floor())}
@@ -1091,7 +1091,7 @@ defmodule DeckexWeb.OptimizationLive do
                   rows="2"
                   phx-debounce="blur"
                   placeholder={"o que o motor errou sobre #{card}, ou por que ela fica"}
-                  class="w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-caption text-ink"
+                  class={[control_class()]}
                 >{mark.note}</textarea>
               </.form>
             </li>
@@ -1109,7 +1109,7 @@ defmodule DeckexWeb.OptimizationLive do
               name="revisao[geral]"
               rows="3"
               placeholder="ex.: ficou lento demais; cortou cartas do tema; quero mais remoção barata"
-              class="w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-caption text-ink"
+              class={[control_class()]}
             >{@optimization.contract["revisao_geral"]}</textarea>
 
             <div class="flex flex-wrap items-center gap-3">
@@ -1287,7 +1287,7 @@ defmodule DeckexWeb.OptimizationLive do
                 id="lista-final"
                 readonly
                 rows="12"
-                class="mt-2 w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 font-mono text-caption text-ink"
+                class={[control_class(), "mt-2 font-mono"]}
               >{Optimizations.list_to_text(Optimizations.current_list(@optimization), Optimizations.current_commanders(@optimization))}</textarea>
             </details>
           </div>

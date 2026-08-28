@@ -443,11 +443,26 @@ defmodule DeckexWeb.UI do
     """
   end
 
-  # One padding and one type size for every control in the app. Before this
-  # there were three of each — `px-2`, `px-3` and `px-4`, `text-caption` and
-  # `text-body-lg` — sitting side by side in the same form, because each screen
-  # wrote its own class string. `font-mono` is the only variation left, and it
-  # means "this is a number you will read", not "this screen felt like it".
+  @doc """
+  The class string every form control in this app wears.
+
+  One padding and one type size. Before this there were three of each — `px-2`,
+  `px-3` and `px-4`, `text-caption` and `text-body-lg` — sitting side by side in
+  the same form, because each screen wrote its own string. `font-mono` is the
+  only variation left, and it means "this is a number you will read", not "this
+  screen felt like it".
+
+  `field/1` is the way to draw a control and applies this itself. This is
+  public for the handful that genuinely need their own markup — a `<select>`
+  whose options carry a label different from their value, for one — so that
+  needing custom markup never means inventing custom spacing.
+  """
+  @spec control_class() :: String.t()
+  def control_class do
+    "w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-caption text-ink " <>
+      "placeholder:text-ink-faint focus:border-ink-faint"
+  end
+
   defp control do
     "w-full rounded-md border bg-inlay px-3 py-2 text-caption text-ink placeholder:text-ink-faint"
   end

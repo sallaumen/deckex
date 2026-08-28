@@ -185,7 +185,6 @@ defmodule DeckexWeb.CompareLive do
     """
   end
 
-  defp select_class do
-    "min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-3 text-caption text-ink focus:border-ink-faint"
-  end
+  # The app has one control style; this screen does not get its own.
+  defp select_class, do: [control_class(), "min-h-touch"]
 end
