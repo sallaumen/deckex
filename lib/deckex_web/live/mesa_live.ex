@@ -27,6 +27,10 @@ defmodule DeckexWeb.MesaLive do
     # listens to all of them and redraws itself when any lands a stage.
     if connected?(socket) do
       Enum.each(decks, &subscribe_to_run(&1.running))
+      # The aviso counts and card totals on every tile come from the same
+      # report the deck page shows — and go stale the same way when a run is
+      # applied from another tab.
+      Enum.each(decks, &Events.subscribe_deck(&1.deck.id))
       schedule_tick(decks)
     end
 
@@ -53,6 +57,7 @@ defmodule DeckexWeb.MesaLive do
 
   @impl Phoenix.LiveView
   def handle_info({:optimization_updated, _id}, socket), do: {:noreply, reload(socket)}
+  def handle_info({:deck_updated, _id}, socket), do: {:noreply, reload(socket)}
 
   def handle_info(:tick, socket) do
     schedule_tick(socket.assigns.decks)

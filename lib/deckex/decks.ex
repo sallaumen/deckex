@@ -300,8 +300,13 @@ defmodule Deckex.Decks do
       {:ok, _roles} = Cards.classify_card(card)
       :ok = list_changed(deck)
       :ok = Edits.log(deck, :add, card.name, opts)
+      deck_card = upsert_deck_card!(deck, card, board, quantity)
 
-      {:ok, upsert_deck_card!(deck, card, board, quantity)}
+      # Persist first, broadcast last — the event is a promise that a reader
+      # recomputing the report will see the card it announces.
+      :ok = Events.broadcast_deck_updated(deck)
+
+      {:ok, deck_card}
     end
   end
 
@@ -333,6 +338,7 @@ defmodule Deckex.Decks do
       drop_one!(deck_card)
       :ok = list_changed(deck)
       :ok = Edits.log(deck, :cut, card.name, opts)
+      :ok = Events.broadcast_deck_updated(deck)
 
       {:ok, :removed}
     else
