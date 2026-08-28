@@ -26,7 +26,8 @@ defmodule Deckex.Cards.Roles.Table do
   - **Free spell** means *this* spell has the alternative cost. "Cast **it**
     without paying its mana cost" is cascade and plot — value engines that
     hand you other cards, not the free interaction that makes an empty board
-    feel unsafe.
+    feel unsafe. Evoke's pitch shorthand counts (Endurance exiles a card and
+    says nothing about "rather than pay"); evoke for cheaper mana does not.
   - **Chaos** is *explicit* randomness: coins, dice, "at random". A deck-wide
     reset like Warp World reads as chaos to a player and matches nothing here —
     detecting that from text would cost more precision than it buys, and the AI
@@ -35,6 +36,7 @@ defmodule Deckex.Cards.Roles.Table do
 
   alias Deckex.Cards.Card
   alias Deckex.Cards.RoleMatch
+  alias Deckex.Cards.Roles.Reading
 
   @taxation ~r/unless (that|its|the) (player|controller|opponent) pays|may pay \{[^}]+\}\.?\s*If (the|that) player doesn't/i
 
@@ -44,7 +46,11 @@ defmodule Deckex.Cards.Roles.Table do
 
   @forced_sacrifice ~r/each (opponent|other player) sacrifices/i
 
-  @free_spell ~r/rather than pay this spell's mana cost|cast this spell without paying its mana cost/i
+  # Evoke's pitch shorthand never says "rather than pay": Endurance reads
+  # "Evoke—Exile a green card from your hand." and is exactly the free
+  # interaction this role exists to see. The lookahead keeps mana evokes
+  # (Mulldrifter's "Evoke {2}{U}") out — paying less is not paying nothing.
+  @free_spell ~r/rather than pay this spell's mana cost|cast this spell without paying its mana cost|\bevoke\s*[—–-]\s*(?!\{)/iu
 
   @chaos ~r/flip a coin|roll a (six-sided )?di[ec]|chosen at random/i
 
@@ -65,7 +71,7 @@ defmodule Deckex.Cards.Roles.Table do
 
   @spec classify(Card.t()) :: [RoleMatch.t()]
   def classify(%Card{} = card) do
-    body = card.oracle_text || ""
+    body = Reading.body(card)
 
     for {kind, pattern, evidence} <- @rules,
         body =~ pattern,

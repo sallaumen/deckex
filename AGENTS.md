@@ -461,6 +461,73 @@ for *what* we are building and *why*. This file is *how*.
   pips (`DeckexWeb.UI.oracle_text/1`), because `{2}{G}` printed as braces is
   the source code of a card rather than the card.
 
+- **A rule reads the card's words, never the reminder.** Reminder text — the
+  parenthetical — repeats a rule the game already has, and classifying from it
+  invents roles wholesale: measured 2026-08-28, a cycling Triome was a "draw
+  engine", Reiterate drew through Buyback's note, Krosan Grip was a "hoser"
+  through split second's, and two equipments taxed the table through ward's.
+  Every classifier reads through `Deckex.Cards.Roles.Reading.body/1`; the cost
+  is that keyword mechanics whose behaviour lives only in the reminder must be
+  known **by name** — the graveyard-cast keywords (escape, disturb, harmonize…)
+  went into the recursion rule the same day, because stripping the reminder
+  without knowing the keyword cost Underworld Breach its role.
+- **Removal is every shape the colour pie prints it in.** "Destroy/exile
+  target" is two colours' dialect: bounce, tuck, -X/-X, the fight and the
+  edict are removal to the player across the table, mass bounce and mass -X
+  are sweepers, and a spell put on top of its owner's library was countered
+  whatever the verb. Measured on the reference deck: Chaos Warp carried no
+  role at all, and the engine told every stage the deck had one board wipe
+  while it sat on two.
+- **Card advantage that never says "draw" still counts — and whose draw it is,
+  is decided per clause with the subject adjacent to the verb.** Fact or
+  Fiction puts a pile into your hand; impulse exiles from your library with
+  permission to play. A proximity window for "an opponent draws" ate Rhystic
+  Study itself (23 characters from "an opponent casts" to "you may draw"), and
+  a per-card exclusion would eat Consecrated Sphinx, which answers the
+  opponent's draw with yours. Measured on the reference deck: draw read 10
+  while the deck held 16, and every briefing built from that number asked the
+  model to fix a problem the deck did not have.
+
+- **A token engine defends with its output, not its body.** The blocker count
+  filters by toughness and excludes engine bodies, and both filters miss the
+  go-wide deck's whole defence: the 1/1 an engine made this turn dies blocking
+  for free, because the engine is home making another. `:token_engine` (a
+  permanent whose trigger or activated ability creates *creature* tokens —
+  Treasure is ramp, an ETB is a one-shot) counts toward the defence floor;
+  one-shot token spells do not, because a burst spent is a burst gone. The
+  owner named this before the code did: the creatures that make creatures are
+  worth more than most creatures.
+- **The canonical residue shrinks, and that is the design working.** Young
+  Pyromancer was the module doc's example of a card no rule finds — until the
+  token-engine rule found it, which broke five tests that had used it as
+  "unclassifiable". The residue example in tests is whatever card the rules
+  legitimately cannot see today (currently Apex Devastator, quadruple cascade
+  with its whole behaviour in reminder text); when a new rule eats it, the
+  tests move to the next one rather than the rule backing off.
+
+- **A rule change travels with its blast radius, twice.** First in CI:
+  `Deckex.Cards.RolesGoldenTest` classifies every committed fixture against a
+  golden snapshot, so a regex that moves a card nobody expected fails
+  `mix test` before it reaches a briefing (regenerate deliberately with
+  `mix deckex.roles.golden`, and defend every changed row in the commit — a
+  row you cannot defend as a player is a rule that needs a guard, not a
+  snapshot that needs updating). Second against reality:
+  `mix deckex.roles.diff` classifies the whole live catalogue against the
+  stored roles, read-only, and `--apply` runs the reclassify the
+  stale-catalogue law demands. Both tasks start the Repo alone — never the
+  app, never Oban.
+- **The dossier rule that does not depend on the flag.** A dossier citing a
+  card that is not in the decklist is stale residue whatever
+  `dossier_stale` says — the flag missed on a real deck (Fable found
+  Thousand-Year Storm cited in a list that never held it), so the briefing now
+  states the rule unconditionally: the model must not build on a dossier card
+  the list does not contain, and names the mismatch in `leitura`. The
+  decklist cannot be stale about itself.
+- **Phasing is protection.** "Your permanents phase out" says none of the five
+  protection keywords and beats all of them for one turn. Clever Concealment
+  held zero roles while being exactly what a go-wide deck holds up against a
+  wipe.
+
 ## Operating notes
 
 - **`mix run` starts Oban, and Oban consumes.** A script that enqueues a job

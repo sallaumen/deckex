@@ -37,15 +37,15 @@ defmodule Deckex.Cards.RoleAITest do
 
   describe "classify/1" do
     test "asks the model only about the cards it is given" do
-      %{"young_pyromancer" => card} = seed(~w(young_pyromancer))
+      %{"apex_devastator" => card} = seed(~w(apex_devastator))
 
       expect(Deckex.AI.Mock, :complete, fn prompt, _schema, _opts ->
-        assert prompt =~ "Young Pyromancer"
+        assert prompt =~ "Apex Devastator"
 
         {:ok,
          %{
            "cards" => [
-             %{"name" => "Young Pyromancer", "roles" => ["wincon"], "reasoning" => "faz fichas"}
+             %{"name" => "Apex Devastator", "roles" => ["wincon"], "reasoning" => "faz fichas"}
            ]
          }}
       end)
@@ -55,13 +55,13 @@ defmodule Deckex.Cards.RoleAITest do
     end
 
     test "ignores a role the model invented" do
-      %{"young_pyromancer" => card} = seed(~w(young_pyromancer))
+      %{"apex_devastator" => card} = seed(~w(apex_devastator))
 
       expect(Deckex.AI.Mock, :complete, fn _prompt, _schema, _opts ->
         {:ok,
          %{
            "cards" => [
-             %{"name" => "Young Pyromancer", "roles" => ["wincon", "banana"], "reasoning" => "x"}
+             %{"name" => "Apex Devastator", "roles" => ["wincon", "banana"], "reasoning" => "x"}
            ]
          }}
       end)
@@ -71,7 +71,7 @@ defmodule Deckex.Cards.RoleAITest do
     end
 
     test "ignores a card name the model hallucinated" do
-      %{"young_pyromancer" => card} = seed(~w(young_pyromancer))
+      %{"apex_devastator" => card} = seed(~w(apex_devastator))
 
       expect(Deckex.AI.Mock, :complete, fn _prompt, _schema, _opts ->
         {:ok,
@@ -93,7 +93,7 @@ defmodule Deckex.Cards.RoleAITest do
     end
 
     test "propagates an AI failure as a domain error" do
-      %{"young_pyromancer" => card} = seed(~w(young_pyromancer))
+      %{"apex_devastator" => card} = seed(~w(apex_devastator))
 
       expect(Deckex.AI.Mock, :complete, fn _prompt, _schema, _opts ->
         {:error, Error.new(:ai_timeout, "estourou")}
@@ -105,18 +105,18 @@ defmodule Deckex.Cards.RoleAITest do
 
   describe "Cards.classify_all/1" do
     test "uses rules for what it can and the AI only for the residue" do
-      %{"sol_ring" => sol_ring, "young_pyromancer" => pyromancer} =
-        seed(~w(sol_ring young_pyromancer))
+      %{"sol_ring" => sol_ring, "apex_devastator" => pyromancer} =
+        seed(~w(sol_ring apex_devastator))
 
       # Sol Ring never reaches the model: the rules place it for free.
       expect(Deckex.AI.Mock, :complete, fn prompt, _schema, _opts ->
-        assert prompt =~ "Young Pyromancer"
+        assert prompt =~ "Apex Devastator"
         refute prompt =~ "Sol Ring"
 
         {:ok,
          %{
            "cards" => [
-             %{"name" => "Young Pyromancer", "roles" => ["wincon"], "reasoning" => "fichas"}
+             %{"name" => "Apex Devastator", "roles" => ["wincon"], "reasoning" => "fichas"}
            ]
          }}
       end)
@@ -136,8 +136,8 @@ defmodule Deckex.Cards.RoleAITest do
     end
 
     test "an AI failure does not lose the roles the rules already found" do
-      %{"sol_ring" => sol_ring, "young_pyromancer" => pyromancer} =
-        seed(~w(sol_ring young_pyromancer))
+      %{"sol_ring" => sol_ring, "apex_devastator" => pyromancer} =
+        seed(~w(sol_ring apex_devastator))
 
       expect(Deckex.AI.Mock, :complete, fn _prompt, _schema, _opts ->
         {:error, Error.new(:ai_timeout, "estourou")}

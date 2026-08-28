@@ -17,12 +17,13 @@ defmodule Deckex.Cards.Roles.Mill do
 
   alias Deckex.Cards.Card
   alias Deckex.Cards.RoleMatch
+  alias Deckex.Cards.Roles.Reading
 
   @opponent_mill ~r/(target player|target opponent|each opponent|each player|opponents?) mills?/i
 
   @spec classify(Card.t()) :: [RoleMatch.t()]
   def classify(%Card{} = card) do
-    body = card.oracle_text || ""
+    body = Reading.body(card)
 
     if body =~ @opponent_mill do
       [RoleMatch.new(:mill, :high, "moe biblioteca alheia")]

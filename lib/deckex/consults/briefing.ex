@@ -636,7 +636,10 @@ defmodule Deckex.Consults.Briefing do
     #{stale_line(stale)}
     This dossier is the owner's current understanding of the deck. Trust it as
     context — and when the list itself says otherwise, contradict it explicitly
-    in `leitura`.
+    in `leitura`. A card named in this dossier that is NOT in the decklist
+    below is stale residue from an older version: do not build on it, do not
+    treat it as part of any chain, and name the mismatch in `leitura` in one
+    sentence. The staleness flag can miss; the decklist cannot.
     """
   end
 

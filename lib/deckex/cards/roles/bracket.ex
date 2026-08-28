@@ -21,6 +21,7 @@ defmodule Deckex.Cards.Roles.Bracket do
 
   alias Deckex.Cards.Card
   alias Deckex.Cards.RoleMatch
+  alias Deckex.Cards.Roles.Reading
 
   # "destroy all lands", "destroy each land", and the sacrifice variants that
   # hit every player. `all|each` after the verb keeps Strip Mine out, and
@@ -38,7 +39,7 @@ defmodule Deckex.Cards.Roles.Bracket do
 
   @spec classify(Card.t()) :: [RoleMatch.t()]
   def classify(%Card{} = card) do
-    body = card.oracle_text || ""
+    body = Reading.body(card)
 
     land_denial(body) ++ extra_turn(body)
   end

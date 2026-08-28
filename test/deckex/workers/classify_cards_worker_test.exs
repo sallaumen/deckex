@@ -29,7 +29,7 @@ defmodule Deckex.Workers.ClassifyCardsWorkerTest do
   end
 
   test "retries an AI timeout rather than cancelling" do
-    %{"young_pyromancer" => card} = seed(~w(young_pyromancer))
+    %{"apex_devastator" => card} = seed(~w(apex_devastator))
 
     expect(Deckex.AI.Mock, :complete, fn _prompt, _schema, _opts ->
       {:error, Error.new(:ai_timeout, "estourou")}

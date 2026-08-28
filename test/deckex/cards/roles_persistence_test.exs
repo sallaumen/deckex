@@ -36,7 +36,7 @@ defmodule Deckex.Cards.RolesPersistenceTest do
     end
 
     test "stores nothing for a card the rules cannot place" do
-      %{"young_pyromancer" => card} = seed(~w(young_pyromancer))
+      %{"apex_devastator" => card} = seed(~w(apex_devastator))
 
       assert {:ok, []} = Cards.classify_card(card)
       assert Cards.roles_for(card) == []
@@ -45,7 +45,7 @@ defmodule Deckex.Cards.RolesPersistenceTest do
 
   describe "set_role_manually/3" do
     test "records a manual role" do
-      %{"young_pyromancer" => card} = seed(~w(young_pyromancer))
+      %{"apex_devastator" => card} = seed(~w(apex_devastator))
 
       assert {:ok, role} = Cards.set_role_manually(card, :wincon, "eu decidi")
       assert %{kind: :wincon, source: :manual, confidence: :high} = role

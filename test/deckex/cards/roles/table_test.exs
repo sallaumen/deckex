@@ -79,4 +79,14 @@ defmodule Deckex.Cards.Roles.TableTest do
       refute :hoser in kinds("koma")
     end
   end
+
+  describe "free_spell via evoke" do
+    test "an evoke PITCH cost is a free spell" do
+      # Endurance: "Evoke—Exile a green card from your hand." — the shorthand
+      # never says "rather than pay", and it is exactly the free interaction
+      # this role exists to see.
+      assert :free_spell in kinds("endurance")
+      assert :free_spell in kinds("subtlety")
+    end
+  end
 end

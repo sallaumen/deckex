@@ -8,14 +8,33 @@ defmodule Deckex.Cards.Roles.Interaction do
   threat has resolved; against an aggressive deck only the answers that address
   a permanent already on the battlefield count.
 
-  The wipe rules exclude "each creature **you control**" — a pump clause on a
-  removal spell (`Overwhelming Victory`) otherwise reads as a board wipe.
+  Removal is every shape the colour pie prints it in, not just the two verbs.
+  Measured on a real Temur deck: Chaos Warp — shuffle-into-library — carried
+  no role at all, because blue and red don't say "destroy". Bounce, tuck,
+  -X/-X, fight and the edict are all removal to the player sitting across
+  from them, and each carries the exclusion that keeps it honest:
+
+  - Bouncing a permanent **you control** is protection, not removal.
+  - "Target creature **card**" is a graveyard's object, not the battlefield's.
+  - The wipe rules exclude "each creature **you control**" — a pump clause on
+    a removal spell (`Overwhelming Victory`) otherwise reads as a board wipe.
+  - A spell put on top or bottom of its owner's library never resolved: that
+    is a counter in effect, whatever the verb.
+  - A wipe is not also spot removal — except through **Overload**, whose whole
+    mass mode is the keyword: a removal spell that overloads genuinely is both.
   """
 
   alias Deckex.Cards.Card
   alias Deckex.Cards.RoleMatch
+  alias Deckex.Cards.Roles.Reading
 
   @counter ~r/counter target/i
+
+  # A spell that never resolves is countered, whatever the verb: Subtlety puts
+  # it on top or bottom of the library, Hullbreaker Horror hands it back. The
+  # window crosses one sentence boundary because Subtlety's verb lands in the
+  # sentence after its target.
+  @counter_denies ~r/returns? (?:up to \w+ )?target spell|target [^.]{0,40}spell\b.{0,120}?(top|bottom) of (their|its owner's) librar/is
 
   @destroys_all ~r/(destroy|exile) all\b/i
 
@@ -24,35 +43,86 @@ defmodule Deckex.Cards.Roles.Interaction do
 
   @sacrifice_all ~r/each (player|opponent) sacrifices/i
 
-  @spot ~r/(destroy|exile) target|damage to target (creature|permanent|planeswalker)|damage to any target/i
+  # Mass bounce and mass -X/-X close a board exactly like destruction does —
+  # Perplexing Test and Toxic Deluge are sweepers in any player's hands.
+  @bounce_all ~r/returns? (all|each)\b[^.]*\bto their owners' hands?/i
+  @shrink_all ~r/(all|each) creatures?(?! you control)[^.]{0,30}gets? -/i
 
-  @protection ~r/\b(hexproof|indestructible|shroud|protection from|ward)\b/i
+  # "Exile target CARD" is a zone's object, not the battlefield's — Mizzix's
+  # Mastery exiles a card from your own graveyard to recast it, and calling
+  # that removal put a false wipe on it the day Overload learned to double.
+  @spot ~r/(destroy|exile) target (?!card\b)|damage to target (creature|permanent|planeswalker)|damage to any target/i
+
+  # Overload turns "target" into "each" — the mass mode lives entirely in the
+  # keyword, and its reminder is text the rules refuse to read. A removal
+  # spell that overloads is genuinely both modes: Winds of Abandon exiles one
+  # creature for two mana and every creature you don't control for six.
+  @overload ~r/\boverload\b/i
+
+  # The other shapes of "this permanent is gone": bounce (not of your own),
+  # tuck (Chaos Warp, Oust — but never "target creature card", which lives in
+  # a graveyard), -X/-X, the fight and the bite, and the edict.
+  @spot_bounce ~r/returns? (?:up to \w+ )?target (?:[a-z]+ )*?(permanent|creature|artifact|enchantment|planeswalker)\b(?![^.]*you control)[^.]{0,40}\bto (its|their) owner/i
+  @spot_tuck ~r/shuffles? (it|target[^.]{0,30}) into (its owner's|their) librar|puts? target (?:[a-z]+ )*?(permanent|creature|artifact|enchantment|planeswalker)(?! card)\b[^.]{0,60}librar/i
+  @spot_shrink ~r/target creature gets? -/i
+  @spot_fight ~r/fights? (up to \w+ )?target|deals damage equal to its power to target/i
+  @spot_edict ~r/(target (player|opponent)|each opponent) sacrifices? [^.]{0,30}creature/i
+
+  # Phasing is the strongest protection printed — a phased-out permanent
+  # cannot be targeted, wiped or sacrificed — and it says none of the five
+  # keywords. Clever Concealment carried zero roles while being exactly the
+  # card a go-wide deck holds up against the wipe.
+  @protection ~r/\b(hexproof|indestructible|shroud|protection from|ward)\b|phases? out/i
 
   @spec classify(Card.t()) :: [RoleMatch.t()]
   def classify(%Card{} = card) do
-    body = card.oracle_text || ""
+    body = Reading.body(card)
 
     counter(body) ++ mass_or_spot(body) ++ protection(body)
   end
 
   defp counter(body) do
-    if body =~ @counter,
-      do: [RoleMatch.new(:counter, :high, "contra-magia (\"counter target\")")],
-      else: []
+    cond do
+      body =~ @counter ->
+        [RoleMatch.new(:counter, :high, "contra-magia (\"counter target\")")]
+
+      body =~ @counter_denies ->
+        [RoleMatch.new(:counter, :high, "nega a mágica sem dizer \"counter\"")]
+
+      true ->
+        []
+    end
   end
 
   # A card is a wipe or spot removal, never both: the wipe clause on a sweeper
   # would otherwise also trip the spot pattern via a secondary mode.
   defp mass_or_spot(body) do
     cond do
-      wipe?(body) -> [RoleMatch.new(:board_wipe, :high, "atinge todas as criaturas")]
-      body =~ @spot -> [RoleMatch.new(:spot_removal, :high, "remove um alvo único")]
-      true -> []
+      wipe?(body) ->
+        [RoleMatch.new(:board_wipe, :high, "atinge todas as criaturas")]
+
+      spot?(body) and body =~ @overload ->
+        [
+          RoleMatch.new(:spot_removal, :high, "remove um alvo único"),
+          RoleMatch.new(:board_wipe, :high, "com Overload, atinge todos")
+        ]
+
+      spot?(body) ->
+        [RoleMatch.new(:spot_removal, :high, "remove um alvo único")]
+
+      true ->
+        []
     end
   end
 
   defp wipe?(body) do
-    body =~ @destroys_all or body =~ @damages_all or body =~ @sacrifice_all
+    body =~ @destroys_all or body =~ @damages_all or body =~ @sacrifice_all or
+      body =~ @bounce_all or body =~ @shrink_all
+  end
+
+  defp spot?(body) do
+    body =~ @spot or body =~ @spot_bounce or body =~ @spot_tuck or body =~ @spot_shrink or
+      body =~ @spot_fight or body =~ @spot_edict
   end
 
   defp protection(body) do
