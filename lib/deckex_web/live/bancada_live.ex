@@ -276,6 +276,15 @@ defmodule DeckexWeb.BancadaLive do
 
   # ── reading the state ─────────────────────────────────────────────────────
 
+  # The composition, said in the deck's own terms. The reserve is folded into
+  # the cut count when hidden — the number he sees is the number he can answer.
+  defp vagas_line(vacancies) do
+    cuts = Enum.count(vacancies, &(&1.action == :cut))
+    adds = Enum.count(vacancies, &(&1.action == :add))
+
+    "#{cuts} vagas de possível corte · #{adds} de possível entrada"
+  end
+
   defp decided_count(step, vacancies) do
     length(vacancies) - Curation.undecided(step, vacancies)
   end
@@ -324,6 +333,12 @@ defmodule DeckexWeb.BancadaLive do
     Enum.any?(vacancy.candidatos, &(verdict(verdicts, vacancy, &1) != nil))
   end
 
+  defp chosen_badge(:cut), do: "SAI ✓"
+  defp chosen_badge(:add), do: "ENTRA ✓"
+
+  defp verb(:cut), do: "Cortar"
+  defp verb(:add), do: "Adicionar"
+
   defp chosen?(step, vacancy, candidate), do: Curation.decision(step, vacancy) == candidate.name
 
   # A vacancy is one card or none, so choosing is also *not* choosing the other
@@ -358,6 +373,12 @@ defmodule DeckexWeb.BancadaLive do
       end
     end)
   end
+
+  defp direction_ask(:cut),
+    do: "Escolha qual destas SAI do deck — ou nenhuma. Clicar numa carta é cortá-la."
+
+  defp direction_ask(:add),
+    do: "Escolha qual destas ENTRA no deck — ou nenhuma. Clicar numa carta é adicioná-la."
 
   defp action_heading(:cut), do: "Sai do deck"
   defp action_heading(:add), do: "Entra no deck"
@@ -451,7 +472,7 @@ defmodule DeckexWeb.BancadaLive do
 
           <p class="shrink-0 font-mono text-caption text-ink-muted">
             {decided_count(@step, @visible)} de {length(@visible)}
-            <span class="font-sans text-ink-faint">decididas</span>
+            <span class="font-sans text-ink-faint">vagas decididas</span>
           </p>
 
           <%!-- Not a tablist. A tablist owes the reader tabpanels and gives the
@@ -491,6 +512,19 @@ defmodule DeckexWeb.BancadaLive do
         </div>
 
         <.progresso step={@step} visible={@visible} />
+
+        <%!-- The owner's first real board: he read "40" as "40 cards leaving
+              the deck" and stopped, afraid each click was spending tokens.
+              Both facts fit in one line, and both change how the screen
+              feels: a vacancy is a QUESTION, and questions are free. --%>
+        <p class="mx-auto flex max-w-[120rem] flex-wrap gap-x-2 px-4 py-1.5 text-micro text-ink-muted sm:px-6">
+          <span>
+            {vagas_line(@vacancies)} — cada vaga é uma pergunta, e "nenhuma" é resposta.
+          </span>
+          <span class="text-ink-faint">
+            Nada aqui gasta consulta: só o Fechar, no fim, gasta uma.
+          </span>
+        </p>
       </header>
 
       <div
@@ -643,7 +677,7 @@ defmodule DeckexWeb.BancadaLive do
           reserva
         </span>
         <span class="ml-auto font-mono text-micro text-ink-faint">
-          {@cursor + 1} de {length(@visible)}
+          vaga {@cursor + 1} de {length(@visible)}
         </span>
       </div>
 
@@ -660,6 +694,13 @@ defmodule DeckexWeb.BancadaLive do
       >
         {@vacancy.vaga}
       </h2>
+
+      <%!-- The question the click answers, spelled out. The little "Sai do
+            deck" chip above was not enough: on his first real board the owner
+            could not tell whether choosing meant wanting or condemning. --%>
+      <p class="mt-1.5 text-body text-ink-secondary">
+        {direction_ask(@vacancy.action)}
+      </p>
 
       <div class="mt-4 flex items-center gap-3">
         <button
@@ -919,7 +960,7 @@ defmodule DeckexWeb.BancadaLive do
       phx-value-vaga={@vacancy.key}
       phx-value-carta={@candidate.name}
       aria-pressed={to_string(@chosen)}
-      aria-label={"Opção #{@index}: #{@candidate.name}"}
+      aria-label={"#{verb(@vacancy.action)} #{@candidate.name} (opção #{@index})"}
       aria-describedby={@verdict && @note_id}
       class={[
         "group flex h-full w-full flex-col overflow-hidden rounded-card border text-left transition-[border-color,box-shadow,background-color,opacity,filter] duration-200 ease-out motion-reduce:transition-none",
@@ -948,11 +989,11 @@ defmodule DeckexWeb.BancadaLive do
         </div>
 
         <span class={[
-          "absolute left-2 top-2 inline-flex size-6 items-center justify-center rounded-sm font-mono text-micro",
+          "absolute left-2 top-2 inline-flex min-h-6 items-center justify-center rounded-sm px-1.5 font-mono text-micro",
           @chosen && "bg-ink text-felt",
           !@chosen && "bg-inlay/85 text-ink-secondary"
         ]}>
-          {if @chosen, do: "✓", else: @index}
+          {if @chosen, do: chosen_badge(@vacancy.action), else: @index}
         </span>
 
         <span
@@ -1028,7 +1069,7 @@ defmodule DeckexWeb.BancadaLive do
       phx-value-vaga={@vacancy.key}
       phx-value-carta={@candidate.name}
       aria-pressed={to_string(@chosen)}
-      aria-label={"Opção #{@index}: #{@candidate.name}"}
+      aria-label={"#{verb(@vacancy.action)} #{@candidate.name} (opção #{@index})"}
       aria-describedby={@verdict && @note_id}
       title={@candidate.porque}
       class={[
@@ -1045,7 +1086,9 @@ defmodule DeckexWeb.BancadaLive do
         <span class="shrink-0 font-mono text-micro text-ink-faint">
           {Money.brl(@candidate.price_usd)}
         </span>
-        <span :if={@chosen} class="shrink-0 font-mono text-micro text-ink">✓</span>
+        <span :if={@chosen} class="shrink-0 font-mono text-micro text-ink">
+          {chosen_badge(@vacancy.action)}
+        </span>
       </span>
       <%!-- The board says why before the click, exactly like triage does. A
             candidate dimmed with no reason attached is the engine refusing in

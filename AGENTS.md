@@ -596,6 +596,19 @@ for *what* we are building and *why*. This file is *how*.
   card — the sweep stamps the same paragraph on a whole package, and printing
   it four times taught the model that repetition means importance.
 
+- **A screen is understood on first contact or it is not understood.** The
+  Bancada's first real user could not tell whether choosing meant wanting or
+  condemning, read "40" as "40 cards leaving the deck", and stopped clicking
+  because he believed each click was spending tokens — three misreadings, all
+  reasonable, none of them errors in the data. The screen now says all three
+  things where the eye already is: every vacancy spells out the direction of
+  the click ("Escolha qual destas SAI — clicar numa carta é cortá-la"), a
+  chosen tile is stamped SAI/ENTRA rather than merely checked, the counters
+  count "vagas" by name with the composition said in one strip, and the strip
+  ends with the sentence that unfreezes the hand: nothing here spends a
+  consult until Fechar. When a real user reports "acho que tá bugado" about a
+  working screen, the bug is in the communication and it is ours.
+
 ## Operating notes
 
 - **`mix run` starts Oban, and Oban consumes.** A script that enqueues a job
