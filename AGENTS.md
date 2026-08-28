@@ -625,6 +625,24 @@ for *what* we are building and *why*. This file is *how*.
   same-shaped things is FIXED to the viewport (bottom-center cluster with the
   position between the arrows), one screen spot for the whole session.
 
+- **A stage that runs after an owner board must be told whose changes those
+  were.** The changelog reads the same whether a model or the owner made the
+  changes, and a balanço that cuts what he just picked — or a critic that
+  re-litigates his taste, or fights a count he left open on purpose — is the
+  engine overriding the one person it exists to serve. In curadoria the
+  briefing carries the mode (`optimization.mode` travels in the consult's
+  optimization map): the balanço is told his picks outrank the arithmetic and
+  that a gap ≥ 4 closes across the WHOLE deck by type and curve, never out of
+  one drawer; the critic is told its answer is offered-not-applied, to correct
+  damage rather than taste, and that the count is the balanço's job.
+- **A pile of chosen cards is read the way a player reads a decklist:
+  classified by type, ordered by mana, entradas and saídas counted per
+  group.** A flat Saem/Entram strip answered "what did I pick" but not "quanto
+  eu coloquei e quanto tirei" — which is the question a 20-decision round
+  actually raises. The Bancada's recap groups by type bucket (front face,
+  creature first), sorts tiles by mana value, and counts +N/−N per group and
+  in total.
+
 ## Operating notes
 
 - **`mix run` starts Oban, and Oban consumes.** A script that enqueues a job

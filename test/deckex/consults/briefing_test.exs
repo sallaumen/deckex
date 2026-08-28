@@ -351,6 +351,55 @@ defmodule Deckex.Consults.BriefingTest do
     end
   end
 
+  describe "the stages that run after the owner's own board" do
+    # His words, verbatim: "as IAs depois tem que ser um prompte de bastante
+    # qualidade". The stage closing the count and the critic judging the round
+    # both need to know the changelog above them is HIS, not a model's draft.
+    test "the balanço is told the owner's picks outrank the arithmetic" do
+      briefing =
+        build(:balanco,
+          optimization:
+            Map.merge(@optimization, %{stage_kind: :balanco, mode: :curadoria, card_count: 122})
+        )
+
+      assert briefing =~ "As escolhas do dono vêm antes da conta"
+      assert briefing =~ "Never cut a card he just added"
+      # A 22-card gap is a composition problem: spread the cuts, read the
+      # type counts and the curve, never empty one drawer.
+      assert briefing =~ "closes across the WHOLE deck"
+      assert briefing =~ "Cut exactly **22**"
+    end
+
+    test "a small gap in refine mode gets no owner block and no spread lecture" do
+      briefing =
+        build(:balanco, optimization: %{@optimization | stage_kind: :balanco, card_count: 101})
+
+      refute briefing =~ "As escolhas do dono"
+      refute briefing =~ "WHOLE deck"
+    end
+
+    test "the curadoria critic judges quality and leaves the count alone" do
+      briefing =
+        build(:critico,
+          optimization:
+            Map.merge(@optimization, %{stage_kind: :critico, mode: :curadoria, card_count: 122})
+        )
+
+      assert briefing =~ "Quem fez essa rodada foi o dono"
+      assert briefing =~ "offered, not applied"
+      assert briefing =~ "off 100 on purpose"
+      refute briefing =~ "Land on exactly 100 cards"
+    end
+
+    test "the refine critic still has to land on 100" do
+      briefing =
+        build(:critico, optimization: %{@optimization | stage_kind: :critico, card_count: 101})
+
+      assert briefing =~ "Land on exactly 100 cards"
+      refute briefing =~ "Quem fez essa rodada foi o dono"
+    end
+  end
+
   describe "the multi-matchup task" do
     test "matchup accepts a list of targets" do
       briefing = build(:matchup, against: ["um aggro rápido", "um controle pesado"])

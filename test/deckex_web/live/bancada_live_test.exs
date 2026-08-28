@@ -444,7 +444,12 @@ defmodule DeckexWeb.BancadaLiveTest do
       html = pick(view, "add:0", "Cultivate")
 
       # Thirty-six decisions deep, a text list was the only mirror — a deck is
-      # pictures, and so is a round.
+      # pictures, classified the way a player reads a list: by type, with the
+      # entradas and saídas counted so he knows quanto colocou e quanto tirou.
+      assert html =~ "Sua rodada"
+      assert html =~ "entram 1 · saem 1 · saldo +0"
+      assert html =~ "Terrenos"
+      assert html =~ "Feitiços"
       assert html =~ "Saem"
       assert html =~ "Entram"
     end

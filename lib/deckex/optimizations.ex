@@ -758,6 +758,10 @@ defmodule Deckex.Optimizations do
           contract: optimization.contract,
           changelog: changelog(optimization, step),
           stage_kind: step.kind,
+          # The mode changes who the stage is talking about: in curadoria the
+          # changelog's changes are the OWNER's hand-picked choices, and the
+          # critic and the balanço owe them a different kind of respect.
+          mode: optimization.mode,
           # The through-line, carried verbatim rather than summarised, and the
           # engine's own before/after so the critic answers to a measurement
           # instead of to its own impression.

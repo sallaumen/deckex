@@ -215,6 +215,7 @@ defmodule Deckex.Consults.Briefing do
     the plan this deck is now running, or the most useful ones missing from it.
     The engine checks the arithmetic and refuses anything that does not land on
     exactly #{Balance.target()}.
+    #{closing_after_owner(get_in(opts, [:optimization, :mode]), gap)}
     """
   end
 
@@ -413,7 +414,9 @@ defmodule Deckex.Consults.Briefing do
   # perfect, does not let a good card slip out, and **may not leave the deck
   # worse than it found it**. That last one is measured by the engine and
   # handed to it below, because a model asked to promise it will simply promise.
-  defp task_block(:critico, _opts) do
+  defp task_block(:critico, opts) do
+    mode = get_in(opts, [:optimization, :mode])
+
     """
     A round just ran on this deck. **Judge it, then fix it.** You are the last
     stage; what you leave is what the owner sees. The plan it was working to
@@ -438,8 +441,7 @@ defmodule Deckex.Consults.Briefing do
     - Change nothing that is merely *different from your taste*. The round
       already argued these cards; re-litigating them costs the owner a stage
       and moves nothing.
-
-    Land on exactly #{Balance.target()} cards.
+    #{critic_count_rule(mode)}
     """
   end
 
@@ -579,6 +581,81 @@ defmodule Deckex.Consults.Briefing do
 
     > **#{vision["nome"]}** — #{vision["tese"]}
     > O que o deck perde por isso: #{vision["custo"]}
+    """
+  end
+
+  # The stage the whole free-choice contract leans on. The owner was told, on
+  # the board itself, that he could close off 100 and "a IA fecha a conta —
+  # ciente de tudo que você decidiu". This block is that sentence kept: his
+  # picks outrank the arithmetic, and a 20-card gap is a composition problem,
+  # not twenty little ones.
+  defp closing_after_owner(:curadoria, gap) do
+    """
+
+    ## As escolhas do dono vêm antes da conta
+
+    Every change the **Cardápio** stage lists above was picked by hand by the
+    owner — card by card, from vacancies he read himself — and so was every
+    correction he accepted at the critic's board. That list is not a model's
+    draft. It is his.
+
+    - **Never cut a card he just added; never bring back a card he just cut.**
+      Close the count everywhere else first. If the arithmetic truly cannot
+      close otherwise, take the least central of his picks and tell him in
+      `leitura`, by name, why there was no other way.
+    #{spread_line(gap)}- The standard for each individual card is unchanged: the weakest for the
+      plan this deck is now running — which his choices just sharpened, so read
+      them as the freshest statement of what that plan is.
+    """
+  end
+
+  defp closing_after_owner(_mode, _gap), do: ""
+
+  # One card is a judgement call; a dozen is surgery, and surgery from one
+  # drawer kills the patient with the count balanced.
+  defp spread_line(gap) when gap >= 4 do
+    """
+    - A gap of #{gap} closes across the WHOLE deck, not out of one drawer. Read
+      the type counts and the curve in the report above and take the cuts from
+      where the deck is fattest — a close that empties one category (all the
+      removal, all the draw, six lands) balances the number and unbalances the
+      deck. Say in `leitura` how the cuts are spread.
+    """
+  end
+
+  defp spread_line(_small), do: ""
+
+  # In curadoria the critic's answer is OFFERED at a board and a balance stage
+  # runs after the owner answers it — so "land on 100" would make the critic
+  # spend its whole correction budget doing arithmetic that is not its job,
+  # against a count the owner deliberately left open.
+  defp critic_count_rule(:curadoria) do
+    """
+
+    ## Quem fez essa rodada foi o dono
+
+    The Cardápio's changes above were not a model's proposal — the owner picked
+    each card himself from the vacancies laid out for him. Three consequences:
+
+    - Your corrections are **offered, not applied**: he reads them at a board
+      and accepts or declines each one. Write every cut and add so he can judge
+      it standing alone — the need first, then the card's rules text doing the
+      work.
+    - Do not re-litigate taste. He saw the candidates and chose; "I would have
+      picked the other one" moves nothing. Correct real damage only: a synergy
+      his pick breaks, a job the deck no longer covers, a curve that stopped
+      casting itself.
+    - The copy may be off #{Balance.target()} cards **on purpose** — he closes
+      rounds freely and a balance stage runs after you, aware of everything, to
+      settle the count. Do not spend your changes on arithmetic; fix quality
+      and let the number be.
+    """
+  end
+
+  defp critic_count_rule(_mode) do
+    """
+
+    Land on exactly #{Balance.target()} cards.
     """
   end
 
@@ -971,7 +1048,7 @@ defmodule Deckex.Consults.Briefing do
 
     - Maximum bracket: **#{contract["bracket_max"]}** — an add that moves the deck past it will be rejected by the engine.
     #{land_ceiling_line(contract["ceilings"])}
-    #{salt_line(contract["salt"])}#{keep_line(contract["keep"])}#{notes_line(contract["notes"])}#{table_line(contract["matchups"])}#{count_line(optimization[:card_count], stage_kind)}
+    #{salt_line(contract["salt"])}#{keep_line(contract["keep"])}#{notes_line(contract["notes"])}#{table_line(contract["matchups"])}#{count_line(optimization[:card_count], stage_kind, optimization[:mode])}
     #{changelog_lines(changelog)}
     You may revert an earlier stage's change, but engage its stated reason.
     Each card may enter and leave this optimization once — the engine enforces
@@ -1050,19 +1127,28 @@ defmodule Deckex.Consults.Briefing do
 
   defp table_line(_none), do: ""
 
-  defp count_line(nil, _stage_kind), do: ""
+  defp count_line(nil, _stage_kind, _mode), do: ""
 
   # The cardápio ends nothing — the owner does — so it is told the count as a
   # fact and never as a target. "Aim to end this stage at 98" is a directive to
   # a stage that applies no change, and a model handed one either ignores it or
   # obeys it by proposing fewer vacancies than he asked for.
-  defp count_line(count, :cardapio) do
+  defp count_line(count, :cardapio, _mode) do
     "\n- The copy has **#{count} cards** and a Commander deck has exactly " <>
       "#{Balance.target()}. The owner closes the gap by choosing; you only have " <>
       "to make sure he has enough of both kinds of vacancy to close it."
   end
 
-  defp count_line(count, _stage_kind), do: "\n- " <> Balance.instruction(count)
+  # Same fact-not-target rule for the curadoria critic: its changes are chosen
+  # at a board and a balance stage settles the count afterwards, so a closing
+  # directive here would burn the correction budget on arithmetic.
+  defp count_line(count, :critico, :curadoria) do
+    "\n- The copy has **#{count} cards**, off #{Balance.target()} on purpose — " <>
+      "the owner closes rounds freely and a balance stage after you settles " <>
+      "the count. Judge quality; leave the number alone."
+  end
+
+  defp count_line(count, _stage_kind, _mode), do: "\n- " <> Balance.instruction(count)
 
   # Only the avoided half is a rule; the wanted half is an invitation, and the
   # briefing says which is which so the model does not read a preference as a
