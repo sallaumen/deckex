@@ -76,6 +76,21 @@ defmodule Deckex.Cards.Roles.InteractionTest do
     end
   end
 
+  describe "overload" do
+    test "a removal spell that overloads is both modes" do
+      # Winds of Abandon: one creature for two mana, every creature you don't
+      # control for six. The mass mode lives entirely in the keyword.
+      roles = kinds("winds_of_abandon")
+
+      assert :spot_removal in roles
+      assert :board_wipe in roles
+    end
+
+    test "an overloaded pump is neither" do
+      assert kinds("weapon_surge") == []
+    end
+  end
+
   describe "the shapes that deny a spell" do
     test "tucking a SPELL is a counter in effect, whatever the verb" do
       # Subtlety puts the creature spell on top or bottom of the library — it

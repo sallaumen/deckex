@@ -20,6 +20,8 @@ defmodule Deckex.Cards.Roles.Interaction do
     a removal spell (`Overwhelming Victory`) otherwise reads as a board wipe.
   - A spell put on top or bottom of its owner's library never resolved: that
     is a counter in effect, whatever the verb.
+  - A wipe is not also spot removal — except through **Overload**, whose whole
+    mass mode is the keyword: a removal spell that overloads genuinely is both.
   """
 
   alias Deckex.Cards.Card
@@ -46,7 +48,16 @@ defmodule Deckex.Cards.Roles.Interaction do
   @bounce_all ~r/returns? (all|each)\b[^.]*\bto their owners' hands?/i
   @shrink_all ~r/(all|each) creatures?(?! you control)[^.]{0,30}gets? -/i
 
-  @spot ~r/(destroy|exile) target|damage to target (creature|permanent|planeswalker)|damage to any target/i
+  # "Exile target CARD" is a zone's object, not the battlefield's — Mizzix's
+  # Mastery exiles a card from your own graveyard to recast it, and calling
+  # that removal put a false wipe on it the day Overload learned to double.
+  @spot ~r/(destroy|exile) target (?!card\b)|damage to target (creature|permanent|planeswalker)|damage to any target/i
+
+  # Overload turns "target" into "each" — the mass mode lives entirely in the
+  # keyword, and its reminder is text the rules refuse to read. A removal
+  # spell that overloads is genuinely both modes: Winds of Abandon exiles one
+  # creature for two mana and every creature you don't control for six.
+  @overload ~r/\boverload\b/i
 
   # The other shapes of "this permanent is gone": bounce (not of your own),
   # tuck (Chaos Warp, Oust — but never "target creature card", which lives in
@@ -83,9 +94,20 @@ defmodule Deckex.Cards.Roles.Interaction do
   # would otherwise also trip the spot pattern via a secondary mode.
   defp mass_or_spot(body) do
     cond do
-      wipe?(body) -> [RoleMatch.new(:board_wipe, :high, "atinge todas as criaturas")]
-      spot?(body) -> [RoleMatch.new(:spot_removal, :high, "remove um alvo único")]
-      true -> []
+      wipe?(body) ->
+        [RoleMatch.new(:board_wipe, :high, "atinge todas as criaturas")]
+
+      spot?(body) and body =~ @overload ->
+        [
+          RoleMatch.new(:spot_removal, :high, "remove um alvo único"),
+          RoleMatch.new(:board_wipe, :high, "com Overload, atinge todos")
+        ]
+
+      spot?(body) ->
+        [RoleMatch.new(:spot_removal, :high, "remove um alvo único")]
+
+      true ->
+        []
     end
   end
 
