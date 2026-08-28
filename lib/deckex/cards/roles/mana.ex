@@ -23,6 +23,7 @@ defmodule Deckex.Cards.Roles.Mana do
 
   alias Deckex.Cards.Card
   alias Deckex.Cards.RoleMatch
+  alias Deckex.Cards.Roles.Reading
 
   # "Search your library for ... land ... onto the battlefield" — the Cultivate
   # shape. `[^.]*` keeps the match inside one sentence so an unrelated later
@@ -107,7 +108,7 @@ defmodule Deckex.Cards.Roles.Mana do
 
   # --- predicates -----------------------------------------------------------
 
-  defp text(card), do: card.oracle_text || ""
+  defp text(card), do: Reading.body(card)
 
   defp front_type(card), do: card.type_line |> String.split("//") |> hd()
 

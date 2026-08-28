@@ -461,6 +461,33 @@ for *what* we are building and *why*. This file is *how*.
   pips (`DeckexWeb.UI.oracle_text/1`), because `{2}{G}` printed as braces is
   the source code of a card rather than the card.
 
+- **A rule reads the card's words, never the reminder.** Reminder text — the
+  parenthetical — repeats a rule the game already has, and classifying from it
+  invents roles wholesale: measured 2026-08-28, a cycling Triome was a "draw
+  engine", Reiterate drew through Buyback's note, Krosan Grip was a "hoser"
+  through split second's, and two equipments taxed the table through ward's.
+  Every classifier reads through `Deckex.Cards.Roles.Reading.body/1`; the cost
+  is that keyword mechanics whose behaviour lives only in the reminder must be
+  known **by name** — the graveyard-cast keywords (escape, disturb, harmonize…)
+  went into the recursion rule the same day, because stripping the reminder
+  without knowing the keyword cost Underworld Breach its role.
+- **Removal is every shape the colour pie prints it in.** "Destroy/exile
+  target" is two colours' dialect: bounce, tuck, -X/-X, the fight and the
+  edict are removal to the player across the table, mass bounce and mass -X
+  are sweepers, and a spell put on top of its owner's library was countered
+  whatever the verb. Measured on the reference deck: Chaos Warp carried no
+  role at all, and the engine told every stage the deck had one board wipe
+  while it sat on two.
+- **Card advantage that never says "draw" still counts — and whose draw it is,
+  is decided per clause with the subject adjacent to the verb.** Fact or
+  Fiction puts a pile into your hand; impulse exiles from your library with
+  permission to play. A proximity window for "an opponent draws" ate Rhystic
+  Study itself (23 characters from "an opponent casts" to "you may draw"), and
+  a per-card exclusion would eat Consecrated Sphinx, which answers the
+  opponent's draw with yours. Measured on the reference deck: draw read 10
+  while the deck held 16, and every briefing built from that number asked the
+  model to fix a problem the deck did not have.
+
 ## Operating notes
 
 - **`mix run` starts Oban, and Oban consumes.** A script that enqueues a job
