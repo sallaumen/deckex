@@ -128,6 +128,18 @@ defmodule Deckex.Cards.RoleAI do
     - `fixing` corrects colours; it is separate from producing extra mana.
     - `counter` only counters spells. `spot_removal` answers a permanent that has
       already resolved. Never label a counterspell as removal.
+    - `token_engine` is a permanent that creates creature tokens repeatably.
+      The rules already catch the explicit triggers; what reaches you is the
+      judgement call — a one-shot token spell that a deck leans on as its
+      board (a fog that makes blockers, a burst of five bodies) may earn it.
+    - `anthem` lifts the whole team: a pump or a granted ability on creatures
+      you control.
+    - `amplifier` makes the deck's own things happen twice: doubled triggers,
+      copied spells, doubled tokens or counters.
+    - `wincon` is a card whose job is ENDING the game — a deck's primary win
+      route, not merely a big creature. Assign it sparingly.
+    - `protection` includes effects that hide or save your board without the
+      keywords: phasing, "can't be targeted", mass indestructibility.
     - Only assign a role you are confident about. An empty list is a valid and
       useful answer.
 

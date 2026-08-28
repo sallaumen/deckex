@@ -24,6 +24,12 @@ defmodule Deckex.Cards.Roles.Value do
   - The wincon rule matches only sentences that name the act: "you win the
     game", "each opponent loses the game". Everything subtler is judgement,
     and judgement is the AI residue pass's job.
+  - An amplifier makes the deck's own triggers and spells happen twice —
+    "triggers an additional time" (Harmonic Prodigy, Veyran) or copying a
+    spell (Reiterate, Kitsa). The trigger doublers were the largest residue
+    class left in the reference decks, and every one is the card its deck is
+    built around. "Cast **or copy**" as a trigger condition copies nothing,
+    and the rule's `target|that` guard keeps it out.
   """
 
   alias Deckex.Cards.Card
@@ -54,6 +60,11 @@ defmodule Deckex.Cards.Roles.Value do
   # this substring, so no lookbehind is needed.
   @wins ~r/you win the game|each opponent loses the game/i
 
+  # Twice the triggers, or another copy of the spell. `target|that` is the
+  # guard: "whenever you cast or copy an instant" is a trigger CONDITION, and
+  # matching it would hand the role to every magecraft payoff in the format.
+  @amplifies ~r/triggers? an additional time|cop(?:y|ies) (?:target|that) (?:instant|sorcery|spell)/i
+
   # The gap after "library" absorbs another zone: Finale of Devastation reads
   # "Search your library and/or graveyard for a creature card".
   @search ~r/search your library[^.]{0,30}?\bfor\b([^.]*)/i
@@ -81,7 +92,8 @@ defmodule Deckex.Cards.Roles.Value do
     body = Reading.body(card)
 
     draw(body) ++
-      tutor(body) ++ recursion(body) ++ graveyard_hate(body) ++ stax(body) ++ wincon(body)
+      tutor(body) ++
+      recursion(body) ++ graveyard_hate(body) ++ stax(body) ++ wincon(body) ++ amplifier(body)
   end
 
   defp draw(body) do
@@ -126,6 +138,12 @@ defmodule Deckex.Cards.Roles.Value do
 
   defp wincon(body) do
     if body =~ @wins, do: [RoleMatch.new(:wincon, :high, "nomeia a vitória no texto")], else: []
+  end
+
+  defp amplifier(body) do
+    if body =~ @amplifies,
+      do: [RoleMatch.new(:amplifier, :high, "dobra gatilhos ou copia mágicas")],
+      else: []
   end
 
   # A search only counts as a tutor when what it looks for is not a land.

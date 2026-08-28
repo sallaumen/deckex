@@ -90,6 +90,24 @@ defmodule Deckex.Cards.Roles.ValueTest do
     end
   end
 
+  describe "amplifier" do
+    test "a trigger doubler is an amplifier" do
+      # Harmonic Prodigy was the largest residue class left: the card its
+      # whole deck is built around, carrying no role at all.
+      assert :amplifier in kinds("harmonic_prodigy")
+    end
+
+    test "copying a spell is an amplifier" do
+      assert :amplifier in kinds("reiterate")
+    end
+
+    test "'cast or copy' as a trigger condition is not copying anything" do
+      # Storm-Kiln Artist and Archmage Emeritus RIDE copies; they make none.
+      refute :amplifier in kinds("storm_kiln_artist")
+      refute :amplifier in kinds("archmage_emeritus")
+    end
+  end
+
   describe "graveyard hate" do
     test "filing a graveyard into a library is hate, exile or not" do
       # Endurance puts the graveyard on the bottom of its owner's library —

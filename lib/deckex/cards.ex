@@ -225,6 +225,31 @@ defmodule Deckex.Cards do
   end
 
   @doc """
+  Enqueues one stale-only price sweep at application boot.
+
+  The daily cron assumes a server that is awake at 06:00, and a desktop app
+  is not: the owner opened the deck page to "preços de 13 dias atrás" because
+  the sweep had never had a chance to fire. Uniqueness (one per day, any
+  state) makes this free when the cron already ran — and the whole call is
+  wrapped so a database that is not up yet cannot stop the app from booting.
+
+  Skipped under `Oban.Testing`: the test suite starts this application before
+  the sandbox owns the connection, and a job row written there would leak.
+  """
+  @spec reprice_stale_on_boot() :: :ok
+  def reprice_stale_on_boot do
+    unless Application.get_env(:deckex, Oban)[:testing] do
+      %{stale: true}
+      |> RepriceWorker.new(unique: [period: {1, :day}])
+      |> Oban.insert()
+    end
+
+    :ok
+  rescue
+    _boot_race -> :ok
+  end
+
+  @doc """
   Re-prices `card` from the cheapest paper printing Scryfall lists.
 
   The catalogue stores one representative printing per card, and its price is
