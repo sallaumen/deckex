@@ -116,10 +116,10 @@ defmodule Deckex.DecksTest do
     end
 
     test "marks the deck classifying and enqueues the residue" do
-      CatalogueFixture.seed!(["young_pyromancer"])
+      CatalogueFixture.seed!(["apex_devastator"])
 
       assert {:ok, deck} =
-               Decks.import_from_text("1 Young Pyromancer", %{name: "T", source: :paste})
+               Decks.import_from_text("1 Apex Devastator", %{name: "T", source: :paste})
 
       assert deck.status == :classifying
       assert_enqueued(worker: Deckex.Workers.ClassifyCardsWorker)

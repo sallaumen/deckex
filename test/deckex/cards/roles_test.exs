@@ -35,7 +35,7 @@ defmodule Deckex.Cards.RolesTest do
     end
 
     test "a card the rules cannot place returns no matches" do
-      assert Roles.classify(card("young_pyromancer")) == []
+      assert Roles.classify(card("apex_devastator")) == []
     end
   end
 
@@ -55,10 +55,10 @@ defmodule Deckex.Cards.RolesTest do
     end
 
     test "an unmatched card is residue and goes to the AI" do
-      # Young Pyromancer makes creature tokens off spells. No rule touches it:
+      # Apex Devastator makes creature tokens off spells. No rule touches it:
       # it produces no mana, answers nothing, and draws nothing. This is exactly
       # the shape the AI pass exists for.
-      assert Roles.residue?(card("young_pyromancer"))
+      assert Roles.residue?(card("apex_devastator"))
     end
 
     test "Smothering Tithe is caught by the treasure rule, not sent to the AI" do

@@ -6,13 +6,18 @@ defmodule Deckex.Cards.Roles do
   place is *residue*, handed to the AI by `Deckex.Cards.RoleAI` and cached on
   the card forever — so the same card is never paid for twice, across any deck.
 
-  `Sol Ring` is the canonical rule hit: one field, zero cost. `Young Pyromancer`
-  is the canonical residue: it produces no mana, answers nothing and draws
-  nothing, so no regex finds it. The split between them is the whole design.
+  `Sol Ring` is the canonical rule hit: one field, zero cost. `Apex Devastator`
+  is the canonical residue: quadruple cascade, whose whole behaviour lives in
+  reminder text the rules refuse to read, so no regex finds it. The split
+  between them is the whole design. (`Young Pyromancer` held the residue title
+  for most of this app's life — until the token-engine rule learned to see the
+  format's go-wide spine, which is exactly how the residue is supposed to
+  shrink.)
   """
 
   alias Deckex.Cards.Card
   alias Deckex.Cards.RoleMatch
+  alias Deckex.Cards.Roles.Board
   alias Deckex.Cards.Roles.Bracket
   alias Deckex.Cards.Roles.Interaction
   alias Deckex.Cards.Roles.Mana
@@ -27,7 +32,7 @@ defmodule Deckex.Cards.Roles do
   """
   @spec classify(Card.t()) :: [RoleMatch.t()]
   def classify(%Card{} = card) do
-    [Mana, Interaction, Value, Bracket, Mill, Table]
+    [Mana, Interaction, Value, Bracket, Mill, Table, Board]
     |> Enum.flat_map(& &1.classify(card))
     |> best_per_kind()
   end

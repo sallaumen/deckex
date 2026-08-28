@@ -18,13 +18,22 @@ defmodule Deckex.Analysis.Fragility do
   end it.
 
   **Defesa.** Whether anything is *available* to block. Toughness is the first
-  filter — a board of 1/1 tokens is not a defence — but the one that matters is
-  the second: a creature that carries the deck's engine is not a blocker, because
-  trading your mana or your win condition for four damage costs more than the
-  damage. The reference deck holds eight creatures with real toughness and can
-  defend with two of them, which is exactly what its owner reports feeling.
-  This is the quietest way a Commander deck loses: not out-powered, just
-  attacked while everything on the table is too valuable to block with.
+  filter — a standing board of 1/1 tokens is not a defence — but the one that
+  matters is the second: a creature that carries the deck's engine is not a
+  blocker, because trading your mana or your win condition for four damage
+  costs more than the damage. The reference deck holds eight creatures with
+  real toughness and can defend with two of them, which is exactly what its
+  owner reports feeling. This is the quietest way a Commander deck loses: not
+  out-powered, just attacked while everything on the table is too valuable to
+  block with.
+
+  A **token engine** is the exception both filters miss, and the owner named
+  it before the code did: a permanent that makes a creature every turn defends
+  with its *output*, not its body. The 1/1 it made this turn dies blocking and
+  costs nothing, because the engine is still home making another — a stream of
+  free chump blocks is a defence no single toughness value shows. Engines
+  count toward the defence floor; one-shot token spells do not, because a
+  burst spent is a burst gone.
 
   The lens diagnoses and names. What to do about it is the consults' job — they
   already read findings, and they are better at proposing cards than a regex.
@@ -140,11 +149,18 @@ defmodule Deckex.Analysis.Fragility do
     {engine, free} = Enum.split_with(bodies, &engine?/1)
     deterrents = DeckSnapshot.with_role(nonlands, :protection)
 
+    # A token engine defends with its output, not its body, so it is counted
+    # even when it IS an engine — Young Pyromancer's Elemental chump-blocks
+    # for free while Young Pyromancer stays home making another.
+    token_engines = DeckSnapshot.with_role(nonlands, :token_engine)
+
     %{
       blockers: length(free),
       blocker_cards: DeckSnapshot.names(free),
       engine_bodies: length(engine),
       engine_cards: DeckSnapshot.names(engine),
+      token_engines: length(token_engines),
+      token_engine_cards: DeckSnapshot.names(token_engines),
       deterrents: length(deterrents)
     }
   end
@@ -152,24 +168,25 @@ defmodule Deckex.Analysis.Fragility do
   defp engine?(entry), do: Enum.any?(@engine_roles, &CardEntry.has_role?(entry, &1))
 
   defp defence_finding(%{blockers: blockers, engine_bodies: engine} = defence, b) do
-    if blockers < b.blockers_target do
+    if blockers + defence.token_engines < b.blockers_target do
       Finding.new(
         "fragility.no_defence",
         :critical,
         :fragility,
         "Nada segura um ataque",
-        "Só #{blockers} corpo(s) livre(s) com resistência 3 ou mais (alvo: " <>
-          "#{b.blockers_target}). Outras #{engine} criaturas têm resistência para bloquear " <>
-          "mas são o motor do deck — trocá-las custa mais que o dano. Com #{defence.deterrents} " <>
-          "peça(s) de proteção, você não escolhe quando morre, e o comandante vira o alvo " <>
-          "óbvio da mesa.",
+        "Só #{blockers} corpo(s) livre(s) com resistência 3 ou mais e " <>
+          "#{defence.token_engines} motor(es) de token (alvo: #{b.blockers_target}). " <>
+          "Outras #{engine} criaturas têm resistência para bloquear mas são o motor do " <>
+          "deck — trocá-las custa mais que o dano. Com #{defence.deterrents} peça(s) de " <>
+          "proteção, você não escolhe quando morre, e o comandante vira o alvo óbvio da mesa.",
         evidence: %{
           blockers: blockers,
           target: b.blockers_target,
           engine_bodies: engine,
+          token_engines: defence.token_engines,
           deterrents: defence.deterrents
         },
-        card_names: defence.blocker_cards ++ defence.engine_cards
+        card_names: defence.blocker_cards ++ defence.engine_cards ++ defence.token_engine_cards
       )
     end
   end

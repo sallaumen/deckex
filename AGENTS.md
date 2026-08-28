@@ -488,6 +488,23 @@ for *what* we are building and *why*. This file is *how*.
   while the deck held 16, and every briefing built from that number asked the
   model to fix a problem the deck did not have.
 
+- **A token engine defends with its output, not its body.** The blocker count
+  filters by toughness and excludes engine bodies, and both filters miss the
+  go-wide deck's whole defence: the 1/1 an engine made this turn dies blocking
+  for free, because the engine is home making another. `:token_engine` (a
+  permanent whose trigger or activated ability creates *creature* tokens —
+  Treasure is ramp, an ETB is a one-shot) counts toward the defence floor;
+  one-shot token spells do not, because a burst spent is a burst gone. The
+  owner named this before the code did: the creatures that make creatures are
+  worth more than most creatures.
+- **The canonical residue shrinks, and that is the design working.** Young
+  Pyromancer was the module doc's example of a card no rule finds — until the
+  token-engine rule found it, which broke five tests that had used it as
+  "unclassifiable". The residue example in tests is whatever card the rules
+  legitimately cannot see today (currently Apex Devastator, quadruple cascade
+  with its whole behaviour in reminder text); when a new rule eats it, the
+  tests move to the next one rather than the rule backing off.
+
 ## Operating notes
 
 - **`mix run` starts Oban, and Oban consumes.** A script that enqueues a job
