@@ -39,15 +39,17 @@ defmodule DeckexWeb.SettingsPanel do
      |> assign_new(:refetching, fn -> nil end)
      |> assign_new(:repricing, fn -> nil end)
      |> assign_new(:saved, fn -> nil end)
+     |> assign_new(:errors, fn -> %{} end)
+     # The action buttons keep one page-level message; the fields have their own.
+     |> assign_new(:error, fn -> nil end)
      |> load()}
   end
 
+  # `error: nil` used to live here, which meant any re-render from the parent
+  # wiped the message before it could be read. Errors are per field now and
+  # survive until that field saves.
   defp load(socket) do
-    assign(socket,
-      values: Settings.all(),
-      baselines: Settings.baselines(),
-      error: nil
-    )
+    assign(socket, values: Settings.all(), baselines: Settings.baselines())
   end
 
   @impl Phoenix.LiveComponent
@@ -101,7 +103,9 @@ defmodule DeckexWeb.SettingsPanel do
   end
 
   def handle_event("save", %{"setting" => %{"key" => key, "value" => value}}, socket) do
-    {:noreply, save(socket, String.to_existing_atom(key), cast(key, value))}
+    setting = String.to_existing_atom(key)
+
+    {:noreply, save(socket, setting, cast(key, value), setting)}
   end
 
   def handle_event(
@@ -111,13 +115,23 @@ defmodule DeckexWeb.SettingsPanel do
       ) do
     override = socket.assigns.values |> Map.fetch!(:baselines) |> Map.put(field, number(value))
 
-    {:noreply, save(socket, :baselines, override)}
+    # Keyed by the baseline field, not by `:baselines` — one bad box must not
+    # print its message under all nineteen of them.
+    {:noreply, save(socket, :baselines, override, field)}
   end
 
-  defp save(socket, key, value) do
+  # One field's failure must not clear another field's message, and a field
+  # that saves must clear its own — a stale error under a box the owner has
+  # already fixed is worse than none.
+  defp save(socket, key, value, shown_under) do
     case Settings.put(key, value) do
-      {:ok, _value} -> socket |> load() |> assign(saved: key)
-      {:error, error} -> assign(socket, error: error.message)
+      {:ok, _value} ->
+        socket
+        |> load()
+        |> assign(saved: shown_under, errors: Map.delete(socket.assigns.errors, shown_under))
+
+      {:error, error} ->
+        assign(socket, errors: Map.put(socket.assigns.errors, shown_under, error.message))
     end
   end
 
@@ -216,49 +230,18 @@ defmodule DeckexWeb.SettingsPanel do
                 >
                   <input type="hidden" name="setting[key]" value={entry.key} />
 
-                  <div class="min-w-0 flex-1">
-                    <label
-                      for={"panel-field-#{entry.key}"}
-                      class="mb-1 flex items-baseline gap-2 text-caption font-semibold text-ink-secondary"
-                    >
-                      {entry.label}
-                      <%!-- The header promised the panel saves by itself; nine
-                          "Salvar" buttons said otherwise, and for a select the
-                          promise was simply false. Now it is true, and the
-                          field says so where the eye already is. --%>
-                      <span :if={@saved == entry.key} class="font-mono text-micro text-sev-healthy">
-                        salvo
-                      </span>
-                    </label>
-
-                    <select
-                      :if={entry.options}
-                      id={"panel-field-#{entry.key}"}
-                      name="setting[value]"
-                      class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-body text-ink"
-                    >
-                      <option
-                        :for={option <- entry.options}
-                        value={option}
-                        selected={to_string(@values[entry.key]) == to_string(option)}
-                      >
-                        {option}
-                      </option>
-                    </select>
-
-                    <input
-                      :if={is_nil(entry.options)}
-                      id={"panel-field-#{entry.key}"}
-                      type="text"
-                      inputmode={if entry.type in [:integer, :number], do: "decimal"}
-                      phx-debounce="blur"
-                      name="setting[value]"
-                      value={@values[entry.key]}
-                      class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 font-mono text-body-lg text-ink"
-                    />
-
-                    <p :if={entry.hint} class="mt-1 text-micro text-ink-muted">{entry.hint}</p>
-                  </div>
+                  <.field
+                    id={"panel-field-#{entry.key}"}
+                    name="setting[value]"
+                    label={entry.label}
+                    value={@values[entry.key]}
+                    options={entry.options}
+                    hint={entry.hint}
+                    numeric={entry.type in [:integer, :number]}
+                    error={@errors[entry.key]}
+                    saved={@saved == entry.key}
+                    class="flex-1"
+                  />
                 </.form>
               </section>
             </div>
@@ -351,23 +334,16 @@ defmodule DeckexWeb.SettingsPanel do
                 >
                   <input type="hidden" name="baseline[field]" value={field} />
 
-                  <div class="min-w-0 flex-1">
-                    <label
-                      for={"panel-baseline-field-#{field}"}
-                      class="mb-1 block font-mono text-micro text-ink-faint"
-                    >
-                      {field}
-                    </label>
-                    <input
-                      id={"panel-baseline-field-#{field}"}
-                      type="text"
-                      inputmode="decimal"
-                      phx-debounce="blur"
-                      name="baseline[value]"
-                      value={value}
-                      class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-2 py-2 font-mono text-caption text-ink"
-                    />
-                  </div>
+                  <.field
+                    id={"panel-baseline-field-#{field}"}
+                    name="baseline[value]"
+                    label={field}
+                    value={value}
+                    numeric
+                    error={@errors[to_string(field)]}
+                    saved={@saved == to_string(field)}
+                    class="flex-1"
+                  />
                 </.form>
               </div>
             </details>
