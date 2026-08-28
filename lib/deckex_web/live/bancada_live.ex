@@ -363,6 +363,79 @@ defmodule DeckexWeb.BancadaLive do
     |> Enum.sort_by(fn {grupo, rows} -> {Enum.min_by(rows, & &1.index).index, grupo} end)
   end
 
+  # ── the recap's classification ──────────────────────────────────────────────
+  # The order a player scans a decklist in, not the alphabet's.
+  @type_order [
+    "Criaturas",
+    "Instantâneas",
+    "Feitiços",
+    "Artefatos",
+    "Encantamentos",
+    "Planeswalkers",
+    "Batalhas",
+    "Terrenos",
+    "Outras"
+  ]
+
+  defp recap_groups(chosen) do
+    chosen
+    |> Enum.group_by(&type_bucket(&1.card))
+    |> Enum.sort_by(fn {tipo, _picks} -> Enum.find_index(@type_order, &(&1 == tipo)) end)
+  end
+
+  # First match wins, and creature comes first: a Dryad Arbor plays as a
+  # creature to the person counting bodies, whatever else the type line says.
+  @type_buckets [
+    {"Creature", "Criaturas"},
+    {"Land", "Terrenos"},
+    {"Instant", "Instantâneas"},
+    {"Sorcery", "Feitiços"},
+    {"Planeswalker", "Planeswalkers"},
+    {"Battle", "Batalhas"},
+    {"Enchantment", "Encantamentos"},
+    {"Artifact", "Artefatos"}
+  ]
+
+  # Front face only.
+  defp type_bucket(%Card{type_line: line}) when is_binary(line) do
+    front = line |> String.split("//") |> hd()
+
+    Enum.find_value(@type_buckets, "Outras", fn {marker, tipo} ->
+      String.contains?(front, marker) && tipo
+    end)
+  end
+
+  defp type_bucket(_unresolved), do: "Outras"
+
+  defp tally(picks, action), do: Enum.count(picks, &(&1.action == action))
+
+  defp by_mana(picks, action) do
+    picks
+    |> Enum.filter(&(&1.action == action))
+    |> Enum.sort_by(&{mana(&1), &1.name})
+  end
+
+  defp mana(%{card: %Card{cmc: %Decimal{} = cmc}}), do: cmc |> Decimal.to_float() |> trunc()
+  defp mana(_unresolved), do: 99
+
+  defp recap_totals(chosen) do
+    adds = tally(chosen, :add)
+    cuts = tally(chosen, :cut)
+    saldo = adds - cuts
+
+    "entram #{adds} · saem #{cuts} · saldo #{if saldo >= 0, do: "+#{saldo}", else: saldo}"
+  end
+
+  defp recap_note(pick) do
+    mana = if pick.card && pick.card.cmc, do: "#{mana(pick)} mana"
+    price = pick.price_usd && Money.brl(pick.price_usd)
+
+    case Enum.filter([mana, price], & &1) do
+      [] -> nil
+      parts -> Enum.join(parts, " · ")
+    end
+  end
+
   defp filtered(vacancies, step, verdicts, filter) do
     Enum.filter(vacancies, fn vacancy ->
       case filter do
@@ -824,29 +897,60 @@ defmodule DeckexWeb.BancadaLive do
 
     ~H"""
     <div class="space-y-8">
-      <%!-- The round he has assembled so far, as CARDS — after thirty-six
-            decisions the text list in the rail was the only mirror, and "não
-            consigo ver um resumo geral, bonito e visual" is exactly right:
-            a deck is pictures, and so is a round. --%>
+      <%!-- The round he has assembled so far, as CARDS, classified the way a
+            player reads a deck: by type, tiles in mana order, entradas and
+            saídas counted per group. His words, second board: "mais bem
+            classificado por tipo, ou mana por exemplo, pra eu saber quanto eu
+            coloquei e quanto tirei". --%>
       <section :if={@preview.chosen != []} class="rounded-xl border border-hairline-soft bg-rail p-4">
-        <div :for={action <- [:cut, :add]} class="not-first:mt-5">
-          <% picks = Enum.filter(@preview.chosen, &(&1.action == action)) %>
-          <h2 :if={picks != []} class="flex items-baseline gap-2">
-            <span class="text-label font-semibold uppercase tracking-[0.1em] text-ink-secondary">
-              {if action == :cut, do: "Saem", else: "Entram"}
-            </span>
-            <span class="font-mono text-micro text-ink-faint">{length(picks)}</span>
+        <header class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h2 class="text-label font-semibold uppercase tracking-[0.1em] text-ink-secondary">
+            Sua rodada
           </h2>
-          <div :if={picks != []} class="-mx-1 mt-2 min-w-0 overflow-x-auto px-1 pb-1">
-            <div class="flex gap-2">
-              <.card_thumb
-                :for={pick <- picks}
-                name={pick.name}
-                art={pick.card && pick.card.image_art_crop_url}
-                uri={pick.card && pick.card.scryfall_uri}
-                note={pick.price_usd && Money.brl(pick.price_usd)}
-                rank={pick.card && pick.card.edhrec_rank}
-              />
+          <p class="font-mono text-micro tabular-nums text-ink-faint">
+            {recap_totals(@preview.chosen)}
+          </p>
+        </header>
+        <div :for={{tipo, picks} <- recap_groups(@preview.chosen)} class="mt-4">
+          <h3 class="flex items-baseline gap-2 text-caption font-medium text-ink">
+            {tipo}
+            <span
+              :if={tally(picks, :add) > 0}
+              class="font-mono text-micro tabular-nums text-sev-healthy"
+            >
+              +{tally(picks, :add)}
+            </span>
+            <span
+              :if={tally(picks, :cut) > 0}
+              class="font-mono text-micro tabular-nums text-sev-critical"
+            >
+              −{tally(picks, :cut)}
+            </span>
+          </h3>
+          <div
+            :for={
+              {action, rotulo, cor} <- [
+                {:add, "Entram", "text-sev-healthy"},
+                {:cut, "Saem", "text-sev-critical"}
+              ]
+            }
+            :if={tally(picks, action) > 0}
+            class="mt-2 flex min-w-0 items-start gap-2"
+          >
+            <span class={["w-12 shrink-0 pt-1 text-micro font-semibold uppercase tracking-wide", cor]}>
+              {rotulo}
+            </span>
+            <div class="-mx-1 min-w-0 flex-1 overflow-x-auto px-1 pb-1">
+              <div class="flex gap-2">
+                <.card_thumb
+                  :for={pick <- by_mana(picks, action)}
+                  name={pick.name}
+                  art={pick.card && pick.card.image_art_crop_url}
+                  uri={pick.card && pick.card.scryfall_uri}
+                  note={recap_note(pick)}
+                  rank={pick.card && pick.card.edhrec_rank}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -1241,8 +1345,11 @@ defmodule DeckexWeb.BancadaLive do
               Suas escolhas
             </span>
             <span class="flex items-center gap-2">
-              <span class="font-mono text-caption text-ink-faint">
-                {length(@preview.chosen)}
+              <%!-- The number he actually wants at a glance is not "9 picks";
+                    it is quantos entram e quantos saem. --%>
+              <span class="font-mono text-caption tabular-nums">
+                <span class="text-sev-healthy">+{tally(@preview.chosen, :add)}</span>
+                <span class="text-sev-critical">−{tally(@preview.chosen, :cut)}</span>
               </span>
               <.icon
                 name={if @resumo?, do: "hero-chevron-up-micro", else: "hero-chevron-down-micro"}
