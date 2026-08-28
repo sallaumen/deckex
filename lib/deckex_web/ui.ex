@@ -368,6 +368,7 @@ defmodule DeckexWeb.UI do
   attr :error, :string, default: nil
   attr :saved, :boolean, default: false
   attr :numeric, :boolean, default: false
+  attr :rows, :integer, default: nil, doc: "renders a textarea when given"
   attr :class, :any, default: nil
   attr :rest, :global, include: ~w(disabled placeholder)
 
@@ -405,8 +406,20 @@ defmodule DeckexWeb.UI do
         </option>
       </select>
 
+      <textarea
+        :if={is_nil(@options) && @rows}
+        id={@id}
+        name={@name}
+        rows={@rows}
+        phx-debounce="blur"
+        aria-invalid={to_string(not is_nil(@error))}
+        aria-describedby={@error && "#{@id}-error"}
+        class={[control(), @numeric && "font-mono", border(@error)]}
+        {@rest}
+      >{@value}</textarea>
+
       <input
-        :if={is_nil(@options)}
+        :if={is_nil(@options) && is_nil(@rows)}
         id={@id}
         type="text"
         name={@name}
@@ -415,11 +428,7 @@ defmodule DeckexWeb.UI do
         phx-debounce="blur"
         aria-invalid={to_string(not is_nil(@error))}
         aria-describedby={@error && "#{@id}-error"}
-        class={[
-          "min-h-touch w-full rounded-md border bg-inlay px-3 py-2 text-body-lg text-ink",
-          @numeric && "font-mono",
-          border(@error)
-        ]}
+        class={[control(), "min-h-touch", @numeric && "font-mono", border(@error)]}
         {@rest}
       />
 
@@ -432,6 +441,15 @@ defmodule DeckexWeb.UI do
       </p>
     </div>
     """
+  end
+
+  # One padding and one type size for every control in the app. Before this
+  # there were three of each — `px-2`, `px-3` and `px-4`, `text-caption` and
+  # `text-body-lg` — sitting side by side in the same form, because each screen
+  # wrote its own class string. `font-mono` is the only variation left, and it
+  # means "this is a number you will read", not "this screen felt like it".
+  defp control do
+    "w-full rounded-md border bg-inlay px-3 py-2 text-caption text-ink placeholder:text-ink-faint"
   end
 
   defp border(nil), do: "border-hairline-soft focus:border-ink-faint"

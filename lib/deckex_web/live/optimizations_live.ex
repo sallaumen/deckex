@@ -409,36 +409,22 @@ defmodule DeckexWeb.OptimizationsLive do
 
             <div :if={@mode == :curadoria} class="grid grid-cols-2 gap-3 2xl:col-span-2">
               <div>
-                <label
-                  for="launch-vagas-corte"
-                  class="mb-1 block text-caption font-semibold text-ink-secondary"
-                >
-                  Vagas de corte
-                </label>
-                <input
+                <.field
                   id="launch-vagas-corte"
-                  type="text"
-                  inputmode="numeric"
                   name="contract[vagas_corte]"
+                  label="Vagas de corte"
                   value="10"
-                  class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-2 py-2 font-mono text-caption text-ink"
+                  numeric
                 />
               </div>
 
               <div>
-                <label
-                  for="launch-vagas-entrada"
-                  class="mb-1 block text-caption font-semibold text-ink-secondary"
-                >
-                  Vagas de entrada
-                </label>
-                <input
+                <.field
                   id="launch-vagas-entrada"
-                  type="text"
-                  inputmode="numeric"
                   name="contract[vagas_entrada]"
+                  label="Vagas de entrada"
                   value="20"
-                  class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-2 py-2 font-mono text-caption text-ink"
+                  numeric
                 />
               </div>
 
@@ -452,23 +438,14 @@ defmodule DeckexWeb.OptimizationsLive do
             <%!-- The whole point of a one-stage round: he already knows what
                   he wants done and does not need nine stages to discover it. --%>
             <div :if={@mode == :livre} class="2xl:col-span-2">
-              <label
-                for="launch-pedido"
-                class="mb-1 block text-caption font-semibold text-ink-secondary"
-              >
-                O que você quer que ele faça
-              </label>
-              <textarea
+              <.field
                 id="launch-pedido"
                 name="contract[pedido]"
-                rows="3"
+                label="O que você quer que ele faça"
+                rows={3}
                 placeholder={pedido_placeholder()}
-                class="w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-caption text-ink placeholder:text-ink-faint"
-              ></textarea>
-              <p class="mt-1 text-micro text-ink-muted">
-                Pode deixar em branco: sem pedido, a rodada faz só o que suas cartas obrigatórias e
-                pedidas já mandam.
-              </p>
+                hint="Pode deixar em branco: sem pedido, a rodada faz só o que suas cartas obrigatórias e pedidas já mandam."
+              />
             </div>
 
             <div
@@ -547,7 +524,7 @@ defmodule DeckexWeb.OptimizationsLive do
               <select
                 id="launch-from"
                 name="contract[from_version]"
-                class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-2 py-2 text-caption text-ink"
+                class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-caption text-ink"
               >
                 <option :if={@drifted?} value="" selected>
                   Como está agora — {@deck_size} cartas, com mudanças não marcadas
@@ -635,56 +612,37 @@ defmodule DeckexWeb.OptimizationsLive do
             </div>
 
             <div>
-              <label
-                for="launch-keep"
-                class="mb-1 block text-caption font-semibold text-ink-secondary"
-              >
-                Proteger só nesta rodada (uma por linha)
-              </label>
-              <textarea
+              <.field
                 id="launch-keep"
                 name="contract[keep]"
-                rows="2"
+                label="Proteger só nesta rodada (uma por linha)"
+                rows={2}
+                numeric
                 placeholder={keep_placeholder()}
-                class="w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 font-mono text-caption text-ink placeholder:text-ink-faint"
-              ></textarea>
-              <p class="mt-1 text-micro text-ink-muted">
-                Soma-se às de cima, e vale só aqui. O comandante já é protegido.
-              </p>
+                hint="Soma-se às de cima, e vale só aqui. O comandante já é protegido."
+              />
             </div>
 
             <%!-- Only the recipe that has a matchup stage asks for matchups.
                   A field that changes nothing is a field that makes the reader
                   wonder what it changed. --%>
             <div :if={@mode != :livre}>
-              <label
-                for="launch-matchups"
-                class="mb-1 block text-caption font-semibold text-ink-secondary"
-              >
-                Matchups para testar (um por linha)
-              </label>
-              <textarea
+              <.field
                 id="launch-matchups"
                 name="contract[matchups]"
-                rows="2"
-                class="w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-caption text-ink"
-              >{Enum.join(@contract["matchups"], "\n")}</textarea>
+                label="Matchups para testar (um por linha)"
+                rows={2}
+                value={Enum.join(@contract["matchups"], "\n")}
+              />
             </div>
 
             <div class="grid gap-4 sm:grid-cols-[1fr_10rem]">
               <div>
-                <label
-                  for="launch-notes"
-                  class="mb-1 block text-caption font-semibold text-ink-secondary"
-                >
-                  Notas para todas as etapas
-                </label>
-                <input
+                <.field
                   id="launch-notes"
-                  type="text"
                   name="contract[notes]"
+                  label="Notas para todas as etapas"
                   placeholder="ex.: mantenha o tema de lontras"
-                  class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-3 py-2 text-caption text-ink placeholder:text-ink-faint"
                 />
               </div>
 
