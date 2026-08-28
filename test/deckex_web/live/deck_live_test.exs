@@ -45,6 +45,38 @@ defmodule DeckexWeb.DeckLiveTest do
     end
   end
 
+  describe "the page hears the deck change under it" do
+    setup do
+      CatalogueFixture.seed!(~w(sol_ring counterspell forest))
+
+      %{deck: import_deck("1 Sol Ring\n4 Forest")}
+    end
+
+    # The regression the owner reported as "os alertas apontam para uma versão
+    # antiga": the page only subscribed to consults, so a card added from
+    # another tab — or a whole optimization applied from the run page — left
+    # the findings frozen at whatever the deck looked like at mount.
+    test "a card added elsewhere updates the open page's numbers", %{conn: conn, deck: deck} do
+      {:ok, view, html} = live(conn, ~p"/decks/#{deck.id}")
+
+      refute html =~ "Counterspell"
+
+      {:ok, _card} = Decks.add_card(deck, "Counterspell")
+
+      html = render(view)
+      assert html =~ "Counterspell"
+    end
+
+    test "a deck deleted elsewhere says goodbye instead of crashing", %{conn: conn, deck: deck} do
+      {:ok, view, _html} = live(conn, ~p"/decks/#{deck.id}")
+
+      {:ok, _deleted} = Decks.delete_deck(deck)
+
+      flash = assert_redirect(view, "/")
+      assert flash["info"] =~ "apagado"
+    end
+  end
+
   describe "the deck screen" do
     setup do
       CatalogueFixture.seed!(~w(sol_ring natures_lore command_tower counterspell forest))

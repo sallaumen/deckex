@@ -35,7 +35,18 @@ defmodule DeckexWeb.DeckLive do
         # Subscribe HERE and only here. assign_deck runs again on every edit
         # and consult event; a subscribe inside it would stack subscriptions,
         # and PubSub delivers once per subscription.
-        if connected?(socket), do: Events.subscribe_consults(deck.id)
+        #
+        # BOTH topics, and the second is the one that was missing: the deck
+        # topic fires when the list itself changes — a version applied from
+        # the run page, a restore, a card added in another tab. For most of
+        # this app's life the page only heard consults, so the findings a
+        # reader trusts most sat frozen at whatever the deck looked like at
+        # mount — measured on a real deck, reported by its owner as "os
+        # alertas apontam para uma versão antiga".
+        if connected?(socket) do
+          Events.subscribe_consults(deck.id)
+          Events.subscribe_deck(deck.id)
+        end
 
         {:ok, assign_deck(socket, deck)}
 
@@ -233,6 +244,23 @@ defmodule DeckexWeb.DeckLive do
     {:ok, fresh} = Decks.fetch_deck(socket.assigns.deck.id)
 
     {:noreply, assign_deck(socket, fresh)}
+  end
+
+  # The list changed under this page — recompute everything the reader is
+  # looking at. The deleted branch is real: "apagar" broadcasts too, and a
+  # page recomputing a deck that no longer exists would crash instead of
+  # saying goodbye.
+  def handle_info({:deck_updated, _id}, socket) do
+    case Decks.fetch_deck(socket.assigns.deck.id) do
+      {:ok, fresh} ->
+        {:noreply, assign_deck(socket, fresh)}
+
+      {:error, %Error{}} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Esse deck foi apagado.")
+         |> push_navigate(to: ~p"/")}
+    end
   end
 
   # Consults.request/3 raises rather than returning a tagged error — every

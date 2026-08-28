@@ -569,6 +569,20 @@ for *what* we are building and *why*. This file is *how*.
   unreachable, and no wall at all left the launcher showing an empty field
   the owner refilled every launch — his own words drew it: "R$ 800 inviável".
 
+- **An event with no subscriber is a promise nobody hears.**
+  `broadcast_deck_updated` fired from seven call sites — apply, restore,
+  rename, delete, card writes — and for most of this app's life not one page
+  subscribed to it: the deck page listened only to consults, so the findings a
+  reader trusts most sat frozen at whatever the deck looked like at mount.
+  The owner reported it as "os alertas apontam para uma versão antiga", and he
+  was right about the symptom and wrong about the cause — the report is never
+  cached; the PAGE was. DeckLive and MesaLive subscribe now, card writes
+  broadcast after persistence (persist first, broadcast last), and the
+  deleted branch navigates away instead of recomputing a deck that no longer
+  exists. When adding an Events broadcast, name its subscriber in the same
+  commit — and when adding a page that shows deck-derived numbers, subscribe
+  it to the deck topic.
+
 ## Operating notes
 
 - **`mix run` starts Oban, and Oban consumes.** A script that enqueues a job
