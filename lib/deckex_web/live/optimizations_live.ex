@@ -44,6 +44,7 @@ defmodule DeckexWeb.OptimizationsLive do
            mode: :refine,
            salt: Salt.preset("sem_freio"),
            launching: false,
+           errors: %{},
            page_title: "Otimizações · #{deck.name}"
          )}
 
@@ -132,6 +133,27 @@ defmodule DeckexWeb.OptimizationsLive do
   end
 
   def handle_event("comecar", %{"contract" => params}, socket) do
+    case ceiling_errors(params) do
+      errors when errors != %{} -> {:noreply, assign(socket, errors: errors)}
+      _none -> start_run(socket, params)
+    end
+  end
+
+  # A blank ceiling means "no ceiling" and always has. A *typo* used to mean
+  # exactly the same thing — `Integer.parse("abc")` fails, `parse_int` answers
+  # `nil`, and the form that authorises spending twenty reais of model time
+  # quietly removed its own price limit. Blank and wrong must not be the same
+  # answer on this screen.
+  defp ceiling_errors(params) do
+    for param <- ["ceiling_card", "ceiling_land"],
+        typed = String.trim(params[param] || ""),
+        typed != "",
+        is_nil(parse_int(typed)),
+        into: %{},
+        do: {param, "“#{typed}” não é um valor em reais. Deixe em branco para não ter teto."}
+  end
+
+  defp start_run(socket, params) do
     contract = %{
       "bracket_max" => String.to_integer(params["bracket_max"]),
       "ceilings" => %{
@@ -152,8 +174,11 @@ defmodule DeckexWeb.OptimizationsLive do
     # Refused here rather than mid-run: every add the contract contradicts
     # would be rejected by the bracket guard anyway, one paid consult at a time.
     case Salt.contradiction(contract) do
-      nil -> launch(socket, Map.put(contract, "mode", socket.assigns.mode))
-      reason -> {:noreply, put_flash(socket, :error, reason)}
+      nil ->
+        socket |> assign(errors: %{}) |> launch(Map.put(contract, "mode", socket.assigns.mode))
+
+      reason ->
+        {:noreply, put_flash(socket, :error, reason)}
     end
   end
 
@@ -545,62 +570,32 @@ defmodule DeckexWeb.OptimizationsLive do
             </div>
 
             <div class="grid gap-4 sm:grid-cols-3">
-              <div>
-                <label
-                  for="launch-bracket"
-                  class="mb-1 block text-caption font-semibold text-ink-secondary"
-                >
-                  Bracket máximo
-                </label>
-                <select
-                  id="launch-bracket"
-                  name="contract[bracket_max]"
-                  class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-2 py-2 text-caption text-ink"
-                >
-                  <option
-                    :for={bracket <- [1, 2, 3, 4]}
-                    value={bracket}
-                    selected={bracket == @contract["bracket_max"]}
-                  >
-                    {bracket}
-                  </option>
-                </select>
-                <p class="mt-1 text-micro text-ink-muted">O piso medido hoje é o padrão.</p>
-              </div>
-
-              <div>
-                <label
-                  for="launch-ceiling-card"
-                  class="mb-1 block text-caption font-semibold text-ink-secondary"
-                >
-                  Teto por carta (R$)
-                </label>
-                <input
-                  id="launch-ceiling-card"
-                  type="text"
-                  inputmode="numeric"
-                  name="contract[ceiling_card]"
-                  value={@contract["ceilings"]["card"]}
-                  class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-2 py-2 font-mono text-caption text-ink"
-                />
-              </div>
-
-              <div>
-                <label
-                  for="launch-ceiling-land"
-                  class="mb-1 block text-caption font-semibold text-ink-secondary"
-                >
-                  Teto por terreno (R$)
-                </label>
-                <input
-                  id="launch-ceiling-land"
-                  type="text"
-                  inputmode="numeric"
-                  name="contract[ceiling_land]"
-                  value={@contract["ceilings"]["land"]}
-                  class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-2 py-2 font-mono text-caption text-ink"
-                />
-              </div>
+              <.field
+                id="launch-bracket"
+                name="contract[bracket_max]"
+                label="Bracket máximo"
+                value={@contract["bracket_max"]}
+                options={[1, 2, 3, 4]}
+                hint="O piso medido hoje é o padrão."
+              />
+              <.field
+                id="launch-ceiling-card"
+                name="contract[ceiling_card]"
+                label="Teto por carta (R$)"
+                value={@contract["ceilings"]["card"]}
+                numeric
+                hint="Em branco = sem teto."
+                error={@errors["ceiling_card"]}
+              />
+              <.field
+                id="launch-ceiling-land"
+                name="contract[ceiling_land]"
+                label="Teto por terreno (R$)"
+                value={@contract["ceilings"]["land"]}
+                numeric
+                hint="Em branco = sem teto."
+                error={@errors["ceiling_land"]}
+              />
             </div>
 
             <%!-- This box used to be the only place to protect a card, and it
@@ -693,35 +688,18 @@ defmodule DeckexWeb.OptimizationsLive do
                 />
               </div>
 
-              <div>
-                <label
-                  for="launch-model"
-                  class="mb-1 block text-caption font-semibold text-ink-secondary"
-                >
-                  Modelo
-                </label>
-                <select
-                  id="launch-model"
-                  name="contract[model]"
-                  class="min-h-touch w-full rounded-md border border-hairline-soft bg-inlay px-2 py-2 font-mono text-caption text-ink"
-                >
-                  <option
-                    :for={model <- Consults.models_at_or_above(Settings.model_floor())}
-                    value={model}
-                    selected={model == @contract["model"]}
-                  >
-                    {model}
-                  </option>
-                </select>
-                <%!-- The floor filters this list, and when it filtered it down
-                      to one nothing on screen said why — the picker just looked
-                      like the app only had one model. Now it names the rule and
-                      where to change it. --%>
-                <p class="mt-1 text-micro text-ink-muted">
-                  Piso: <span class="font-mono">{Settings.model_floor()}</span>. Modelos abaixo dele
-                  não podem propor mudança de carta — muda nos Ajustes.
-                </p>
-              </div>
+              <%!-- The floor filters this list, and when it filtered it down to
+                    one nothing on screen said why — the picker just looked like
+                    the app only had one model. The hint names the rule and
+                    where to change it. --%>
+              <.field
+                id="launch-model"
+                name="contract[model]"
+                label="Modelo"
+                value={@contract["model"]}
+                options={Consults.models_at_or_above(Settings.model_floor())}
+                hint={"Piso: #{Settings.model_floor()}. Abaixo dele um modelo não pode propor mudança de carta — muda nos Ajustes."}
+              />
             </div>
 
             <div class="flex items-center justify-end gap-3 border-t border-hairline-soft pt-4 2xl:col-span-2">
