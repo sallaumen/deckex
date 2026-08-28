@@ -18,7 +18,6 @@ defmodule Deckex.Optimizations.Curation do
 
   alias Deckex.Consults.Suggestion
   alias Deckex.Consults.Vacancy
-  alias Deckex.Optimizations.Balance
   alias Deckex.Optimizations.OptimizationStep
 
   @doc """
@@ -147,31 +146,19 @@ defmodule Deckex.Optimizations.Curation do
   @doc """
   Why this board cannot be committed yet, in the owner's language, or nil.
 
-  Off 100 is the rule a Commander deck lives by, and the one thing this screen
-  may not let him get wrong.
-
-  Choosing nothing is refused on the **cardápio** only: an empty first board is
-  not a small round, it is no round, and closing it would spend the critic's
-  consult saying so. On the critic's board it is the opposite — an empty board
-  is him declining the corrections, which is the whole point of the mode, and
-  refusing it would trap him on a screen whose only exit was agreeing.
+  One refusal only, and only at the cardápio: choosing nothing is not a small
+  round, it is no round, and closing it would spend the critic's consult
+  saying so. The COUNT does not block — the owner chooses freely, and a copy
+  left off 100 is what the balance stages exist to close, informed by every
+  decision he just made. He asked for exactly this, in as many words: pick
+  and drop without arithmetic in the way, and let the engine settle the
+  hundred afterwards. At the critic's gate even an empty board passes: that
+  is him declining the corrections, which is the whole point of the mode.
   """
   @spec blocker(OptimizationStep.t(), [Vacancy.t()], non_neg_integer()) :: String.t() | nil
-  def blocker(%OptimizationStep{} = step, vacancies, starting) do
-    count = count(step, vacancies, starting)
-
-    cond do
-      step.kind == :cardapio and chosen(step, vacancies) == [] ->
-        "Você ainda não escolheu nada. Escolha ao menos uma carta para fechar a rodada."
-
-      count > Balance.target() ->
-        "O deck ficaria com #{count} cartas. Corte mais #{count - Balance.target()}."
-
-      count < Balance.target() ->
-        "O deck ficaria com #{count} cartas. Faltam #{Balance.target() - count}."
-
-      true ->
-        nil
+  def blocker(%OptimizationStep{} = step, vacancies, _starting) do
+    if step.kind == :cardapio and chosen(step, vacancies) == [] do
+      "Você ainda não escolheu nada. Escolha ao menos uma carta para fechar a rodada."
     end
   end
 end

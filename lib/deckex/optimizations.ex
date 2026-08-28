@@ -1414,11 +1414,20 @@ defmodule Deckex.Optimizations do
   # stages have eight chances to walk a large gap down into reach first.
   @max_closable_gap 10
 
+  # Curadoria closes wider gaps on purpose: the owner chooses freely — his
+  # board may leave the copy twenty over — and asked, in as many words, for
+  # the engine to balance the count AFTER his decisions instead of blocking
+  # them. The bound is the launch contract's own arithmetic: he cannot drift
+  # further than the vacancies he was offered. The stages converge: a closing
+  # stage that lands short of 100 has its excess refused by the balance guard,
+  # and whatever gap remains goes to the next stage, up to the cap.
+  @max_closable_gap_curadoria 30
+
   defp close_or_finish(optimization, done_step) do
     count = sandbox_size(optimization, current_list(optimization))
     spent = Enum.count(optimization.steps, &(&1.kind == :balance))
 
-    if closable?(count, spent) do
+    if closable?(count, spent, optimization.mode) do
       optimization |> append_balance_step(done_step, count) |> run_step()
 
       :ok
@@ -1427,10 +1436,11 @@ defmodule Deckex.Optimizations do
     end
   end
 
-  defp closable?(count, stages_spent) do
+  defp closable?(count, stages_spent, mode) do
     gap = abs(Balance.target() - count)
+    cap = if mode == :curadoria, do: @max_closable_gap_curadoria, else: @max_closable_gap
 
-    gap > 0 and gap <= @max_closable_gap and stages_spent < @max_balance_stages
+    gap > 0 and gap <= cap and stages_spent < @max_balance_stages
   end
 
   defp append_balance_step(optimization, done_step, count) do

@@ -433,6 +433,34 @@ defmodule DeckexWeb.BancadaLiveTest do
     end
   end
 
+  describe "the round as pictures" do
+    test "the board opens with the chosen cards as art tiles", %{conn: conn} do
+      {_deck, optimization} = parked_run()
+
+      {:ok, view, _html} = live(conn, ~p"/otimizacoes/#{optimization.id}/bancada")
+
+      quadro(view)
+      pick(view, "cut:0", "Forest")
+      html = pick(view, "add:0", "Cultivate")
+
+      # Thirty-six decisions deep, a text list was the only mirror — a deck is
+      # pictures, and so is a round.
+      assert html =~ "Saem"
+      assert html =~ "Entram"
+    end
+  end
+
+  describe "the fixed navigator" do
+    test "prev and next live in one screen spot with the position between them", %{conn: conn} do
+      {_deck, optimization} = parked_run()
+
+      {:ok, _view, html} = live(conn, ~p"/otimizacoes/#{optimization.id}/bancada")
+
+      assert html =~ "fixed bottom-5 left-1/2"
+      assert html =~ "1/4"
+    end
+  end
+
   describe "the round as a list" do
     test "the rail can show back what he chose", %{conn: conn} do
       {_deck, optimization} = parked_run()
@@ -478,7 +506,7 @@ defmodule DeckexWeb.BancadaLiveTest do
   end
 
   describe "the rail" do
-    test "refuses to close off 100, and says by how much", %{conn: conn} do
+    test "off 100, the rail states the plan instead of refusing", %{conn: conn} do
       {_deck, optimization} = parked_run()
 
       {:ok, view, _html} = live(conn, ~p"/otimizacoes/#{optimization.id}/bancada")
@@ -486,9 +514,10 @@ defmodule DeckexWeb.BancadaLiveTest do
       quadro(view)
       html = pick(view, "add:0", "Cultivate")
 
-      assert html =~ "101 cartas"
-      assert html =~ "Corte mais 1"
-      assert html =~ ~r/<button[^>]*disabled/
+      assert html =~ "O deck ficaria com 101"
+      assert html =~ "a IA\nfecha a conta em 100" or html =~ "fecha a conta em 100"
+      # The button is live: his choice stands, the arithmetic waits.
+      refute html =~ ~r/phx-click="fechar"[^>]*disabled/
     end
 
     test "opens the gate once the count lands on 100", %{conn: conn} do

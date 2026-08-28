@@ -211,15 +211,36 @@ defmodule Deckex.Optimizations.BancadaTest do
       assert error.message =~ "ainda não escolheu nada"
     end
 
-    test "is refused off 100, and says by how much", ctx do
+    test "commits off 100, and the balance stage closes the count after the critic", ctx do
       %{step: step, vacancies: vacancies} = ctx
       _step = pick(step, vacancies, "add:0", "Cultivate")
 
       {:ok, optimization} = Optimizations.fetch(ctx.optimization.id)
 
-      assert {:error, error} = Optimizations.commit(optimization, vacancies)
-      assert error.message =~ "101 cartas"
-      assert error.message =~ "Corte mais 1"
+      # The board commits at 101 — his choice stands, the arithmetic waits.
+      assert {:ok, moved} = Optimizations.commit(optimization, vacancies)
+      assert Enum.find(moved.steps, &(&1.kind == :critico)).status == :running
+
+      # The critic proposes nothing; the round is off 100, so a balance stage
+      # is appended and asked to close the gap, aware of what he decided.
+      {:ok, after_critic} =
+        answer(moved.id, %{"veredito" => "Ok.", "cuts" => [], "adds" => []})
+
+      balance = Enum.find(after_critic.steps, &(&1.kind == :balance))
+      assert balance
+      assert balance.label =~ "Cortar 1"
+
+      # The balance stage cuts one and the run finishes on a legal list.
+      {:ok, closed} =
+        answer(after_critic.id, %{
+          "leitura" => "Fechando.",
+          "diagnosis" => "Sobrou 1.",
+          "cuts" => [%{"card" => "Forest", "reason" => "a carta mais fraca"}],
+          "adds" => []
+        })
+
+      assert Optimizations.sandbox_size(closed, Optimizations.current_list(closed)) == 100
+      assert closed.status == :done
     end
 
     test "a balanced board is audited and applied, and the run moves on", ctx do
