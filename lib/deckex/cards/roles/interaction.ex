@@ -68,7 +68,11 @@ defmodule Deckex.Cards.Roles.Interaction do
   @spot_fight ~r/fights? (up to \w+ )?target|deals damage equal to its power to target/i
   @spot_edict ~r/(target (player|opponent)|each opponent) sacrifices? [^.]{0,30}creature/i
 
-  @protection ~r/\b(hexproof|indestructible|shroud|protection from|ward)\b/i
+  # Phasing is the strongest protection printed — a phased-out permanent
+  # cannot be targeted, wiped or sacrificed — and it says none of the five
+  # keywords. Clever Concealment carried zero roles while being exactly the
+  # card a go-wide deck holds up against the wipe.
+  @protection ~r/\b(hexproof|indestructible|shroud|protection from|ward)\b|phases? out/i
 
   @spec classify(Card.t()) :: [RoleMatch.t()]
   def classify(%Card{} = card) do

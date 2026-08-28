@@ -505,6 +505,29 @@ for *what* we are building and *why*. This file is *how*.
   with its whole behaviour in reminder text); when a new rule eats it, the
   tests move to the next one rather than the rule backing off.
 
+- **A rule change travels with its blast radius, twice.** First in CI:
+  `Deckex.Cards.RolesGoldenTest` classifies every committed fixture against a
+  golden snapshot, so a regex that moves a card nobody expected fails
+  `mix test` before it reaches a briefing (regenerate deliberately with
+  `mix deckex.roles.golden`, and defend every changed row in the commit — a
+  row you cannot defend as a player is a rule that needs a guard, not a
+  snapshot that needs updating). Second against reality:
+  `mix deckex.roles.diff` classifies the whole live catalogue against the
+  stored roles, read-only, and `--apply` runs the reclassify the
+  stale-catalogue law demands. Both tasks start the Repo alone — never the
+  app, never Oban.
+- **The dossier rule that does not depend on the flag.** A dossier citing a
+  card that is not in the decklist is stale residue whatever
+  `dossier_stale` says — the flag missed on a real deck (Fable found
+  Thousand-Year Storm cited in a list that never held it), so the briefing now
+  states the rule unconditionally: the model must not build on a dossier card
+  the list does not contain, and names the mismatch in `leitura`. The
+  decklist cannot be stale about itself.
+- **Phasing is protection.** "Your permanents phase out" says none of the five
+  protection keywords and beats all of them for one turn. Clever Concealment
+  held zero roles while being exactly what a go-wide deck holds up against a
+  wipe.
+
 ## Operating notes
 
 - **`mix run` starts Oban, and Oban consumes.** A script that enqueues a job

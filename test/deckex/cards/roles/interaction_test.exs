@@ -114,6 +114,12 @@ defmodule Deckex.Cards.Roles.InteractionTest do
     test "granting hexproof is protection" do
       assert :protection in kinds("swiftfoot_boots")
     end
+
+    test "phasing the team out is protection, and says no keyword" do
+      # Clever Concealment carried zero roles while being exactly the card a
+      # go-wide deck holds up against the wipe.
+      assert :protection in kinds("clever_concealment")
+    end
   end
 
   describe "no match" do
