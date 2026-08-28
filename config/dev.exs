@@ -74,6 +74,27 @@ config :deckex, dev_routes: true
 # Do not include metadata nor timestamps in development logs
 config :logger, :default_formatter, format: "[$level] $message\n"
 
+# Dev shipped with no level at all, which means `:debug` — and `:debug` in this
+# app is **every Ecto query, with its SQL and its params**. Measured 2026-08-27:
+# one render of a deck page issues 56 queries and ~13,5 KB of log, and
+# `web_console_logger: true` above sends the same stream to the browser console,
+# so a session pays for it twice. Nothing is wrong with any single line; the
+# volume is what fills a terminal's scrollback until the terminal stops
+# answering, and a scrollback buffer is memory, not disk.
+#
+# `:info` keeps what a person actually reads while working — the request line,
+# Oban's job results, and every warning and error this app writes on purpose.
+# When a query IS the question, ask for it by name:
+#
+#     LOG_LEVEL=debug mix phx.server
+requested_level = System.get_env("LOG_LEVEL", "info")
+
+known_levels = ~w(emergency alert critical error warning notice info debug)
+
+config :logger,
+  level:
+    if(requested_level in known_levels, do: String.to_existing_atom(requested_level), else: :info)
+
 # Set a higher stacktrace during development. Avoid configuring such
 # in production as building large stacktraces may be expensive.
 config :phoenix, :stacktrace_depth, 20

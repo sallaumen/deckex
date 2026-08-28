@@ -14,6 +14,14 @@ services:
       - "5435:5432"
     volumes:
       - deckex_pg:/var/lib/postgresql/data
+    # Docker's json-file driver has no ceiling by default, and this container is
+    # `unless-stopped` on a desktop that stays on for weeks. Two numbers are
+    # cheaper than remembering to prune.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
