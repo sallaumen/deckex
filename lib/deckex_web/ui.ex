@@ -791,6 +791,60 @@ defmodule DeckexWeb.UI do
   end
 
   @doc """
+  A card's rules text, with its mana symbols drawn as pips.
+
+  This is the fact a card is actually judged on, and for most of this app's
+  life no screen showed it — the same omission the briefing law names as the
+  single cause behind its worst misreadings. A person choosing between three
+  cards is doing exactly what a stage does, and deserves the same evidence.
+
+  Reminder text — the parenthetical the printed card sets in italics — is set
+  in italics here too, because it explains and never rules.
+
+  ## Examples
+
+      <.oracle_text text={@card.oracle_text} />
+      <.oracle_text text={@card.oracle_text} clamp={3} />
+  """
+  attr :text, :string, default: nil
+  attr :clamp, :integer, default: nil, doc: "max lines before overflow is hidden"
+  attr :class, :any, default: nil
+
+  def oracle_text(%{text: text} = assigns) when text in [nil, ""] do
+    ~H""
+  end
+
+  def oracle_text(assigns) do
+    ~H"""
+    <div
+      class={["space-y-1.5 text-caption leading-relaxed text-ink-secondary", @class]}
+      style={
+        @clamp &&
+          "display:-webkit-box;-webkit-line-clamp:#{@clamp};-webkit-box-orient:vertical;overflow:hidden"
+      }
+    >
+      <p :for={line <- String.split(@text, "\n", trim: true)} class="[overflow-wrap:anywhere]">
+        <span :for={segment <- Format.segments(line)}>
+          <.mana_pip :if={elem(segment, 0) == :symbol} symbol={elem(segment, 1)} size={13} />
+          <span :if={elem(segment, 0) == :text} class={reminder_class(elem(segment, 1))}>{elem(
+            segment,
+            1
+          )}</span>
+        </span>
+      </p>
+    </div>
+    """
+  end
+
+  # A parenthetical in rules text is reminder text: it repeats a rule the game
+  # already has, and it is set apart on the printed card for the same reason.
+  defp reminder_class(text) do
+    if String.starts_with?(String.trim_leading(text), "(") do
+      "italic text-ink-faint"
+    end
+  end
+
+  @doc """
   One bucket of the mana-curve histogram.
 
   `max` is the tallest bucket in the whole histogram and sets the shared scale —

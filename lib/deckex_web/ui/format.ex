@@ -217,6 +217,31 @@ defmodule DeckexWeb.UI.Format do
   end
 
   @doc """
+  Rules text split into the runs a renderer needs: prose and mana symbols.
+
+  Oracle text is the fact a card is judged on, and it is written in a notation
+  — `{T}`, `{2}{G}` — that a Magic player reads as pictures. Rendering it as
+  literal braces is rendering the source code of a card instead of the card.
+
+      iex> DeckexWeb.UI.Format.segments("{T}: Add {G}.") |> Enum.map(&elem(&1, 0))
+      [:symbol, :text, :symbol, :text]
+  """
+  @spec segments(String.t() | nil) :: [{:text, String.t()} | {:symbol, symbol()}]
+  def segments(nil), do: []
+  def segments(""), do: []
+
+  def segments(text) when is_binary(text) do
+    @symbol_pattern
+    |> Regex.split(text, include_captures: true, trim: true)
+    |> Enum.map(fn part ->
+      case Regex.run(@symbol_pattern, part, capture: :all_but_first) do
+        [body] -> {:symbol, symbol(body)}
+        nil -> {:text, part}
+      end
+    end)
+  end
+
+  @doc """
   The CSS `background` value for a symbol's pip.
 
   A hybrid gets a hard-stop diagonal across its two colours — the printed

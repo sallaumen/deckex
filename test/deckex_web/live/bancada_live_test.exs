@@ -192,6 +192,225 @@ defmodule DeckexWeb.BancadaLiveTest do
     end
   end
 
+  describe "the keyboard" do
+    setup %{conn: conn} do
+      {_deck, optimization} = parked_run()
+      {:ok, view, _html} = live(conn, ~p"/otimizacoes/#{optimization.id}/bancada")
+
+      %{view: view, optimization: optimization}
+    end
+
+    # The regression that matters: a window key listener hears every key, and
+    # the LiveView used to raise `FunctionClauseError` on the first letter —
+    # killing the process and losing the cursor on remount.
+    test "a key that means nothing here is ignored, not a crash", %{view: view} do
+      for key <- ~w(a Z 9 Shift Tab F5 Dead) do
+        render_hook(view, "tecla", %{"key" => key})
+      end
+
+      assert render(view) =~ "Bancada"
+    end
+
+    test "0 skips the vacancy on screen", %{view: view} do
+      render_hook(view, "tecla", %{"acao" => "pular"})
+
+      assert render(view) =~ "1 de 4"
+      assert render(view) =~ "100"
+    end
+
+    test "U undoes the vacancy on screen", %{view: view} do
+      render_hook(view, "tecla", %{"n" => 1})
+      assert render(view) =~ "99"
+
+      render_hook(view, "tecla", %{"acao" => "desfazer"})
+      assert render(view) =~ "100"
+    end
+
+    test "the shortcuts sheet opens, and every path out closes it", %{view: view} do
+      html = view |> element(~s(button[phx-click="atalhos"])) |> render_click()
+
+      assert html =~ "Atalhos"
+      assert html =~ "nenhuma destas"
+
+      # Escape, via the hook. Closing twice must stay closed — the old wiring
+      # had two window listeners whose toggles cancelled and reopened it.
+      render_hook(view, "tecla", %{"acao" => "fechar-paineis"})
+      render_hook(view, "fechar-atalhos", %{})
+      refute render(view) =~ ~s(role="dialog")
+
+      # And the X, which is idempotent rather than a toggle.
+      view |> element(~s(header button[phx-click="atalhos"])) |> render_click()
+      view |> element(~s(button[phx-click="fechar-atalhos"])) |> render_click()
+      refute render(view) =~ ~s(role="dialog")
+    end
+  end
+
+  describe "hostile payloads" do
+    setup %{conn: conn} do
+      {_deck, optimization} = parked_run()
+      {:ok, view, _html} = live(conn, ~p"/otimizacoes/#{optimization.id}/bancada")
+
+      %{view: view}
+    end
+
+    # `Enum.at/2` wraps a negative index to the END of the list, so an
+    # unguarded n=0 silently picked the LAST candidate — a selection the owner
+    # never made, which is the one failure this screen exists to prevent.
+    test "n=0 picks nothing instead of wrapping to the last candidate", %{view: view} do
+      render_hook(view, "tecla", %{"n" => 0})
+      render_hook(view, "tecla", %{"n" => -1})
+      render_hook(view, "tecla", %{"n" => "1"})
+
+      assert render(view) =~ "0 de 4"
+      assert render(view) =~ "100"
+    end
+
+    test "a junk filter is ignored, not a crash", %{view: view} do
+      quadro(view)
+      render_hook(view, "filtrar", %{"filtro" => "nao_existe"})
+      render_hook(view, "filtrar", %{"filtro" => "ok"})
+
+      assert render(view) =~ "Sai do deck"
+    end
+
+    test "a stale vacancy key is ignored, not a crash", %{view: view} do
+      render_hook(view, "escolher", %{"vaga" => "add:99", "carta" => "Sol Ring"})
+      render_hook(view, "limpar", %{"vaga" => "cut:99"})
+
+      assert render(view) =~ "0 de 4"
+    end
+  end
+
+  describe "the cursor when the reserve opens" do
+    # Picking the add that opens the reserve inserts cut vacancies BEFORE the
+    # adds, so a numeric +1 landed him back on the vacancy he had just
+    # answered. Advancing from the answered KEY survives the insertion.
+    test "a pick advances to the next vacancy, not back onto itself", %{conn: conn} do
+      {_deck, optimization} = parked_run()
+
+      {:ok, view, _html} = live(conn, ~p"/otimizacoes/#{optimization.id}/bancada")
+
+      # Jump to add:0 and pick — net +1 opens the reserve cut.
+      view |> element(~s(button[phx-value-fase="quadro"])) |> render_click()
+      view |> element(~s(button[phx-value-chave="add:0"])) |> render_click()
+      render_hook(view, "tecla", %{"n" => 1})
+
+      html = render(view)
+      assert html =~ "O deck não compra carta nenhuma."
+      refute html =~ "Sua curva quer aceleração de 3."
+    end
+
+    test "undoing the add folds the reserve without stranding the cursor", %{conn: conn} do
+      {_deck, optimization} = parked_run()
+
+      {:ok, view, _html} = live(conn, ~p"/otimizacoes/#{optimization.id}/bancada")
+
+      quadro(view)
+      pick(view, "add:0", "Cultivate")
+
+      # The board now shows the reserve; undo the add from the last vacancy.
+      view |> element(~s(button[phx-value-chave="add:1"])) |> render_click()
+      render_hook(view, "limpar", %{"vaga" => "add:0"})
+
+      # `visible` shrank under the cursor and the page still stands.
+      assert render(view) =~ "de 4"
+    end
+  end
+
+  describe "judging a card" do
+    test "every candidate carries its rules text", %{conn: conn} do
+      {_deck, optimization} = parked_run()
+
+      {:ok, view, html} = live(conn, ~p"/otimizacoes/#{optimization.id}/bancada")
+
+      # Forest's oracle text, which is what the choice is actually made on.
+      assert html =~ "Add"
+
+      html = view |> element(~s(button[phx-click="texto"])) |> render_click()
+
+      refute html =~ "esconder o texto das cartas"
+      assert html =~ "mostrar o texto das cartas"
+    end
+
+    test "a candidate's accessible name is the card, not the whole tile", %{conn: conn} do
+      {_deck, optimization} = parked_run()
+
+      {:ok, _view, html} = live(conn, ~p"/otimizacoes/#{optimization.id}/bancada")
+
+      assert html =~ ~s(aria-label="Opção 1: Forest")
+    end
+  end
+
+  describe "the owner's own words" do
+    test "a cut candidate carries the note he wrote about it", %{conn: conn} do
+      {deck, optimization} = parked_run()
+
+      {:ok, _note} =
+        Decks.put_card_note(deck, "Forest", "essa floresta é a que o Nissa busca")
+
+      {:ok, _view, html} = live(conn, ~p"/otimizacoes/#{optimization.id}/bancada")
+
+      # His words, above the model's argument, labelled as his.
+      assert html =~ "essa floresta é a que o Nissa busca"
+      assert html =~ "Você"
+    end
+  end
+
+  describe "the board's filters" do
+    setup %{conn: conn} do
+      {_deck, optimization} = parked_run()
+      {:ok, view, _html} = live(conn, ~p"/otimizacoes/#{optimization.id}/bancada")
+      quadro(view)
+
+      %{view: view}
+    end
+
+    test "narrow the board to what he is looking for", %{view: view} do
+      pick(view, "cut:0", "Forest")
+
+      html = view |> element(~s(button[phx-value-filtro="escolhidas"])) |> render_click()
+
+      assert html =~ "Noventa e oito florestas é terreno demais."
+      refute html =~ "Llanowar morre a qualquer varrida."
+
+      html = view |> element(~s(button[phx-value-filtro="indecisas"])) |> render_click()
+
+      refute html =~ "Noventa e oito florestas é terreno demais."
+      assert html =~ "Llanowar morre a qualquer varrida."
+    end
+
+    test "say plainly when nothing matches", %{view: view} do
+      html = view |> element(~s(button[phx-value-filtro="escolhidas"])) |> render_click()
+
+      assert html =~ "Nenhuma vaga com esse filtro"
+    end
+
+    test "a vacancy on the board opens in triage", %{view: view} do
+      html = view |> element(~s(button[phx-value-chave="add:0"])) |> render_click()
+
+      assert html =~ "Sua curva quer aceleração de 3."
+      assert html =~ "Nenhuma destas"
+    end
+  end
+
+  describe "the round as a list" do
+    test "the rail can show back what he chose", %{conn: conn} do
+      {_deck, optimization} = parked_run()
+
+      {:ok, view, _html} = live(conn, ~p"/otimizacoes/#{optimization.id}/bancada")
+
+      html = view |> element(~s(button[phx-click="resumo"])) |> render_click()
+      assert html =~ "Nada escolhido ainda"
+
+      quadro(view)
+      pick(view, "add:0", "Cultivate")
+      html = render(view)
+
+      assert html =~ "Suas escolhas"
+      assert html =~ "Cultivate"
+    end
+  end
+
   describe "the board" do
     test "groups the vacancies by the reason they exist", %{conn: conn} do
       {_deck, optimization} = parked_run()
