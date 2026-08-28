@@ -336,10 +336,17 @@ defmodule DeckexWeb.OptimizationsLive do
               <span aria-hidden="true">·</span>
               <span class="font-mono text-ink-faint">{run.contract["model"]}</span>
 
+              <%!-- "hoje" is load-bearing. The outcome chip above is the
+                    run's own verdict, frozen when it finished; this delta is
+                    recomputed with TODAY's engine, and the two can honestly
+                    disagree — a run that measured "saiu pior 0→1" under an
+                    engine that undercounted removal reads 0→0 after the
+                    engine learned to count. Showing both unlabeled looked
+                    like a bug; labeled, it is the engine improving in public. --%>
               <span :if={delta = criticals_delta(run, @deck)}>
                 <span aria-hidden="true" class="text-ink-faint">·</span>
                 <span class={["font-mono", delta_tone(delta)]}>
-                  críticos {elem(delta, 0)}→{elem(delta, 1)}
+                  hoje: críticos {elem(delta, 0)}→{elem(delta, 1)}
                 </span>
               </span>
             </p>

@@ -577,11 +577,15 @@ defmodule DeckexWeb.DeckLive do
         <%!-- Wraps as a row of whole stats rather than squeezing four of them
               into columns one word wide. Each number keeps its line: at 320px
               "0/10 caras · 0/2 exceções" broke across three. --%>
-        <div class="flex flex-wrap items-end gap-x-6 gap-y-4">
+        <%!-- A grid on a phone, the flex row on anything wider: right-aligned
+              tiles wrapping freely at 375px landed at ragged x-positions and
+              read as spilled type, not as a band of numbers. --%>
+        <div class="grid grid-cols-2 gap-x-6 gap-y-4 sm:flex sm:flex-wrap sm:items-end">
           <.button
             :if={@running_optimization}
             navigate={~p"/otimizacoes/#{@running_optimization.id}"}
             variant="primary"
+            class="col-span-2 sm:col-span-1"
           >
             {case @running_optimization.status do
               :awaiting_choice -> "Otimização esperando você →"
@@ -593,6 +597,7 @@ defmodule DeckexWeb.DeckLive do
             :if={is_nil(@running_optimization)}
             navigate={~p"/decks/#{@deck.id}/otimizacoes"}
             variant="primary"
+            class="col-span-2 justify-self-start sm:col-span-1"
           >
             Otimizar
           </.button>
@@ -600,9 +605,14 @@ defmodule DeckexWeb.DeckLive do
           <%!-- Beside the deck's own value on purpose: one is what the cards
                 cost, the other is what asking about them cost, and an owner
                 deciding whether to run another optimization is weighing both. --%>
-          <.token_meter totals={@ai_totals} label="Gasto com IA" size={:lg} class="text-right" />
+          <.token_meter
+            totals={@ai_totals}
+            label="Gasto com IA"
+            size={:lg}
+            class="text-left sm:text-right"
+          />
 
-          <div class="text-right whitespace-nowrap">
+          <div class="whitespace-nowrap text-left sm:text-right">
             <p class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
               Valor do deck
             </p>
@@ -636,7 +646,7 @@ defmodule DeckexWeb.DeckLive do
                 raises a finding at 105 cards, but a deck being at exactly 100
                 is a fact the owner checks constantly while editing — and a
                 number that only appears when broken cannot be checked. --%>
-          <div class="text-right whitespace-nowrap">
+          <div class="whitespace-nowrap text-left sm:text-right">
             <p class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
               Cartas
             </p>
@@ -652,7 +662,7 @@ defmodule DeckexWeb.DeckLive do
             </p>
           </div>
 
-          <div class="text-right whitespace-nowrap">
+          <div class="whitespace-nowrap text-left sm:text-right">
             <p class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
               Bracket (piso)
             </p>
@@ -674,7 +684,10 @@ defmodule DeckexWeb.DeckLive do
       <div class="grid gap-10 xl:grid-cols-[minmax(340px,26rem)_1fr] xl:items-start">
         <aside class="xl:sticky xl:top-8 xl:max-h-[calc(100vh-4rem)] xl:overflow-y-auto">
           <div class="mb-4 space-y-2">
-            <div class="flex items-center justify-between gap-3">
+            <%!-- Wraps rather than clips: at 375px "Comparar modelos" ran off
+                  the right edge of the viewport, and a horizontally scrolling
+                  page is the one thing a body may never do. --%>
+            <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
               <h2 class="text-label font-semibold uppercase tracking-[0.1em] text-ink-faint">
                 Achados
               </h2>
