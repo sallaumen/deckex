@@ -27,6 +27,8 @@ defmodule DeckexWeb.CardRulesLive do
   alias Deckex.Decks
   alias Deckex.Decks.CardNote
   alias Deckex.Decks.CardRules
+  alias Deckex.Decks.DeckVersion
+  alias Deckex.Decks.Versions
   alias Deckex.Error
   alias Deckex.Events
   alias DeckexWeb.Clock
@@ -66,10 +68,28 @@ defmodule DeckexWeb.CardRulesLive do
       # same for every row and the deck is ~100 cards.
       missing: CardRules.missing_from(Enum.map(rules, & &1.card_name), present),
       present: MapSet.new(present, &Name.normalize/1),
+      # Notes leaning on cards that left the list. The note is his and only he
+      # can prune it — which is exactly why the screen has to point.
+      stale_citations: CardRules.stale_citations(rules, departed_names(deck, present)),
       locked_share: locked_share(deck, rules),
       page_title: "Cartas · #{deck.name}"
     )
     |> propose()
+  end
+
+  # Every card that ever appeared in a version of this deck and is not in the
+  # working list now — the deck's own history, not a guess at prose.
+  defp departed_names(deck, present) do
+    current = MapSet.new(present, &Name.normalize/1)
+
+    deck
+    |> Versions.list()
+    |> Enum.flat_map(fn version ->
+      version |> DeckVersion.rows() |> Enum.map(& &1["name"]) |> Kernel.++(version.commanders)
+    end)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+    |> Enum.reject(&MapSet.member?(current, Name.normalize(&1)))
   end
 
   # Recomputed whenever the rules change, because locking a proposal has to make
@@ -522,6 +542,7 @@ defmodule DeckexWeb.CardRulesLive do
           rules={rules}
           missing={@missing}
           present={@present}
+          stale_citations={@stale_citations}
         />
       </div>
     </div>
@@ -532,6 +553,7 @@ defmodule DeckexWeb.CardRulesLive do
   attr :rules, :list, required: true
   attr :missing, :any, required: true
   attr :present, :any, required: true
+  attr :stale_citations, :map, required: true
 
   defp group(assigns) do
     ~H"""
@@ -599,6 +621,22 @@ defmodule DeckexWeb.CardRulesLive do
               </button>
             </div>
           </div>
+
+          <%!-- The note is his and only he can prune it — so the screen
+                points instead of touching: a chain through a card that left
+                the list rode into every briefing until the model itself had
+                to flag it as residue. --%>
+          <p
+            :if={cited = @stale_citations[rule.id]}
+            class="mt-2 flex items-start gap-1.5 text-caption leading-snug text-sev-warning"
+          >
+            <span class="mt-1.5 size-1.5 shrink-0 rounded-full bg-current" aria-hidden="true" />
+            <span class="min-w-0">
+              Esta nota cita {Enum.join(cited, ", ")} — {if length(cited) == 1,
+                do: "que não está mais na lista",
+                else: "que não estão mais na lista"}. Vale atualizar ou esquecer.
+            </span>
+          </p>
 
           <.form for={%{}} id={"motivo-#{rule.id}"} phx-submit="motivo" class="mt-2">
             <input type="hidden" name="card" value={rule.card_name} />

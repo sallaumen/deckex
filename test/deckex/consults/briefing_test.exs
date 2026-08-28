@@ -212,6 +212,38 @@ defmodule Deckex.Consults.BriefingTest do
     end
   end
 
+  describe "the owner's notes in the briefing" do
+    defp note(name, text) do
+      %Deckex.Decks.CardNote{card_name: name, note: text, stance: :note, source: :sweep}
+    end
+
+    test "identical note texts collapse into one entry naming every card" do
+      # The sweep writes the same reasoning onto every card of a package, and
+      # the briefing printed one paragraph four times — teaching the model
+      # that repetition means importance, at four times the tokens.
+      chain = "A cadeia se autofinancia com Battle Hymn."
+
+      briefing =
+        build(:full,
+          card_notes: [
+            note("Storm-Kiln Artist", chain),
+            note("Birgi", chain),
+            note("Kykar", chain)
+          ]
+        )
+
+      assert briefing =~ "**Birgi, Kykar, Storm-Kiln Artist**: A cadeia se autofinancia"
+      assert length(String.split(briefing, "A cadeia se autofinancia")) == 2
+    end
+
+    test "the decklist outranks a note that leans on an absent card" do
+      briefing = build(:full, card_notes: [note("Elsha", "Thousand-Year Storm é o teto.")])
+
+      assert briefing =~ "residue from an older version"
+      assert briefing =~ "his reading wins"
+    end
+  end
+
   describe "the optimization block" do
     @optimization %{
       contract: %{

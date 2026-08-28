@@ -805,15 +805,38 @@ defmodule Deckex.Consults.Briefing do
     """
     ## O que o dono já disse sobre cartas deste deck
 
-    #{Enum.map_join(said, "\n", &rule_line/1)}
+    #{Enum.map_join(dedupe_notes(said), "\n", &note_line/1)}
 
     These are his words about his own list, from earlier rounds. Where one of
     them contradicts your reading of a card, **his reading wins** — he plays
     the deck and he wrote this down precisely because a stage got it wrong
     once. Do not propose a change that a note above argues against without
     engaging the note by name.
+
+    One caveat outranks even his notes: **the decklist below**. A note that
+    leans on a card that is NOT in the list — a chain through it, a payoff
+    from it — is residue from an older version of the deck. His rulings about
+    the cards still here stand; a chain through an absent card does not
+    exist, and building on it repeats the mistake these notes were written to
+    prevent. Name the mismatch once in `leitura` and move on.
     """
   end
+
+  # The sweep writes the same reasoning onto every card of a package, and a
+  # briefing that prints one paragraph four times spends tokens teaching the
+  # model that repetition means importance. Same text, one entry, every card
+  # named — nothing of his is dropped.
+  defp dedupe_notes(said) do
+    said
+    |> Enum.group_by(& &1.note)
+    |> Enum.map(fn {note, group} ->
+      %{card_names: group |> Enum.map(& &1.card_name) |> Enum.sort(), note: note}
+    end)
+    |> Enum.sort_by(& &1.card_names)
+  end
+
+  defp note_line(%{card_names: names, note: nil}), do: "- **#{Enum.join(names, ", ")}**"
+  defp note_line(%{card_names: names, note: note}), do: "- **#{Enum.join(names, ", ")}**: #{note}"
 
   defp rule_line(%{card_name: name, note: nil}), do: "- **#{name}**"
   defp rule_line(%{card_name: name, note: note}), do: "- **#{name}**: #{note}"
