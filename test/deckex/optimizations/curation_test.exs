@@ -104,7 +104,9 @@ defmodule Deckex.Optimizations.CurationTest do
     end
   end
 
-  describe "net/2 and count/3" do
+  describe "net/3 and count/4" do
+    @list [%{"name" => "Forest", "quantity" => 4}, %{"name" => "Shalai", "quantity" => 1}]
+
     test "cards in minus cards out" do
       vacancies = [
         vacancy(:cut, 0, cards: ["Forest"]),
@@ -114,12 +116,47 @@ defmodule Deckex.Optimizations.CurationTest do
 
       step = step(%{"cut:0" => "Forest", "add:0" => "Sol Ring", "add:1" => "Cultivate"})
 
-      assert Curation.net(step, vacancies) == 1
-      assert Curation.count(step, vacancies, 100) == 101
+      assert Curation.net(step, vacancies, @list) == 1
+      assert Curation.count(step, vacancies, 100, @list) == 101
     end
 
     test "an untouched board moves nothing" do
-      assert Curation.net(step(), [vacancy(:add, 0)]) == 0
+      assert Curation.net(step(), [vacancy(:add, 0)], @list) == 0
+    end
+
+    # The board that told him 106 while the list it would produce held 107.
+    # Two vacancies may offer the same card — the reserve re-offers a basic on
+    # purpose — and the engine's cut of a card already gone is a no-op.
+    test "a second cut of a single-copy card counts once, and is named" do
+      vacancies = [
+        vacancy(:cut, 0, cards: ["Shalai"]),
+        vacancy(:cut, 1, cards: ["Shalai"])
+      ]
+
+      step = step(%{"cut:0" => "Shalai", "cut:1" => "Shalai"})
+
+      assert Curation.net(step, vacancies, @list) == -1
+      assert Curation.surplus_keys(step, vacancies, @list) == MapSet.new(["cut:1"])
+
+      {effective, surplus} = Curation.settle(step, vacancies, @list)
+      assert length(effective) == 1
+      assert surplus == ["cut:1"]
+    end
+
+    test "cutting two of four Forests is not surplus — the copies are there" do
+      vacancies = [vacancy(:cut, 0, cards: ["Forest"]), vacancy(:cut, 1, cards: ["Forest"])]
+      step = step(%{"cut:0" => "Forest", "cut:1" => "Forest"})
+
+      assert Curation.net(step, vacancies, @list) == -2
+      assert Curation.surplus_keys(step, vacancies, @list) == MapSet.new()
+    end
+
+    test "a cut of a card the list does not hold at all lands nowhere" do
+      vacancies = [vacancy(:cut, 0, cards: ["Sol Ring"])]
+      step = step(%{"cut:0" => "Sol Ring"})
+
+      assert Curation.net(step, vacancies, @list) == 0
+      assert Curation.surplus_keys(step, vacancies, @list) == MapSet.new(["cut:0"])
     end
   end
 

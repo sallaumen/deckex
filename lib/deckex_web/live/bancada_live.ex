@@ -325,8 +325,29 @@ defmodule DeckexWeb.BancadaLive do
   # click. The live one adds what is only true of the set he has assembled:
   # that this add spends the second of his two exception slots.
   defp verdict(assigns, vacancy, candidate) do
-    Optimizations.verdict(assigns.preflight, vacancy.action, candidate.name) ||
+    # The most specific truth about this exact pick comes first: a cut with no
+    # copy left to take is legal, chosen, and inert — and a board that showed
+    # it like any other cut was the board that said 106 for a list of 107.
+    surplus_note(assigns, vacancy, candidate) ||
+      Optimizations.verdict(assigns.preflight, vacancy.action, candidate.name) ||
       Optimizations.verdict(assigns.preview.audit, vacancy.action, candidate.name)
+  end
+
+  defp surplus_note(assigns, vacancy, candidate) do
+    surplus = Map.get(assigns.preview, :surplus) || MapSet.new()
+
+    if MapSet.member?(surplus, vacancy.key) and candidate.name == decision_name(assigns, vacancy) do
+      {:note,
+       "Esta cópia já sai por outra vaga — o deck não tem outra. " <>
+         "A escolha fica, mas não mexe na conta."}
+    end
+  end
+
+  defp decision_name(assigns, vacancy) do
+    case Curation.decision(assigns.step, vacancy) do
+      name when is_binary(name) -> name
+      _skipped_or_undecided -> nil
+    end
   end
 
   defp warned?(verdicts, vacancy) do
@@ -447,11 +468,14 @@ defmodule DeckexWeb.BancadaLive do
     end)
   end
 
+  defp direction_question(:cut), do: "Qual destas sai do deck?"
+  defp direction_question(:add), do: "Qual destas entra no deck?"
+
   defp direction_ask(:cut),
-    do: "Escolha qual destas SAI do deck — ou nenhuma. Clicar numa carta é cortá-la."
+    do: "Clicar numa carta é cortá-la. Se nenhuma merece sair, responda “nenhuma destas”."
 
   defp direction_ask(:add),
-    do: "Escolha qual destas ENTRA no deck — ou nenhuma. Clicar numa carta é adicioná-la."
+    do: "Clicar numa carta é adicioná-la. Se nenhuma convence, responda “nenhuma destas”."
 
   defp action_heading(:cut), do: "Sai do deck"
   defp action_heading(:add), do: "Entra no deck"
@@ -640,7 +664,10 @@ defmodule DeckexWeb.BancadaLive do
           }
         </script>
 
-        <main id="trabalho" tabindex="-1" class="min-w-0 flex-1">
+        <%!-- The floating navigator is fixed to the viewport, so the work
+              column reserves its height: at rest nothing of his — least of all
+              card art, which this app never covers — sits underneath it. --%>
+        <main id="trabalho" tabindex="-1" class="min-w-0 flex-1 pb-24">
           <.triagem
             :if={@phase == :triagem}
             step={@step}
@@ -648,7 +675,7 @@ defmodule DeckexWeb.BancadaLive do
             cursor={@cursor}
             texto?={@texto?}
             notes={@notes}
-            verdicts={%{preflight: @preflight, preview: @preview}}
+            verdicts={%{preflight: @preflight, preview: @preview, step: @step}}
             gate={@step.kind}
           />
           <.quadro
@@ -659,7 +686,7 @@ defmodule DeckexWeb.BancadaLive do
             filter={@filter}
             reserve_open?={@reserve_open?}
             preview={@preview}
-            verdicts={%{preflight: @preflight, preview: @preview}}
+            verdicts={%{preflight: @preflight, preview: @preview, step: @step}}
           />
         </main>
 
@@ -760,19 +787,28 @@ defmodule DeckexWeb.BancadaLive do
             changes with the cursor, so `phx-mounted` moves focus here on every
             move — otherwise a pick unmounts the button that had focus and the
             next Tab restarts from the top of the page. --%>
+      <%!-- The QUESTION is the headline. It used to be the vacancy's prose —
+            which on a real board runs four dense lines of plan reference at
+            26px, sixty times, with the actual instruction in 12px underneath.
+            The eye should land on what to do; the reasoning is what you read
+            second, and it is still the second-loudest thing here. --%>
       <h2
         id={"vaga-#{@vacancy.key}"}
         tabindex="-1"
         phx-mounted={JS.focus()}
-        class="mt-3 max-w-[65ch] text-heading font-semibold leading-tight text-balance text-ink sm:text-title"
+        class="mt-3 text-heading font-semibold leading-tight text-ink"
       >
-        {@vacancy.vaga}
+        {direction_question(@vacancy.action)}
       </h2>
 
-      <%!-- The question the click answers, spelled out. The little "Sai do
-            deck" chip above was not enough: on his first real board the owner
-            could not tell whether choosing meant wanting or condemning. --%>
-      <p class="mt-1.5 text-body text-ink-secondary">
+      <p class="mt-2 max-w-[65ch] text-lead leading-snug text-balance text-ink-secondary">
+        {@vacancy.vaga}
+      </p>
+
+      <%!-- The mechanic, spelled out. The little "Sai do deck" chip above was
+            not enough: on his first real board the owner could not tell
+            whether choosing meant wanting or condemning. --%>
+      <p class="mt-2 text-caption text-ink-faint">
         {direction_ask(@vacancy.action)}
       </p>
 
@@ -845,7 +881,20 @@ defmodule DeckexWeb.BancadaLive do
       <%!-- FIXED to the viewport, because vacancies have different heights and
             buttons that ride the content move under a finger that is clicking
             through forty of them. Same screen spot, every vacancy. --%>
-      <div class="fixed bottom-5 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-lg border border-hairline-soft bg-rail/95 p-1 shadow-lifted backdrop-blur-sm">
+      <div class={
+        [
+          "fixed z-30 flex items-center gap-1 bg-rail/95 backdrop-blur-sm",
+          # Phone: a real bottom bar — full width, opaque, inside the safe area,
+          # under the thumb. The floating island version landed ON the card art,
+          # which is the one thing this app never covers, and read as something
+          # dropped on the page rather than as chrome.
+          "inset-x-0 bottom-0 justify-center border-t border-hairline px-4 pt-3",
+          "pb-[max(0.75rem,env(safe-area-inset-bottom))]",
+          # From sm up there is margin beside the column, so it becomes the pill.
+          "sm:inset-x-auto sm:bottom-5 sm:left-1/2 sm:-translate-x-1/2 sm:rounded-lg",
+          "sm:border sm:border-hairline-soft sm:p-1 sm:pb-1 sm:pt-1 sm:shadow-lifted"
+        ]
+      }>
         <button
           type="button"
           phx-click="ir"
@@ -940,8 +989,12 @@ defmodule DeckexWeb.BancadaLive do
             <span class={["w-12 shrink-0 pt-1 text-micro font-semibold uppercase tracking-wide", cor]}>
               {rotulo}
             </span>
-            <div class="-mx-1 min-w-0 flex-1 overflow-x-auto px-1 pb-1">
-              <div class="flex gap-2">
+            <%!-- Wraps. A recap is scanned, not scrolled: ten creatures in a
+                  104px row overflowed by 82px, and with eight type groups in
+                  two directions that was sixteen separate sideways scrollers
+                  hiding the very cards this section exists to show. --%>
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap gap-2">
                 <.card_thumb
                   :for={pick <- by_mana(picks, action)}
                   name={pick.name}
@@ -1292,7 +1345,11 @@ defmodule DeckexWeb.BancadaLive do
               of something he just did. A screen reader gets nothing from a
               silent repaint, so the scoreboard announces itself. --%>
         <div role="status" aria-live="polite" class="space-y-2.5 xl:space-y-3">
-          <div class="grid grid-cols-3 gap-2 xl:grid-cols-2 xl:gap-3">
+          <%!-- Two up, everywhere. Three tiles across a 375px phone left the
+                money 100px wide and "R$ 1538,73" rendered "R$ 1538…" — the same
+                truncation the criticals tile had, on the number that says what
+                the round costs. --%>
+          <div class="grid grid-cols-2 gap-2 xl:gap-3">
             <.placar
               label="Cartas"
               value={Integer.to_string(@preview.count)}
@@ -1301,17 +1358,24 @@ defmodule DeckexWeb.BancadaLive do
               <:note>de {Balance.target()}</:note>
             </.placar>
 
+            <%!-- The delta used to be one 28px line, "0 → 5", and at the rail's
+                  real width it rendered "0 →…" — the number that says whether
+                  his round makes the deck worse, ellipsised. It is a value and
+                  the baseline it is measured against, like every other number
+                  in this app. --%>
             <.placar
               label="Críticos"
-              value={"#{elem(@criticals, 0)} → #{elem(@criticals, 1)}"}
+              value={Integer.to_string(elem(@criticals, 1))}
               tone={criticals_tone(@criticals)}
-            />
+            >
+              <:note>{criticals_baseline(@criticals)}</:note>
+            </.placar>
 
             <.placar
               label="Entradas"
               value={Money.brl(@preview.spend_usd)}
               tone={if over_budget?(@preview), do: :warning, else: :neutral}
-              class="xl:col-span-2"
+              class="col-span-2"
             >
               <:note :if={line = exception_line(@preview)}>{line}</:note>
             </.placar>
@@ -1459,6 +1523,12 @@ defmodule DeckexWeb.BancadaLive do
     </div>
     """
   end
+
+  # Said in words, because a bare "eram 0" next to a 5 does not say which way
+  # the round moved, and this is the one number that judges his own choices.
+  defp criticals_baseline({before, before}), do: "seguem #{before}"
+  defp criticals_baseline({before, now}) when now > before, do: "eram #{before} — subiu"
+  defp criticals_baseline({before, _now}), do: "eram #{before} — caiu"
 
   defp tone_var(:neutral), do: "var(--ink)"
   defp tone_var(tone), do: "var(--sev-#{tone})"

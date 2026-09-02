@@ -68,12 +68,23 @@ defmodule Deckex.Optimizations.Curation do
   """
   @spec chosen(OptimizationStep.t(), [Vacancy.t()]) :: [Suggestion.t()]
   def chosen(%OptimizationStep{} = step, vacancies) do
+    step |> picks(vacancies) |> Enum.map(&elem(&1, 1))
+  end
+
+  @doc """
+  The same picks, each still holding the vacancy it came from.
+
+  `Suggestion` is the shape every stage's answer takes and it has no business
+  knowing about boards, so the vacancy travels beside it rather than inside it.
+  """
+  @spec picks(OptimizationStep.t(), [Vacancy.t()]) :: [{Vacancy.t(), Suggestion.t()}]
+  def picks(%OptimizationStep{} = step, vacancies) do
     vacancies
     |> Enum.sort_by(&{&1.action == :add, &1.index})
     |> Enum.flat_map(fn vacancy ->
       with name when is_binary(name) <- decision(step, vacancy),
            %Vacancy.Candidate{} = candidate <- Enum.find(vacancy.candidatos, &(&1.name == name)) do
-        [suggestion(vacancy, candidate)]
+        [{vacancy, suggestion(vacancy, candidate)}]
       else
         _skipped_or_undecided_or_gone -> []
       end
@@ -96,21 +107,75 @@ defmodule Deckex.Optimizations.Curation do
   defp reason(%Vacancy{vaga: vaga}, %Vacancy.Candidate{porque: ""}), do: vaga
   defp reason(%Vacancy{vaga: vaga}, %Vacancy.Candidate{porque: porque}), do: "#{vaga} — #{porque}"
 
+  @doc """
+  The choices that will actually change the list, and the ones that cannot.
+
+  Two vacancies may offer the same card — the reserve deliberately re-offers a
+  basic — and the owner may take both. The engine's `apply_change/2` removes
+  one copy and silently does nothing for the second, so a board that counted
+  both as `-1` told him he was at 106 while the list it would produce held
+  107. **The count is the one number this screen exists to be right about**, so
+  a cut is effective only while the list still has a copy for it to take.
+
+  Deterministic and copies-aware: the picks are walked in `chosen/2`'s order
+  against a budget of the copies the list actually holds. An add is always
+  effective — the singleton rule is the audit's job, and it enforces it.
+  """
+  @spec settle(OptimizationStep.t(), [Vacancy.t()], [map()]) ::
+          {[Suggestion.t()], [String.t()]}
+  def settle(%OptimizationStep{} = step, vacancies, list) do
+    copies =
+      Enum.reduce(list, %{}, fn row, acc ->
+        Map.update(acc, key(row["name"]), row["quantity"] || 1, &(&1 + (row["quantity"] || 1)))
+      end)
+
+    {effective, surplus, _left} =
+      step
+      |> picks(vacancies)
+      |> Enum.reduce({[], [], copies}, fn
+        {_vacancy, %Suggestion{action: :add} = pick}, {ok, no, left} ->
+          {[pick | ok], no, left}
+
+        {vacancy, %Suggestion{action: :cut} = pick}, {ok, no, left} ->
+          case Map.get(left, key(pick.name), 0) do
+            n when n > 0 -> {[pick | ok], no, Map.put(left, key(pick.name), n - 1)}
+            _none_left -> {ok, [vacancy.key | no], left}
+          end
+      end)
+
+    {Enum.reverse(effective), Enum.reverse(surplus)}
+  end
+
+  defp key(name), do: name |> to_string() |> String.downcase() |> String.trim()
+
+  @doc """
+  The vacancy keys whose cut cannot land, because no copy is left for it.
+
+  What the board paints on the tile: the pick stands, but it moves nothing,
+  and a screen that let him believe otherwise would be lying about the only
+  number it exists to get right.
+  """
+  @spec surplus_keys(OptimizationStep.t(), [Vacancy.t()], [map()]) :: MapSet.t()
+  def surplus_keys(%OptimizationStep{} = step, vacancies, list) do
+    {_effective, surplus} = settle(step, vacancies, list)
+    MapSet.new(surplus)
+  end
+
   @doc "Cards in minus cards out. What the count gate reads."
-  @spec net(OptimizationStep.t(), [Vacancy.t()]) :: integer()
-  def net(%OptimizationStep{} = step, vacancies) do
-    step
-    |> chosen(vacancies)
-    |> Enum.reduce(0, fn
+  @spec net(OptimizationStep.t(), [Vacancy.t()], [map()]) :: integer()
+  def net(%OptimizationStep{} = step, vacancies, list) do
+    {effective, _surplus} = settle(step, vacancies, list)
+
+    Enum.reduce(effective, 0, fn
       %Suggestion{action: :add}, total -> total + 1
       %Suggestion{action: :cut}, total -> total - 1
     end)
   end
 
   @doc "Where this board would leave the sandbox's card count."
-  @spec count(OptimizationStep.t(), [Vacancy.t()], non_neg_integer()) :: integer()
-  def count(%OptimizationStep{} = step, vacancies, starting) do
-    starting + net(step, vacancies)
+  @spec count(OptimizationStep.t(), [Vacancy.t()], non_neg_integer(), [map()]) :: integer()
+  def count(%OptimizationStep{} = step, vacancies, starting, list) do
+    starting + net(step, vacancies, list)
   end
 
   @doc "How many vacancies still have no answer of any kind."
@@ -128,7 +193,15 @@ defmodule Deckex.Optimizations.Curation do
   """
   @spec reserve_open?(OptimizationStep.t(), [Vacancy.t()]) :: boolean()
   def reserve_open?(%OptimizationStep{} = step, vacancies) do
-    net(step, vacancies) > 0 or Enum.any?(vacancies, &(&1.reserve? and decided?(step, &1)))
+    carrying =
+      step
+      |> chosen(vacancies)
+      |> Enum.reduce(0, fn
+        %Suggestion{action: :add}, total -> total + 1
+        %Suggestion{action: :cut}, total -> total - 1
+      end)
+
+    carrying > 0 or Enum.any?(vacancies, &(&1.reserve? and decided?(step, &1)))
   end
 
   defp decided?(step, vacancy), do: decision(step, vacancy) != :undecided

@@ -63,7 +63,7 @@ defmodule DeckexWeb.BancadaLiveTest do
     Optimizations.fetch(optimization_id)
   end
 
-  defp parked_run(contract \\ @contract) do
+  defp parked_run(contract \\ @contract, cardapio \\ nil) do
     CatalogueFixture.seed!(~w(sol_ring forest cultivate llanowar_elves rhystic_study))
 
     stub(Deckex.Scryfall.Mock, :fetch_by_names, fn names ->
@@ -80,7 +80,7 @@ defmodule DeckexWeb.BancadaLiveTest do
 
     {:ok, optimization} = Optimizations.start(deck, contract)
     {:ok, _planned} = answer(optimization.id, plan())
-    {:ok, waiting} = answer(optimization.id, cardapio())
+    {:ok, waiting} = answer(optimization.id, cardapio || cardapio())
 
     {deck, waiting}
   end
@@ -204,7 +204,8 @@ defmodule DeckexWeb.BancadaLiveTest do
     # wanting or condemning, read "40" as "40 cards leaving the deck", and
     # stopped clicking, afraid each click was spending tokens.
     test "a cut vacancy says the click cuts", %{html: html} do
-      assert html =~ "SAI do deck — ou nenhuma"
+      # The question is the headline; the mechanic is spelled out under it.
+      assert html =~ "Qual destas sai do deck?"
       assert html =~ "Clicar numa carta é cortá-la"
       assert html =~ ~s|aria-label="Cortar Forest (opção 1)"|
     end
@@ -213,7 +214,7 @@ defmodule DeckexWeb.BancadaLiveTest do
       quadro(view)
       html = view |> element(~s|button[phx-value-chave="add:0"]|) |> render_click()
 
-      assert html =~ "ENTRA no deck — ou nenhuma"
+      assert html =~ "Qual destas entra no deck?"
       assert html =~ ~s|aria-label="Adicionar Cultivate (opção 1)"|
     end
 
@@ -433,6 +434,51 @@ defmodule DeckexWeb.BancadaLiveTest do
     end
   end
 
+  describe "a cut with no copy left" do
+    # His real board: two vacancies offered the same card, he took both, and
+    # the rail said one card fewer than the list the commit would produce.
+    # The reserve only unfolds while he is carrying an entry nothing pays for,
+    # so every case here opens with the add.
+    test "two Forests are two real cards — nothing is flagged", %{conn: conn} do
+      {_deck, optimization} = parked_run()
+
+      {:ok, view, _html} = live(conn, ~p"/otimizacoes/#{optimization.id}/bancada")
+
+      quadro(view)
+      pick(view, "add:0", "Cultivate")
+      pick(view, "cut:2", "Forest")
+      html = pick(view, "cut:0", "Forest")
+
+      # 100 + 1 - 2 = 99, and the deck holds 98 Forests.
+      assert html =~ "99"
+      refute html =~ "já sai por outra vaga"
+    end
+
+    test "a single-copy card taken twice moves the count once", %{conn: conn} do
+      # Llanowar Elves is in the deck once; the reserve offers it a second time.
+      menu =
+        put_in(cardapio(), ["cortes", Access.at(2)], %{
+          "grupo" => "Reserva",
+          "vaga" => "Vaga extra de corte.",
+          "candidatos" => [%{"carta" => "Llanowar Elves", "porque" => "de novo"}]
+        })
+
+      {_deck, optimization} = parked_run(@contract, menu)
+
+      {:ok, view, _html} = live(conn, ~p"/otimizacoes/#{optimization.id}/bancada")
+
+      quadro(view)
+      pick(view, "add:0", "Cultivate")
+      pick(view, "cut:2", "Llanowar Elves")
+      html = pick(view, "cut:1", "Llanowar Elves")
+
+      # 100 + 1 - 1 = 100. The second pick has no copy left to take, and the
+      # board says so instead of quietly counting it.
+      assert html =~ "100"
+      assert html =~ "já sai por outra vaga"
+    end
+  end
+
   describe "the round as pictures" do
     test "the board opens with the chosen cards as art tiles", %{conn: conn} do
       {_deck, optimization} = parked_run()
@@ -461,7 +507,10 @@ defmodule DeckexWeb.BancadaLiveTest do
 
       {:ok, _view, html} = live(conn, ~p"/otimizacoes/#{optimization.id}/bancada")
 
-      assert html =~ "fixed bottom-5 left-1/2"
+      # A bottom bar on the phone, the pill from sm up — never a floating
+      # island over card art.
+      assert html =~ "inset-x-0 bottom-0"
+      assert html =~ "sm:bottom-5 sm:left-1/2"
       assert html =~ "1/4"
     end
   end

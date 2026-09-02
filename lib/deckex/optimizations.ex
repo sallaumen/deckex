@@ -1019,15 +1019,20 @@ defmodule Deckex.Optimizations do
         %Deck{} = deck,
         vacancies
       ) do
-    suggestions = Curation.chosen(step, vacancies)
+    list = step.list_before || []
+    # What he PICKED, and what those picks can actually do to this list: a cut
+    # of a card the round already spent has no copy left to take, and counting
+    # it would put a number on screen that the commit cannot produce.
+    {suggestions, surplus} = Curation.settle(step, vacancies, list)
     audit = audit_for(optimization, step, deck, suggestions, card_count: nil, history: [])
-    starting = sandbox_size(optimization, step.list_before)
+    starting = sandbox_size(optimization, list)
 
     %{
       audit: audit,
       chosen: suggestions,
+      surplus: MapSet.new(surplus),
       starting: starting,
-      count: Curation.count(step, vacancies, starting),
+      count: Curation.count(step, vacancies, starting, list),
       undecided: Curation.undecided(step, vacancies),
       spend_usd: Suggestions.total_usd(suggestions),
       occupancy: occupancy_of(optimization, step, deck, suggestions),
@@ -1175,7 +1180,11 @@ defmodule Deckex.Optimizations do
          :ok <- committable_board(optimization, step, vacancies) do
       {:ok, deck} = Decks.fetch_deck(optimization.deck_id)
 
-      suggestions = Curation.chosen(step, vacancies)
+      # Only the picks that can land. A surplus cut applied here would be a
+      # no-op recorded as a change: the changelog would tell the next stage the
+      # card left twice, and the count would drift from the list. The gate step
+      # has already run, so its `list_before` is the sandbox it was handed.
+      {suggestions, _surplus} = Curation.settle(step, vacancies, step.list_before)
       audit = audit_for(optimization, step, deck, suggestions, history: [])
       {applied, rejected} = split(suggestions, audit)
 
