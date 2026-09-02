@@ -643,6 +643,39 @@ for *what* we are building and *why*. This file is *how*.
   creature first), sorts tiles by mana value, and counts +N/−N per group and
   in total.
 
+- **A choice that cannot land must not be counted, and must say so.** Two
+  vacancies can offer the same card — the reserve re-offers a basic on purpose
+  — and `apply_change/2` removes one copy and silently no-ops the second. The
+  board counted both, so a real round read "106 cartas" for a list that would
+  commit at 108. `Curation.settle/3` walks the picks against the copies the
+  list actually holds and returns `{effective, surplus_keys}`: the count, the
+  recap and the commit all read the effective set, and the surplus pick keeps
+  its place on the board carrying "já sai por outra vaga". **The count is the
+  one number this screen exists to be right about** — anything derived from
+  picks rather than from the list is a number that can drift from it.
+- **A 28px numeral in a narrow rail truncates, and `truncate` hides it in
+  silence.** "Críticos 0 → 5" rendered "0 →…" and the money rendered
+  "R$ 1538…" — two of the three numbers that judge a round, unreadable, with
+  no error anywhere. A delta is a value and the baseline it is measured
+  against (`5` over `eram 0 — subiu`), never both crammed into one line; and a
+  numeral tile needs its real width at 375px before it ships. Measure rendered
+  text against its box, not the class list.
+- **Chrome fixed to the viewport becomes a bottom bar on a phone, never a
+  floating island.** The centred pill that reads as elegant on a desktop lands
+  on the card art on a 375px screen, which is the one thing this app never
+  covers. Full width, opaque, inside `env(safe-area-inset-bottom)` on mobile;
+  the pill from `sm` up — and the scrolling column reserves its height so
+  nothing sits under it at rest.
+- **The question is the headline; the model's reasoning is what you read
+  second.** The Bancada set the vacancy's prose at 26px — four dense lines of
+  plan reference, sixty times — with "escolha qual destas sai" in 12px under
+  it. The heading now says what to do ("Qual destas sai do deck?"), the
+  reasoning follows at lead size, and the mechanic sits quiet below both.
+- **A summary is scanned, not scrolled.** The recap's rows were horizontal
+  scrollers: ten tiles overflowing by 82px, and with eight type groups in two
+  directions, sixteen separate sideways scrollers hiding the cards the section
+  exists to show. It wraps.
+
 ## Operating notes
 
 - **`mix run` starts Oban, and Oban consumes.** A script that enqueues a job
