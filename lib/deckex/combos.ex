@@ -21,6 +21,8 @@ defmodule Deckex.Combos do
   deck better than an empty one.
   """
 
+  require Logger
+
   alias Deckex.Cards.Name
   alias Deckex.Decks
   alias Deckex.Decks.Deck
@@ -46,7 +48,14 @@ defmodule Deckex.Combos do
     present = MapSet.new(main ++ commanders, &Name.normalize/1)
 
     with {:ok, answer} <- Spellbook.find_combos(main, commanders) do
-      {:ok, store(deck, build(answer, present))}
+      combos = build(answer, present)
+
+      Logger.info(
+        "combos: #{length(combos["assembled"] || [])} montados, " <>
+          "#{length(combos["one_card_away"] || [])} a uma carta"
+      )
+
+      {:ok, store(deck, combos)}
     end
   end
 

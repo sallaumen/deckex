@@ -25,6 +25,13 @@ config :deckex, DeckexWeb.Endpoint,
 # Print only warnings and errors during test
 config :logger, level: :warning
 
+# And print them narrow. The suite exercises the same code paths the app does,
+# so it writes the same metadata — six UUIDs in front of every warning turns a
+# failing run's output into something you scroll past instead of read.
+config :logger, :default_formatter,
+  format: "$time [$level] $metadata$message\n",
+  metadata: [:deck]
+
 # Oban: don't run jobs automatically in tests — drive them with perform_job/2.
 config :deckex, Oban, testing: :manual
 

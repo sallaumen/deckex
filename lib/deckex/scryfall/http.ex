@@ -13,7 +13,10 @@ defmodule Deckex.Scryfall.Http do
   """
   @behaviour Deckex.Scryfall.Client
 
+  require Logger
+
   alias Deckex.Error
+  alias Deckex.Log
 
   @endpoint "https://api.scryfall.com/cards/collection"
   @batch_size 75
@@ -24,10 +27,36 @@ defmodule Deckex.Scryfall.Http do
   def fetch_by_names([]), do: {:ok, %{found: [], not_found: []}}
 
   def fetch_by_names(names) when is_list(names) do
-    names
-    |> Enum.chunk_every(@batch_size)
-    |> Enum.with_index()
-    |> Enum.reduce_while({:ok, %{found: [], not_found: []}}, &fetch_batch/2)
+    chunks = Enum.chunk_every(names, @batch_size)
+    started = System.monotonic_time(:millisecond)
+
+    result =
+      chunks
+      |> Enum.with_index()
+      |> Enum.reduce_while({:ok, %{found: [], not_found: []}}, &fetch_batch/2)
+
+    log(result, length(names), length(chunks), System.monotonic_time(:millisecond) - started)
+
+    result
+  end
+
+  # This module spends the one budget in the app that is not ours to spend: two
+  # requests a second, 75 identifiers each. How many requests a deck import
+  # actually costs, and how long the throttle held it, was until now knowable
+  # only by reading this source and doing the arithmetic.
+  defp log({:ok, %{found: found, not_found: missing}}, asked, requests, ms) do
+    Logger.info(
+      "Scryfall: #{Log.count(asked, "nome", "nomes")} em " <>
+        "#{Log.count(requests, "requisição", "requisições")} — " <>
+        "#{length(found)} achados, #{length(missing)} não · #{Log.duration(ms)}"
+    )
+  end
+
+  defp log({:error, error}, asked, requests, ms) do
+    Logger.warning(
+      "Scryfall falhou depois de #{Log.count(requests, "requisição", "requisições")} " <>
+        "(#{Log.count(asked, "nome", "nomes")}, #{Log.duration(ms)}): #{error.message}"
+    )
   end
 
   defp fetch_batch({chunk, index}, {:ok, acc}) do

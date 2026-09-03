@@ -19,6 +19,7 @@ defmodule Deckex.Workers.ComboWorker do
 
   alias Deckex.Combos
   alias Deckex.Decks
+  alias Deckex.Log
 
   require Logger
 
@@ -31,8 +32,13 @@ defmodule Deckex.Workers.ComboWorker do
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"deck_id" => deck_id}}) do
     case Decks.fetch_deck(deck_id) do
-      {:ok, deck} -> refresh(deck)
-      {:error, _gone} -> :ok
+      {:ok, deck} ->
+        Log.context(deck: deck)
+
+        refresh(deck)
+
+      {:error, _gone} ->
+        :ok
     end
   end
 
@@ -42,7 +48,9 @@ defmodule Deckex.Workers.ComboWorker do
         :ok
 
       {:error, error} ->
-        Logger.warning("combos: #{error.message} (#{deck.name})")
+        # The deck keeps yesterday's combos and stays flagged, so this is a
+        # warning and not an error: nothing was lost and the next edit retries.
+        Logger.warning("combos não atualizados: #{error.message}")
 
         {:error, error.message}
     end

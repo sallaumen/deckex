@@ -9,6 +9,8 @@ defmodule Deckex.Settings do
   `%Baselines{}` rather than the lens asking for one.
   """
 
+  require Logger
+
   alias Deckex.Analysis.Baselines
   alias Deckex.Error
   alias Deckex.Repo
@@ -47,6 +49,13 @@ defmodule Deckex.Settings do
       %Setting{}
       |> Setting.changeset(%{key: to_string(key), value: %{"v" => value}})
       |> Repo.insert!(on_conflict: {:replace, [:value, :updated_at]}, conflict_target: :key)
+
+      # A baseline is the number every measurement in the app compares against,
+      # and a ceiling is the number that decides what may be bought. Changing
+      # one silently changes every finding and every audit after it — so when
+      # a run's verdict looks different from last week's, this line is the
+      # first thing worth having.
+      Logger.info("ajuste #{key} = #{inspect(value)}")
 
       {:ok, value}
     end

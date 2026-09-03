@@ -676,6 +676,39 @@ for *what* we are building and *why*. This file is *how*.
   directions, sixteen separate sideways scrollers hiding the cards the section
   exists to show. It wraps.
 
+## Logging
+
+Before 2026-09-03 this app had **five** log calls, four of them warnings, and
+not one `Logger.info`. A run could spend seventeen minutes and R$19 and the
+terminal would show the HTTP request line and nothing else.
+
+- **A message is a pt-BR sentence; metadata is the structured half.** The owner
+  reads these. Every `Error.message` in this app is already pt-BR, and an
+  English sentence wrapped around one reads worse than either language alone.
+  Numbers and identifiers go in the metadata, not spliced into the prose.
+- **Tag the unit of work, not the line.** `Deckex.Log.context/1` at the top of
+  an Oban `perform/1` or a LiveView `mount/3`; everything downstream inherits
+  it. `Deckex.Log.fields/1` is for a single line with nothing to inherit it —
+  never tag a LiveView process with a deck it merely touched once.
+- **The levels mean something.** `info` = the thing the owner asked for
+  happened, or money was spent. `warning` = degraded and continuing; the deck
+  keeps yesterday's combos, the price stays stale, the card is unresolved.
+  `error` = the thing the owner asked for did not happen.
+- **Decide the level where you decide the words.** `outcome_for/1` returns
+  `{level, text}` together, so a reworded verdict cannot silently become the
+  wrong severity — which is exactly what a `String.starts_with?("ATENÇÃO")`
+  check would have done.
+- **Never log what already has a record.** Card edits are written to
+  `deck_edits` and shown on the page; a terminal line for each is noise. Log
+  what has no other trace: what a fetch cost, what a call spent, what a stage
+  decided.
+- **A list in a line is capped.** `Deckex.Log.names/2`. Measured: one import
+  printed sixty-five card names into a single warning.
+- **Dev prints the deck NAME and nothing else.** The ids are carried for a
+  structured backend and would be 36 characters of noise in front of the
+  sentence you wanted to read. The allowlist lives in `config/config.exs`; the
+  per-environment formatter picks from it.
+
 ## Operating notes
 
 - **`mix run` starts Oban, and Oban consumes.** A script that enqueues a job

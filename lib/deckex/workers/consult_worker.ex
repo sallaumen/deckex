@@ -9,6 +9,8 @@ defmodule Deckex.Workers.ConsultWorker do
   use Oban.Worker, queue: :ai, max_attempts: 3
 
   alias Deckex.Consults
+  alias Deckex.Decks
+  alias Deckex.Log
 
   @doc "Enqueues the AI call for a consult."
   @spec enqueue(String.t()) :: {:ok, Oban.Job.t()} | {:error, term()}
@@ -19,9 +21,24 @@ defmodule Deckex.Workers.ConsultWorker do
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"consult_id" => consult_id}} = job) do
     case Consults.fetch(consult_id) do
-      {:ok, consult} -> run(consult, job)
+      {:ok, consult} -> consult |> tag() |> run(job)
       {:error, error} -> {:cancel, error.message}
     end
+  end
+
+  # Tagged here, at the top of the unit of work, so every line this job writes
+  # downstream — the AI call, the catalogue refresh, the audit — names its deck
+  # without being told again. One extra read to name a job that is about to
+  # spend minutes and money.
+  defp tag(consult) do
+    Log.context(consult: consult)
+
+    case Decks.fetch_deck(consult.deck_id) do
+      {:ok, deck} -> Log.context(deck: deck)
+      {:error, _gone} -> Log.context(deck_id: consult.deck_id)
+    end
+
+    consult
   end
 
   defp run(consult, job) do

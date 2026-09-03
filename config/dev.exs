@@ -71,8 +71,21 @@ config :deckex, DeckexWeb.Endpoint,
 # Enable dev routes for dashboard and mailbox
 config :deckex, dev_routes: true
 
-# Do not include metadata nor timestamps in development logs
-config :logger, :default_formatter, format: "[$level] $message\n"
+# The stock generator drops the timestamp and the metadata in dev. Both are
+# wrong for this app.
+#
+# **The timestamp**, because a unit of work here is minutes long: a pipeline
+# stage routinely runs for six, and a line with no time cannot be placed
+# against the run whose timeline the owner is reading on screen.
+#
+# **The metadata**, because "which deck was that about?" is the question every
+# line has to answer — the app runs three decks and every message would
+# otherwise be anonymous. Only `deck` is printed, and it is printed as the
+# NAME: the ids are carried for a structured backend, but on a terminal they
+# are 36 characters of noise in front of the sentence you wanted to read.
+config :logger, :default_formatter,
+  format: "$time [$level] $metadata$message\n",
+  metadata: [:deck]
 
 # Dev shipped with no level at all, which means `:debug` — and `:debug` in this
 # app is **every Ecto query, with its SQL and its params**. Measured 2026-08-27:

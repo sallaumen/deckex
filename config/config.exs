@@ -78,10 +78,15 @@ config :tailwind,
     env: %{"NODE_PATH" => [Path.expand("../deps", __DIR__), Mix.Project.build_path()]}
   ]
 
-# Configure Elixir's Logger
+# Configure Elixir's Logger.
+#
+# `metadata:` is the ALLOWLIST of what a formatter may print — everything
+# `Deckex.Log.context/1` attaches is carried regardless, and a JSON backend
+# would emit all of it. These are the keys worth having on a line here; dev and
+# test both narrow it further, to just the deck's name.
 config :logger, :default_formatter,
   format: "$time $metadata[$level] $message\n",
-  metadata: [:request_id]
+  metadata: [:request_id, :deck, :deck_id, :consult_id, :optimization_id, :lens, :model, :mode]
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
