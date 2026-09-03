@@ -1326,7 +1326,7 @@ defmodule DeckexWeb.DeckLive do
                   </span>
                 </header>
 
-                <p :if={consult.error} class="text-caption text-ink-secondary">{consult.error}</p>
+                <.failure :if={consult.error} consult={consult} />
 
                 <div :if={consult.response} class="space-y-3">
                   <p

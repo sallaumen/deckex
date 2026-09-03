@@ -584,6 +584,99 @@ defmodule DeckexWeb.UI do
   defp stance_tone(:note), do: "bg-inlay text-ink-faint"
 
   @doc """
+  Why a consult failed, in the two registers a failure needs.
+
+  The sentence says what happened in pt-BR. The disclosure under it carries the
+  **evidence** — the code, how long it ran, and whatever the adapter actually
+  saw. A run once failed with "A IA retornou erro." and nothing else, on the
+  screen or in the terminal, while the `claude` CLI had said exactly what was
+  wrong the whole time.
+
+  The evidence is folded away, not omitted. It is unreadable on a normal day
+  and the only thing that matters on a bad one, and a `<details>` is the one
+  control that serves both without a second screen.
+
+  A consult from before the evidence columns existed renders the sentence
+  alone: there is nothing honest to unfold.
+
+  ## Examples
+
+      <.failure consult={step.consult} />
+  """
+  attr :consult, :map, required: true, doc: "a failed consult"
+  attr :class, :any, default: nil
+
+  def failure(assigns) do
+    assigns = assign(assigns, :evidence, evidence(assigns.consult))
+
+    ~H"""
+    <div class={["rounded-lg tint px-4 py-3", @class]} style={"--c:#{Format.severity_var(:critical)}"}>
+      <p class="text-body font-semibold text-ink">{@consult.error || "A etapa falhou."}</p>
+
+      <details :if={@evidence != []} class="group mt-2">
+        <%!-- A <summary> is a control that reads as text, so it gets a
+              control's hit area — the suite fails otherwise, and it is right
+              to: this is the one thing on a failed run anyone taps. --%>
+        <summary class="inline-flex min-h-touch cursor-pointer items-center text-caption text-ink-muted underline decoration-hairline-strong underline-offset-2 hover:text-ink">
+          O que a IA respondeu
+        </summary>
+        <dl class="mt-2 space-y-2">
+          <div :for={{label, value} <- @evidence}>
+            <dt class="text-micro font-semibold uppercase tracking-[0.08em] text-ink-faint">
+              {label}
+            </dt>
+            <%!-- `whitespace-pre-wrap` keeps the model's own line breaks — and
+                  it would keep this template's indentation too, so the value
+                  sits tight against its tags. --%>
+            <dd
+              phx-no-format
+              class="mt-0.5 max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-sm bg-inlay px-2 py-1 font-mono text-micro text-ink-secondary"
+            >{value}</dd>
+          </div>
+        </dl>
+      </details>
+    </div>
+    """
+  end
+
+  # The evidence, flattened to label/text pairs in the order a person reads
+  # them: what it was, how long it took, then what was actually said.
+  defp evidence(consult) do
+    header = [{"código", consult.error_code}, {"durou", duration(consult.duration_ms)}]
+
+    Enum.reject(header ++ detail_lines(consult.error_details), fn {_label, value} ->
+      value in [nil, ""]
+    end)
+  end
+
+  defp duration(nil), do: nil
+  defp duration(ms) when ms < 1000, do: "#{ms} ms"
+  defp duration(ms), do: "#{Float.round(ms / 1000, 1)} s"
+
+  defp detail_lines(details) when is_map(details) do
+    details
+    |> Enum.sort_by(fn {key, _value} -> key end)
+    |> Enum.map(fn {key, value} -> {detail_label(key), detail_text(value)} end)
+  end
+
+  defp detail_lines(_absent), do: []
+
+  @detail_labels %{
+    "result" => "resposta",
+    "output" => "saída",
+    "envelope" => "envelope",
+    "reason" => "motivo",
+    "timeout_ms" => "limite"
+  }
+
+  defp detail_label(key), do: Map.get(@detail_labels, key, key)
+
+  defp detail_text(value) when is_binary(value), do: value
+  defp detail_text(value) when is_number(value) or is_boolean(value), do: to_string(value)
+  defp detail_text(nil), do: nil
+  defp detail_text(value), do: inspect(value, pretty: true, limit: :infinity)
+
+  @doc """
   How much of Commander plays this card.
 
   The column that answers the question a price cannot. The owner's instinct was

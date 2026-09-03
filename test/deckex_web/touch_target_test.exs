@@ -21,7 +21,7 @@ defmodule DeckexWeb.TouchTargetTest do
   test "no hit area is sized from the rem scale" do
     offenders =
       for path <- @templates,
-          source = File.read!(path),
+          source = markup(path),
           class <- @rem_scaled,
           String.contains?(source, class),
           do: "#{Path.relative_to_cwd(path)}: #{class}"
@@ -40,7 +40,7 @@ defmodule DeckexWeb.TouchTargetTest do
   test "every summary that acts as a control is sized like one" do
     offenders =
       for path <- @templates,
-          source = File.read!(path),
+          source = markup(path),
           line <- String.split(source, "\n"),
           String.contains?(line, "<summary"),
           not String.contains?(line, "min-h-touch"),
@@ -58,4 +58,9 @@ defmodule DeckexWeb.TouchTargetTest do
   test "the token is exposed as a Tailwind utility" do
     assert File.read!("assets/css/app.css") =~ "--spacing-touch: var(--size-touch)"
   end
+
+  # A comment that *names* the tag is not a control that ships. The `<summary>`
+  # guard flagged the comment explaining why the summary next to it had a hit
+  # area — the guard reading its own documentation as a violation.
+  defp markup(path), do: path |> File.read!() |> String.replace(~r/<%!--.*?--%>/s, "")
 end

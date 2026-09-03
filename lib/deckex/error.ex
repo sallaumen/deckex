@@ -20,6 +20,7 @@ defmodule Deckex.Error do
           | :invalid_setting
           | :not_commander_legal
           | :ai_timeout
+          | :ai_unauthenticated
           | :optimization_running
           | :optimization_not_found
           | :ai_unavailable

@@ -47,7 +47,12 @@ defmodule Deckex.Consults.Consult do
     field :report_snapshot, :map
     field :response, :map
     field :model, :string
+
+    # `error` is the sentence the owner reads. `error_code` and `error_details`
+    # are the evidence behind it — what the adapter knew and used to discard.
     field :error, :string
+    field :error_code, :string
+    field :error_details, :map
     field :duration_ms, :integer
 
     # Set when this consult is a stage of an optimization run. A plain column,
@@ -78,6 +83,8 @@ defmodule Deckex.Consults.Consult do
       :response,
       :model,
       :error,
+      :error_code,
+      :error_details,
       :duration_ms,
       :optimization_id
     ])
