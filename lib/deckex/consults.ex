@@ -229,7 +229,7 @@ defmodule Deckex.Consults do
         {:ok, succeed(running, response, started)}
 
       {:error, %Error{} = error} ->
-        fail(running, error)
+        fail(running, error, started)
     end
   end
 
@@ -404,11 +404,48 @@ defmodule Deckex.Consults do
 
   defp keys(names), do: names |> Enum.map(&Name.normalize/1) |> Enum.uniq()
 
-  defp fail(consult, %Error{} = error) do
-    update!(consult, %{status: :failed, error: error.message})
+  # A failure that says only "A IA retornou erro." is a failure nobody can act
+  # on. The adapter always knew more — the CLI's own explanation sits in
+  # `error.details` — and this used to keep the sentence and drop the evidence.
+  #
+  # Both now land on the row (so the screen can show them) and in the log (so
+  # the terminal can). `duration_ms` is recorded on a failure too: six seconds
+  # and two minutes are different stories, and the row could not tell them
+  # apart.
+  defp fail(consult, %Error{} = error, started) do
+    failed =
+      update!(consult, %{
+        status: :failed,
+        error: error.message,
+        error_code: to_string(error.code),
+        error_details: printable(error.details),
+        duration_ms: System.monotonic_time(:millisecond) - started
+      })
+
+    Logger.error("""
+    consulta #{failed.id} falhou (#{failed.lens}, deck #{failed.deck_id})
+      código: #{failed.error_code}
+      mensagem: #{failed.error}
+      detalhe: #{inspect(failed.error_details, pretty: true, limit: :infinity)}\
+    """)
 
     {:error, error}
   end
+
+  # Details go to JSONB, which takes strings, numbers, booleans and nil — an
+  # atom or a tuple in there would raise while *reporting a failure*, turning a
+  # legible error into a crash. Anything else is inspected into a string.
+  defp printable(details) when is_map(details) do
+    Map.new(details, fn {key, value} -> {to_string(key), printable_value(value)} end)
+  end
+
+  defp printable_value(value)
+       when is_binary(value) or is_number(value) or is_boolean(value) or is_nil(value),
+       do: value
+
+  defp printable_value(value) when is_map(value), do: printable(value)
+  defp printable_value(value) when is_list(value), do: Enum.map(value, &printable_value/1)
+  defp printable_value(value), do: inspect(value)
 
   defp update!(consult, attrs) do
     updated = consult |> Consult.changeset(attrs) |> Repo.update!()

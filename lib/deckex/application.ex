@@ -7,6 +7,17 @@ defmodule Deckex.Application do
 
   @impl true
   def start(_type, _args) do
+    # Oban logs nothing unless its logger is attached, and this app never
+    # attached it. A run failed twice in one afternoon and the terminal stayed
+    # empty both times — the cancellation was recorded in `oban_jobs.errors`
+    # and nowhere a person would look.
+    #
+    # `:job` only: the plugin, peer and stager chatter is noise for a
+    # single-node desktop app. `encode: false` because this is read in a
+    # terminal, not shipped to a log aggregator.
+    _already_attached_on_a_hot_reload =
+      Oban.Telemetry.attach_default_logger(events: [:job], encode: false)
+
     children = [
       DeckexWeb.Telemetry,
       Deckex.Repo,

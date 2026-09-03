@@ -828,6 +828,11 @@ defmodule DeckexWeb.OptimizationLive do
             </span>
           </div>
 
+          <%!-- A stage that failed used to say only that the run was paused —
+                never what went wrong. The reason was on the consult row the
+                whole time, one join away, and this page already had it. --%>
+          <.failure :if={step.status == :failed and step.consult} consult={step.consult} class="mt-3" />
+
           <p
             :if={step.status == :failed and @optimization.status == :paused}
             class="mt-2 text-caption text-ink-muted"

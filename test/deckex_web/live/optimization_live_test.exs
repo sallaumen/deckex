@@ -498,6 +498,30 @@ defmodule DeckexWeb.OptimizationLiveTest do
       html = live |> element("button[phx-click='retomar']") |> render_click()
       assert html =~ "rodando"
     end
+
+    test "a failed stage says what the IA actually answered", %{conn: conn} do
+      deck = deck()
+      {:ok, optimization} = Optimizations.start(deck, %{}, @two_lenses)
+
+      expect(Deckex.AI.Mock, :complete, fn _p, _s, _o ->
+        {:error,
+         Deckex.Error.new(:ai_unavailable, "A IA retornou erro.", %{
+           result: "Credit balance is too low"
+         })}
+      end)
+
+      {:ok, fetched} = Optimizations.fetch(optimization.id)
+      step = Enum.find(fetched.steps, &(&1.status == :running))
+      {:cancel, _reason} = perform_job(ConsultWorker, %{consult_id: step.consult_id})
+
+      {:ok, _live, html} = live(conn, ~p"/otimizacoes/#{optimization.id}")
+
+      # The sentence, and — the whole point — the reason behind it. This page
+      # used to say only that the run was paused.
+      assert html =~ "A IA retornou erro."
+      assert html =~ "Credit balance is too low"
+      assert html =~ "ai_unavailable"
+    end
   end
 
   describe "reimaginar" do

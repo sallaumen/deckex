@@ -108,6 +108,42 @@ defmodule Deckex.ConsultsTest do
       assert stored =~ "estourou"
     end
 
+    test "keeps the evidence behind the failure, not just the sentence" do
+      deck = deck()
+      {:ok, consult} = Consults.request(deck, :full)
+
+      expect(Deckex.AI.Mock, :complete, fn _prompt, _schema, _opts ->
+        {:error,
+         Error.new(:ai_unavailable, "A IA retornou erro.", %{
+           result: "Credit balance is too low"
+         })}
+      end)
+
+      assert {:error, %Error{}} = Consults.run(consult)
+
+      assert [failed] = Consults.list_for_deck(deck)
+      assert failed.error_code == "ai_unavailable"
+      assert failed.error_details == %{"result" => "Credit balance is too low"}
+      # A failure that took six seconds and one that took ten minutes are
+      # different stories; the row used to be unable to tell them apart.
+      assert failed.duration_ms >= 0
+    end
+
+    test "a detail JSONB cannot hold is inspected, never raised while reporting a failure" do
+      deck = deck()
+      {:ok, consult} = Consults.request(deck, :full)
+
+      expect(Deckex.AI.Mock, :complete, fn _prompt, _schema, _opts ->
+        {:error, Error.new(:ai_unavailable, "morreu", %{reason: {:exit, :killed}, tries: 3})}
+      end)
+
+      assert {:error, %Error{}} = Consults.run(consult)
+
+      assert [%{error_details: details}] = Consults.list_for_deck(deck)
+      assert details["reason"] == "{:exit, :killed}"
+      assert details["tries"] == 3
+    end
+
     test "sends the stored briefing verbatim — never a rebuilt one" do
       {:ok, consult} = Consults.request(deck(), :full)
 
