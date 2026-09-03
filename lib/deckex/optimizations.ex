@@ -16,6 +16,8 @@ defmodule Deckex.Optimizations do
   earlier ones. See `recipe/2`.
   """
 
+  require Logger
+
   alias Deckex.Analysis
   alias Deckex.Analysis.Bracket
   alias Deckex.Analysis.CardEntry
@@ -41,6 +43,7 @@ defmodule Deckex.Optimizations do
   alias Deckex.Decks.Versions
   alias Deckex.Error
   alias Deckex.Events
+  alias Deckex.Log
   alias Deckex.Optimizations.Balance
   alias Deckex.Optimizations.Curation
   alias Deckex.Optimizations.Mark
@@ -241,6 +244,10 @@ defmodule Deckex.Optimizations do
       end)
 
     {:ok, optimization} = fetch(optimization.id)
+
+    Log.context(deck: deck, optimization: optimization)
+    Logger.info("rodada #{mode} começou — #{length(recipe)} etapas, #{length(list)} cartas")
+
     {:ok, _step} = run_step(hd(optimization.steps))
 
     fetch(optimization.id)
@@ -781,6 +788,11 @@ defmodule Deckex.Optimizations do
 
     Events.broadcast_optimization(optimization)
 
+    Logger.info(
+      "etapa #{step.position}/#{length(optimization.steps)} — #{step.label} rodando",
+      Log.fields(deck: deck, optimization: optimization, consult: consult)
+    )
+
     {:ok, updated}
   end
 
@@ -922,6 +934,15 @@ defmodule Deckex.Optimizations do
       step
       |> OptimizationStep.changeset(%{status: :done, applied: applied, rejected: rejected})
       |> Repo.update!()
+
+    Log.context(deck: deck, optimization: optimization, consult: consult)
+
+    # The engine's verdict on what the model proposed. A rejection is not a
+    # failure — it is the audit doing its job — so this is `info` even when
+    # everything was refused, and the counts say which happened.
+    Logger.info(
+      "etapa #{step.label} fechou — #{length(applied)} aplicadas, #{length(rejected)} recusadas"
+    )
 
     {:ok, refreshed} = fetch(optimization.id)
 
@@ -1240,6 +1261,14 @@ defmodule Deckex.Optimizations do
         {:ok, optimization} = fetch(step.optimization_id)
         {:ok, _paused} = pause(optimization)
 
+        # The reason itself was already logged by `Consults.fail/3`, in full.
+        # This line says what it COST: a run stopped, with paid stages behind
+        # it and pending stages that will not run until someone comes back.
+        Logger.error(
+          "rodada pausada na etapa #{step.label} (#{step.position}) — a consulta falhou",
+          Log.fields(optimization: optimization, consult: consult)
+        )
+
         :ok
     end
   end
@@ -1478,7 +1507,7 @@ defmodule Deckex.Optimizations do
     # loaded, and the outcome depends on seeing it.
     {:ok, optimization} = fetch(optimization.id)
 
-    outcome = outcome_for(optimization)
+    {level, outcome} = outcome_for(optimization)
 
     optimization
     |> Optimization.changeset(%{
@@ -1487,6 +1516,11 @@ defmodule Deckex.Optimizations do
       finished_at: DateTime.utc_now(:second)
     })
     |> Repo.update!()
+
+    # "Never leave the deck worse" is measured, not promised — and the level
+    # says which way the measurement went. A run that ended worse than it
+    # started is the one line in this file worth waking up for.
+    Logger.log(level, "rodada terminou: #{outcome}", Log.fields(optimization: optimization))
 
     :ok
   end
@@ -1527,10 +1561,16 @@ defmodule Deckex.Optimizations do
   # The count comes first: a run that improved every measurement and left the
   # list at 103 cards did not finish the job, and an outcome of "completo" on
   # an illegal deck is the app lying to the person who has to shuffle it.
+  # Returns the level alongside the words. Deciding them apart — a log level
+  # that re-reads the sentence to guess how it went — is how a reworded
+  # verdict silently becomes the wrong severity.
   defp outcome_for(optimization) do
     case sandbox_size(optimization, current_list(optimization)) do
-      count when count != 100 -> "fechou em #{count} cartas, não em #{Balance.target()}"
-      _hundred -> verdict(criticals_delta(optimization), effect(optimization))
+      count when count != 100 ->
+        {:warning, "fechou em #{count} cartas, não em #{Balance.target()}"}
+
+      _hundred ->
+        verdict(criticals_delta(optimization), effect(optimization))
     end
   end
 
@@ -1599,13 +1639,13 @@ defmodule Deckex.Optimizations do
   # "Apareceu: Nada segura um ataque" is a verdict he can judge from the row:
   # sometimes it is real damage, sometimes it is the deck standing one card
   # from a line it was already leaning on.
-  defp verdict({same, same}, _effect), do: "completo · críticos #{same}, sem mudança"
+  defp verdict({same, same}, _effect), do: {:info, "completo · críticos #{same}, sem mudança"}
 
   defp verdict({before, now}, _effect) when now < before,
-    do: "completo · críticos #{before}→#{now}"
+    do: {:info, "completo · críticos #{before}→#{now}"}
 
   defp verdict({before, now}, effect) do
-    "ATENÇÃO: o deck saiu pior — críticos #{before}→#{now}#{appeared(effect)}"
+    {:warning, "ATENÇÃO: o deck saiu pior — críticos #{before}→#{now}#{appeared(effect)}"}
   end
 
   defp appeared(%{introduced: introduced}) do

@@ -19,6 +19,7 @@ defmodule Deckex.Cards do
   alias Deckex.Cards.Roles
   alias Deckex.Cards.ScryfallMapper
   alias Deckex.Error
+  alias Deckex.Log
   alias Deckex.Repo
   alias Deckex.Scryfall
   alias Deckex.Workers.RepriceWorker
@@ -52,8 +53,34 @@ defmodule Deckex.Cards do
     with {:ok, %{found: found, not_found: not_found}} <- fetch_missing(missing),
          {:ok, inserted} <- insert_all(found) do
       reprice_unpriced(inserted)
+      log_resolution(wanted, known, inserted, not_found)
 
       {:ok, %{cards: known ++ inserted, not_found: not_found}}
+    end
+  end
+
+  # The one place that can say what a lookup actually cost. "Já no catálogo" is
+  # the number the Scryfall budget law exists to keep high, and it was
+  # invisible: nothing told the owner whether importing a deck spent two
+  # requests or none.
+  defp log_resolution(wanted, known, inserted, not_found) do
+    # Every name asked for lands in exactly one of the three, so the line adds
+    # up. The first version said "0 buscadas na Scryfall" on a lookup that had
+    # just spent a request — true of what came back, misleading about what it
+    # cost.
+    Logger.info(
+      "#{Log.count(length(wanted), "carta pedida", "cartas pedidas")}: " <>
+        "#{length(known)} do catálogo, #{length(inserted)} novas, " <>
+        "#{Log.count(length(not_found), "não encontrada", "não encontradas")}"
+    )
+
+    # A name Scryfall does not have is almost always a typo in a pasted list,
+    # and it silently shrinks every count the analysis makes afterwards.
+    if not_found != [] do
+      Logger.warning(
+        "Scryfall não conhece #{Log.count(length(not_found), "carta", "cartas")}: " <>
+          Log.names(not_found)
+      )
     end
   end
 
@@ -284,10 +311,18 @@ defmodule Deckex.Cards do
           changed: [%{name: String.t(), from: Decimal.t() | nil, to: Decimal.t()}]
         }
   def reprice_all(cards) when is_list(cards) do
-    cards
-    |> in_lock_order()
-    |> Enum.reduce(%{checked: 0, changed: []}, &reprice_one/2)
-    |> Map.update!(:changed, &Enum.reverse/1)
+    result =
+      cards
+      |> in_lock_order()
+      |> Enum.reduce(%{checked: 0, changed: []}, &reprice_one/2)
+      |> Map.update!(:changed, &Enum.reverse/1)
+
+    Logger.info(
+      "preços: #{result.checked} conferidos, #{length(result.changed)} mudaram " <>
+        "(#{length(cards)} pedidos)"
+    )
+
+    result
   end
 
   @doc "Every card in the catalogue, in `oracle_id` order."
@@ -325,7 +360,7 @@ defmodule Deckex.Cards do
         record_reprice(acc, card, repriced.price_usd)
 
       {:error, %Error{} = error} ->
-        Logger.warning("reprice failed for #{card.name}: #{error.message}")
+        Logger.warning("preço de #{card.name} não atualizado: #{error.message}")
 
         acc
     end

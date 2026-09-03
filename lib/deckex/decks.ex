@@ -8,6 +8,8 @@ defmodule Deckex.Decks do
   itself only writes rows.
   """
 
+  require Logger
+
   alias Deckex.Analysis.CardEntry
   alias Deckex.Analysis.DeckSnapshot
   alias Deckex.Cards
@@ -27,6 +29,7 @@ defmodule Deckex.Decks do
   alias Deckex.Decks.Versions
   alias Deckex.Error
   alias Deckex.Events
+  alias Deckex.Log
   alias Deckex.Moxfield
   alias Deckex.Optimizations
   alias Deckex.Repo
@@ -65,6 +68,11 @@ defmodule Deckex.Decks do
        )}
     else
       {:ok, deleted} = Repo.delete(deck)
+
+      # Logged after the fact, not before: the guard above refuses a deck with
+      # a run in flight, and a line announcing a deletion that did not happen
+      # is worse than no line.
+      Logger.info("apagado", Log.fields(deck: deleted))
 
       Events.broadcast_deck_updated(deleted)
 
@@ -221,6 +229,12 @@ defmodule Deckex.Decks do
       # the owner happened to do next, and "what did the import look like"
       # becomes unanswerable a week later.
       {:ok, _version} = Versions.mark(deck, origin: :import, label: "Como foi importado")
+
+      Logger.info(
+        "importado (#{deck.source}) — #{length(entries)} linhas, " <>
+          "#{length(cards)} cartas resolvidas, #{length(not_found)} não",
+        Log.fields(deck: deck)
+      )
 
       {:ok, classify(deck, cards)}
     end

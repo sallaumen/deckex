@@ -12,6 +12,7 @@ defmodule Deckex.Consults do
 
   alias Deckex.AI
   alias Deckex.AI.Ledger
+  alias Deckex.AI.Usage
   alias Deckex.Analysis
   alias Deckex.Analysis.DeckSnapshot
   alias Deckex.Budget
@@ -31,6 +32,8 @@ defmodule Deckex.Consults do
   alias Deckex.Decks.Deck
   alias Deckex.Error
   alias Deckex.Events
+  alias Deckex.Log
+  alias Deckex.Money
   alias Deckex.Repo
   alias Deckex.Settings
   alias Deckex.Workers.CatalogueWorker
@@ -175,9 +178,18 @@ defmodule Deckex.Consults do
       {:ok, _job} = ConsultWorker.enqueue(consult.id)
       Events.broadcast_consult(consult)
 
+      Logger.info(
+        "consulta #{lens} enfileirada para #{model} — briefing de #{kb(briefing)}",
+        Log.fields(deck: deck, consult: consult)
+      )
+
       consult
     end)
   end
+
+  defp kb(text), do: "#{Float.round(byte_size(text) / 1024, 1)} KB"
+
+  defp elapsed(started), do: System.monotonic_time(:millisecond) - started
 
   defp briefing_opts(deck, lens, snapshot, opts) do
     opts
@@ -209,6 +221,8 @@ defmodule Deckex.Consults do
     started = System.monotonic_time(:millisecond)
     schema = Schemas.for_lens(running.lens)
 
+    Logger.info("perguntando à IA (#{running.model}, lente #{running.lens})")
+
     # WebSearch is the point of the whole feature: the app supplies measured
     # facts about this deck, the model supplies knowledge about every card.
     opts = [allowed_tools: ["WebSearch"], timeout_ms: timeout_ms(), model: running.model]
@@ -225,6 +239,11 @@ defmodule Deckex.Consults do
             deck_id: running.deck_id,
             consult_id: running.id
           )
+
+        Logger.info(
+          "IA respondeu em #{Log.duration(elapsed(started))} · #{Money.brl(usage.cost_usd)} · " <>
+            "#{Usage.total_tokens(usage)} tokens"
+        )
 
         {:ok, succeed(running, response, started)}
 
@@ -289,7 +308,7 @@ defmodule Deckex.Consults do
       |> Consult.changeset(%{
         status: :done,
         response: response,
-        duration_ms: System.monotonic_time(:millisecond) - started,
+        duration_ms: elapsed(started),
         error: nil
       })
       |> Repo.update!()
@@ -338,7 +357,10 @@ defmodule Deckex.Consults do
         :ok
 
       {:error, %Error{} = error} ->
-        Logger.warning("catalogue refresh failed for consult #{consult.id}: #{error.message}")
+        Logger.warning(
+          "não consegui completar o catálogo desta resposta: #{error.message}",
+          Log.fields(consult: consult)
+        )
 
         # The miss is queued, not accepted. Left alone it is permanent: the
         # table only reads, so a card that never reached the catalogue reads as
@@ -419,7 +441,7 @@ defmodule Deckex.Consults do
         error: error.message,
         error_code: to_string(error.code),
         error_details: printable(error.details),
-        duration_ms: System.monotonic_time(:millisecond) - started
+        duration_ms: elapsed(started)
       })
 
     Logger.error("""
